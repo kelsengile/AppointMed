@@ -8,7 +8,7 @@ Clinicly is an all-in-one clinic management platform built to help healthcare pr
 - Frontend: 
 - Backend: 
 - Database: 
-- Other tools/libraries: 
+- Other Tools & Libraries: 
 
 ## Developers:
 - Ambrocio, Rhen Jemimah
