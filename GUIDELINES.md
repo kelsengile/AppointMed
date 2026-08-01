@@ -16,7 +16,7 @@ Develop a **Python GUI-Based Object-Oriented Management System** using Tkinter (
 - Library Management System
 - Hotel Reservation System
 - Inventory Management System
-- Clinic Appointment System
+- **Clinic Appointment System**
 - Employee Management System
 - Payroll System
 - Banking System
