@@ -2,23 +2,32 @@
 
 AppointMed is an all-in-one clinic management platform built to help healthcare practices of any size run smoother, front desk to back office. It centralizes the day-to-day operations clinics need to stay organized and responsive to patients.
 
-## Features
+## Features:
 
 - 
 
-## Tech Stack
+---
 
-- **Frontend:** 
-- **Backend:** 
-- **Database:** 
-- **Other Tools & Libraries:** 
+## Tech Stack:
+**Architecture:**
+Frontend:
+Backend:
+Database:
+Other Tools & Libraries:
 
-## Developers
+**Deployment:**
 
-- Ambrocio, Rhen Jemimah
-- Altobar, Loraine Rivera
-- Conel, Kelsen Gile S.
-- Ortega, Xavier Kent
+
+---
+
+## Developers:
+
+Ambrocio, Rhen Jemimah
+Altobar, Loraine Rivera
+Conel, Kelsen Gile S.
+Ortega, Xavier Kent
+
+---
 
 ## Coursework Project
 
