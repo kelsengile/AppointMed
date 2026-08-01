@@ -10,10 +10,10 @@ AppointMed is an all-in-one clinic management platform built to help healthcare 
 
 ## Tech Stack:
 **Architecture:**
--Frontend:
--Backend:
--Database:
--Other Tools & Libraries:
+- Frontend:
+- Backend:
+- Database:
+- Other Tools & Libraries:
 
 **Deployment:**
 
@@ -22,10 +22,10 @@ AppointMed is an all-in-one clinic management platform built to help healthcare 
 
 ## Developers:
 
--Ambrocio, Rhen Jemimah
--Altobar, Loraine Rivera
--Conel, Kelsen Gile S.
--Ortega, Xavier Kent
+- Ambrocio, Rhen Jemimah
+- Altobar, Loraine Rivera
+- Conel, Kelsen Gile S.
+- Ortega, Xavier Kent
 
 ---
 
