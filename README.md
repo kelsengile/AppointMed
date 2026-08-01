@@ -9,7 +9,7 @@ AppointMed is an all-in-one clinic management platform built to help healthcare 
 ---
 
 ## Tech Stack:
-**Architecture:**
+**Architecture:**  
 Frontend:  
 Backend:  
 Database:  
