@@ -25,7 +25,7 @@ Other Tools & Libraries:
 Ambrocio, Rhen Jemimah  
 Altobar, Loraine Rivera  
 Conel, Kelsen Gile S.  
-Ortega, Xavier Kent
+Ortega, Xavier Kent C.  
 
 
 ---
