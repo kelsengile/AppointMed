@@ -1,0 +1,5 @@
+# RESEARCH | AppointMed
+
+---
+
+AppointMed is a clinic management platform designed to streamline the daily operations of healthcare practices, from patient scheduling and record-keeping to administrative and back-office workflows. This document outlines the research conducted in support of the system's design and development, covering the problem domain, existing solutions, target users, and the technical and functional requirements that informed key design decisions. As a coursework project for CMSC 203 – Object-Oriented Programming, this research also grounds the system's architecture in object-oriented principles, ensuring that the final implementation reflects both sound software engineering practices and a genuine understanding of the challenges clinics face in managing day-to-day operations.
