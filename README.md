@@ -23,7 +23,7 @@ Other Tools & Libraries:
 ## Developers:
 
 Ambrocio, Rhen Jemimah L.  
-Altobar, Loraine Rivera  
+Altobar, Loraine R.    
 Conel, Kelsen Gile S.  
 Ortega, Xavier Kent C.  
 
