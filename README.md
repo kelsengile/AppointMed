@@ -22,8 +22,8 @@ Other Tools & Libraries:
 
 ## Developers:
 
-Ambrocio, Rhen Jemimah  
-Altobar, Loraine Rivera  
+Ambrocio, Rhen Jemimah L.  
+Altobar, Loraine R.    
 Conel, Kelsen Gile S.  
 Ortega, Xavier Kent C.  
 
