@@ -1,19 +1,20 @@
 # CONTRIBUTING GUIDELINES
 
 ---
+*Final Project Instructions*
 
-# CMSC 203 – Object-Oriented Programming
-## Final Project: Object-Oriented Application Development
+## CMSC 203 – Object-Oriented Programming
+### Final Project: Object-Oriented Application Development
 
 **Project Title:** Design and Develop a Real-World Object-Oriented Application
 
-## Project Description
+### Project Description
 
 The final project serves as the culminating assessment for CMSC 203 – Object-Oriented Programming. Students will design, develop, test, document, and present a functional desktop application that demonstrates mastery of object-oriented programming concepts learned throughout the course. The project should solve a practical problem using proper software engineering practices and object-oriented design principles.
 
 This project directly measures the attainment of the course intended learning outcomes (CILOs), particularly the students' ability to apply OOP concepts, create maintainable software, utilize design patterns, develop graphical user interfaces, implement exception handling, and produce complete technical documentation.
 
-## Final Project Theme
+### Final Project Theme
 
 Develop a **Python GUI-Based Object-Oriented Management System** using Tkinter (or another instructor-approved Python GUI framework). Students may choose one of the following systems:
 
@@ -27,11 +28,11 @@ Develop a **Python GUI-Based Object-Oriented Management System** using Tkinter (
 - Event Registration System
 - Custom Instructor-approved System
 
-## Project Requirements
+### Project Requirements
 
 Your application must include the following:
 
-### 1. Object-Oriented Programming (30%)
+**1. Object-Oriented Programming (30%)**
 
 The system should demonstrate proper use of:
 
@@ -44,7 +45,7 @@ The system should demonstrate proper use of:
 - Method Overloading (where applicable)
 - Interfaces or Abstract Classes (if applicable)
 
-### 2. Functional Features (20%)
+**2. Functional Features (20%)**
 
 The application must include at least:
 
@@ -57,7 +58,7 @@ The application must include at least:
 - Save Data
 - Load Data
 
-### 3. Graphical User Interface (10%)
+**3. Graphical User Interface (10%)**
 
 Develop a user-friendly interface that includes:
 
@@ -70,7 +71,7 @@ Develop a user-friendly interface that includes:
 - Tables/List Displays
 - Appropriate fonts and colors
 
-### 4. Exception Handling (10%)
+**4. Exception Handling (10%)**
 
 Your application must properly handle errors such as:
 
@@ -80,7 +81,7 @@ Your application must properly handle errors such as:
 - Invalid data types
 - Custom Exceptions (minimum of one)
 
-### 5. Code Quality (10%)
+**5. Code Quality (10%)**
 
 Your code should demonstrate:
 
@@ -91,7 +92,7 @@ Your code should demonstrate:
 - Readability
 - Efficient organization using packages/modules
 
-### 6. Documentation (10%)
+**6. Documentation (10%)**
 
 Submit a technical documentation containing:
 
@@ -108,7 +109,7 @@ Submit a technical documentation containing:
 - Conclusion
 - References
 
-### 7. Presentation and Demonstration (10%)
+**7. Presentation and Demonstration (10%)**
 
 Each group will deliver a 15–20-minute presentation that includes:
 
@@ -120,7 +121,7 @@ Each group will deliver a 15–20-minute presentation that includes:
 - Lessons learned
 - Question and Answer
 
-## Development Guidelines
+### Development Guidelines
 
 - **Programming Language:** Python
 - **GUI Framework:** Tkinter (preferred)
@@ -128,7 +129,7 @@ Each group will deliver a 15–20-minute presentation that includes:
 - **Version Control:** Git is encouraged.
 - **Original Work:** The project must be the students' own work. AI-assisted coding tools may be used ethically for learning and productivity, but students must understand and be able to explain every part of their code.
 
-## Deliverables
+### Deliverables
 
 Submit the following:
 
@@ -140,7 +141,7 @@ Submit the following:
 6. PowerPoint Presentation
 7. Demonstration during Final Examination Week
 
-## Assessment Rubric (100 Points)
+### Assessment Rubric (100 Points)
 
 | Criteria | Weight |
 |---|---|
