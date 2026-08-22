@@ -1,5 +1,7 @@
 # CONTRIBUTING GUIDELINES
 
+AppointMed is a Python + CustomTkinter desktop application for managing clinic appointments, built around a shared MySQL backend so that Doctor, Nurse/Secretary, and Admin users on different machines can view and update the same live data in real time. This project was developed as the final requirement for CMSC 203 – Object-Oriented Programming, and follows an MVC-inspired architecture that separates data models, GUI views, and business-logic controllers to keep the codebase modular, maintainable, and easy to extend. These guidelines outline how to set up the project locally, understand its folder structure, and contribute changes in a way that keeps the system consistent across all client devices.
+
 ---
 ## Initialization:
 
