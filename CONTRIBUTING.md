@@ -1,7 +1,8 @@
 # CONTRIBUTING GUIDELINES
 
 ---
-*Final Project Instructions*
+
+*Final Project Instructions:*
 
 ## CMSC 203 – Object-Oriented Programming
 ### Final Project: Object-Oriented Application Development
