@@ -1,5 +1,7 @@
 # CONTRIBUTING GUIDELINES
 
+AppointMed is a Python + CustomTkinter desktop application for managing clinic appointments, built around a shared MySQL backend so that Doctor, Nurse/Secretary, and Admin users on different machines can view and update the same live data in real time. This project was developed as the final requirement for CMSC 203 – Object-Oriented Programming, and follows an MVC-inspired architecture that separates data models, GUI views, and business-logic controllers to keep the codebase modular, maintainable, and easy to extend. These guidelines outline how to set up the project locally, understand its folder structure, and contribute changes in a way that keeps the system consistent across all client devices.
+
 ---
 ## Initialization:
 
@@ -9,12 +11,12 @@ see the same live data.
 
 **Setup**
 
-1. `pip install -r main/requirements.txt`
+1. Install Git, Make a GitHub Acc, and Install MySQL Server and Workbench
+1. `py -m pip install -r main/requirements.txt`
 2. Start/point to a MySQL server reachable by all client devices.
 3. Run `database/schema.sql` against it once to create the tables.
 4. Update `config/settings.py` with that server's host/credentials.
-5. Run `python main.py` on each device (doctor, nurse, and admin machines
-   all point at the same `DB_CONFIG`).
+5. Run `python main.py` on each device 
 
 **Architecture**
 
@@ -28,36 +30,44 @@ MVC-ish split:
 
 ```
 AppointMed/
-├── main/
-│   ├── assets/
-│   │   ├── fonts
-│   │   ├── icons
-│   │   └── images
-│   ├── config/
-│   │   └── settings.py
-│   ├── controllers/
-│   ├── database/
-│   │   ├── db_connector.py
-│   │   ├── schema.sql
-│   │   └── seed.sql
-│   ├── docs/
-│   │   ├── flowcharts/
-│   │   ├── screenshots/
-│   │   └── uml/
-│   ├── models/
-│   ├── utils/
-│   │   └── exceptions.py
-│   ├── views/
-│   │   ├── admin/
-│   │   ├── doctor/
-│   │   ├── nurse/
-│   │   ├── shared/
-│   ├── main.py
-│   └── requirements.txt
-├── CONTRIBUTING.md
-├── DOCUMENTATION.md
-├── INITIALIZATION.md
-└── README.md
+├── 📁 main
+│   ├── 📁 assets                      # Static files used by the app (images, icons)
+│   │   └── 📁 icons
+│   │   └── 📁 images                     
+│   ├── 📁 config                      # App-wide settings (DB credentials, constants)
+│   │   └── 🐍 settings.py            
+│   ├── 📁 controllers                 # Business logic — validation + DB calls (the "C" in MVC)
+│   │   ├── 🐍 appointment_controller.py   
+│   │   ├── 🐍 auth_controller.py          
+│   │   └── 🐍 user_controller.py          
+│   ├── 📁 database                    # Everything related to connecting to and setting up MySQL
+│   │   ├── 🐍 db_connector.py         
+│   │   ├── 📄 schema.sql              
+│   │   └── 📄 seed.sql                
+│   ├── 📁 docs                        # Required documentation deliverables
+│   │   ├── 📁 flowcharts              
+│   │   ├── 📁 screenshots             
+│   │   └── 📁 uml                     
+│   ├── 📁 models                      # Plain data classes — no Tkinter, no SQL (the "M" in MVC)
+│   │   ├── 🐍 appointment.py          
+│   │   └── 🐍 user.py                 
+│   ├── 📁 utils                       # Shared helper code used across the app
+│   │   └── 🐍 exceptions.py           
+│   ├── 📁 views                       # Tkinter/CustomTkinter windows only (the "V" in MVC)
+│   │   ├── 📁 admin                   # Admin-only screens  
+│   │   │   └── 🐍 admin_dashboard.py  
+│   │   ├── 📁 doctor                  # Doctor-only screens
+│   │   │   └── 🐍 doctor_dashboard.py 
+│   │   ├── 📁 nurse                   # Nurse/Secretary-only screens
+│   │   │   └── 🐍 nurse_dashboard.py  
+│   │   ├── 📁 shared                  # Screens used by every role
+│   │   │   └── 🐍 login_view.py       
+│   │   └── 🐍 __init__.py
+│   ├── 🐍 main.py                     # Entry point — run this on every client device
+│   └── 📄 requirements.txt            # Python dependencies to install
+├── 📝 CONTRIBUTING.md                 
+├── 📝 DOCUMENTATION.md                 
+└── 📝 README.md                       
 ```
 
 ---
