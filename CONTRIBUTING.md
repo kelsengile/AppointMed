@@ -35,15 +35,12 @@ AppointMed/
 │   │   └── 📁 icons
 │   │   └── 📁 images                     
 │   ├── 📁 config                      # App-wide settings (DB credentials, constants)
-│   │   ├── 🐍 __init__.py
 │   │   └── 🐍 settings.py            
 │   ├── 📁 controllers                 # Business logic — validation + DB calls (the "C" in MVC)
-│   │   ├── 🐍 __init__.py
 │   │   ├── 🐍 appointment_controller.py   
 │   │   ├── 🐍 auth_controller.py          
 │   │   └── 🐍 user_controller.py          
 │   ├── 📁 database                    # Everything related to connecting to and setting up MySQL
-│   │   ├── 🐍 __init__.py
 │   │   ├── 🐍 db_connector.py         
 │   │   ├── 📄 schema.sql              
 │   │   └── 📄 seed.sql                
@@ -52,24 +49,18 @@ AppointMed/
 │   │   ├── 📁 screenshots             
 │   │   └── 📁 uml                     
 │   ├── 📁 models                      # Plain data classes — no Tkinter, no SQL (the "M" in MVC)
-│   │   ├── 🐍 __init__.py
 │   │   ├── 🐍 appointment.py          
 │   │   └── 🐍 user.py                 
 │   ├── 📁 utils                       # Shared helper code used across the app
-│   │   ├── 🐍 __init__.pyK
 │   │   └── 🐍 exceptions.py           
 │   ├── 📁 views                       # Tkinter/CustomTkinter windows only (the "V" in MVC)
-│   │   ├── 📁 admin                   # Admin-only screens
-│   │   │   ├── 🐍 __init__.py
+│   │   ├── 📁 admin                   # Admin-only screens  
 │   │   │   └── 🐍 admin_dashboard.py  
 │   │   ├── 📁 doctor                  # Doctor-only screens
-│   │   │   ├── 🐍 __init__.py
 │   │   │   └── 🐍 doctor_dashboard.py 
 │   │   ├── 📁 nurse                   # Nurse/Secretary-only screens
-│   │   │   ├── 🐍 __init__.py
 │   │   │   └── 🐍 nurse_dashboard.py  
 │   │   ├── 📁 shared                  # Screens used by every role
-│   │   │   ├── 🐍 __init__.py
 │   │   │   └── 🐍 login_view.py       
 │   │   └── 🐍 __init__.py
 │   ├── 🐍 main.py                     # Entry point — run this on every client device
