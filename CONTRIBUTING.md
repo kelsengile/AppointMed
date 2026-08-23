@@ -11,12 +11,12 @@ see the same live data.
 
 **Setup**
 
-1. `pip install -r main/requirements.txt`
+1. Install Git, Make a GitHub Acc, and Install MySQL Server and Workbench
+1. `py -m pip install -r main/requirements.txt`
 2. Start/point to a MySQL server reachable by all client devices.
 3. Run `database/schema.sql` against it once to create the tables.
 4. Update `config/settings.py` with that server's host/credentials.
-5. Run `python main.py` on each device (doctor, nurse, and admin machines
-   all point at the same `DB_CONFIG`).
+5. Run `python main.py` on each device 
 
 **Architecture**
 
@@ -30,36 +30,53 @@ MVC-ish split:
 
 ```
 AppointMed/
-├── main/
-│   ├── assets/
-│   │   ├── fonts
-│   │   ├── icons
-│   │   └── images
-│   ├── config/
-│   │   └── settings.py
-│   ├── controllers/
-│   ├── database/
-│   │   ├── db_connector.py
-│   │   ├── schema.sql
-│   │   └── seed.sql
-│   ├── docs/
-│   │   ├── flowcharts/
-│   │   ├── screenshots/
-│   │   └── uml/
-│   ├── models/
-│   ├── utils/
-│   │   └── exceptions.py
-│   ├── views/
-│   │   ├── admin/
-│   │   ├── doctor/
-│   │   ├── nurse/
-│   │   ├── shared/
-│   ├── main.py
-│   └── requirements.txt
-├── CONTRIBUTING.md
-├── DOCUMENTATION.md
-├── INITIALIZATION.md
-└── README.md
+├── 📁 main
+│   ├── 📁 assets                      # Static files used by the app (images, icons)
+│   │   └── 📁 icons
+│   │   └── 📁 images                     
+│   ├── 📁 config                      # App-wide settings (DB credentials, constants)
+│   │   ├── 🐍 __init__.py
+│   │   └── 🐍 settings.py            
+│   ├── 📁 controllers                 # Business logic — validation + DB calls (the "C" in MVC)
+│   │   ├── 🐍 __init__.py
+│   │   ├── 🐍 appointment_controller.py   
+│   │   ├── 🐍 auth_controller.py          
+│   │   └── 🐍 user_controller.py          
+│   ├── 📁 database                    # Everything related to connecting to and setting up MySQL
+│   │   ├── 🐍 __init__.py
+│   │   ├── 🐍 db_connector.py         
+│   │   ├── 📄 schema.sql              
+│   │   └── 📄 seed.sql                
+│   ├── 📁 docs                        # Required documentation deliverables
+│   │   ├── 📁 flowcharts              
+│   │   ├── 📁 screenshots             
+│   │   └── 📁 uml                     
+│   ├── 📁 models                      # Plain data classes — no Tkinter, no SQL (the "M" in MVC)
+│   │   ├── 🐍 __init__.py
+│   │   ├── 🐍 appointment.py          
+│   │   └── 🐍 user.py                 
+│   ├── 📁 utils                       # Shared helper code used across the app
+│   │   ├── 🐍 __init__.pyK
+│   │   └── 🐍 exceptions.py           
+│   ├── 📁 views                       # Tkinter/CustomTkinter windows only (the "V" in MVC)
+│   │   ├── 📁 admin                   # Admin-only screens
+│   │   │   ├── 🐍 __init__.py
+│   │   │   └── 🐍 admin_dashboard.py  
+│   │   ├── 📁 doctor                  # Doctor-only screens
+│   │   │   ├── 🐍 __init__.py
+│   │   │   └── 🐍 doctor_dashboard.py 
+│   │   ├── 📁 nurse                   # Nurse/Secretary-only screens
+│   │   │   ├── 🐍 __init__.py
+│   │   │   └── 🐍 nurse_dashboard.py  
+│   │   ├── 📁 shared                  # Screens used by every role
+│   │   │   ├── 🐍 __init__.py
+│   │   │   └── 🐍 login_view.py       
+│   │   └── 🐍 __init__.py
+│   ├── 🐍 main.py                     # Entry point — run this on every client device
+│   └── 📄 requirements.txt            # Python dependencies to install
+├── 📝 CONTRIBUTING.md                 
+├── 📝 DOCUMENTATION.md                 
+└── 📝 README.md                       
 ```
 
 ---

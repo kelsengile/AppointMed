@@ -9,14 +9,12 @@ AppointMed is an all-in-one clinic management platform built to help healthcare 
 ---
 
 ## Tech Stack:
-**Architecture:**  
-Frontend:  
-Backend:  
-Database:  
-Other Tools & Libraries:  
 
-**Deployment:**
-
+**Frontend:**  CustomTkinter 
+**Backend:**  Python 3
+**Database:**  MySQL (Community Server), MySQL Workbench 
+**Version Control:** Git & GitHub 
+**Other Tools & Libraries:**  `mysql-connector-python`, `bcrypt`, `tkcalendar`, `PyInstaller`
 
 ---
 
