@@ -12,7 +12,7 @@ see the same live data.
 **Setup**
 
 1. Install Git, Make a GitHub Acc, and Install MySQL Server and Workbench
-2. `py -m pip install -r main/requirements.txt`
+2. run in terminal `py -m pip install -r main/requirements.txt`
 3. Start/point to a MySQL server reachable by all client devices.
 4. Run `database/schema.sql` against it once to create the tables.
 5. Update `config/settings.py` with that server's host/credentials.
