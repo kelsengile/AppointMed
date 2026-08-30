@@ -16,7 +16,7 @@ see the same live data.
 3. Start/point to a MySQL server reachable by all client devices.
 4. Run `database/schema.sql` against it once to create the tables.
 5. Update `config/settings.py` with that server's host/credentials.
-6. Run `python main.py` on each device 
+6. Run `python main/main.py` on each device 
 
 **Architecture**
 
