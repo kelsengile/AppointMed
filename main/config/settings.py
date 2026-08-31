@@ -8,7 +8,7 @@ app has one obvious place to read connection info from.
 DB_CONFIG = {
     "host": "localhost",       # replace with your central server's IP for multi-device access
     "port": 3306,
-    "user": "root", # Change to username for MySQL Workbench
+    "user": "lemons", # Change to username for MySQL Workbench
     "password": "password",    # Change to password for MySQL Workbench
     "database": "appointmed_db",
 }
