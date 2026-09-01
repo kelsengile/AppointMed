@@ -72,6 +72,51 @@ AppointMed/
 
 ---
 
+## Contributing
+
+To keep the codebase consistent and easy to follow across all members, please follow these guidelines when contributing.
+
+### Before You Start
+
+1. Pull the latest changes from the main branch before starting new work, to avoid conflicts with your teammates.
+2. Create a new branch for the feature, fix, or module you're working on (e.g. `feature/appointment-controller`, `fix/login-validation`).
+3. If your change affects the database (`database/schema.sql` or `database/seed.sql`), let the team know beforehand, since everyone shares the same live MySQL server.
+
+### Commit Guidelines
+
+- **Commit often, in small, logical chunks.** Treat each commit as a single save point rather than bundling an entire feature into one commit. As a rule of thumb, commit once a function, method, or class is working, rather than waiting until an entire file or module is done.
+- Each commit message should briefly describe what changed and why, for example:
+  - `Add validate_email() to auth_controller`
+  - `Fix null check in Appointment constructor`
+  - `Add InvalidAppointmentTimeError custom exception`
+- Avoid vague messages like `update`, `fix stuff`, or `final version`.
+- Don't mix unrelated changes (e.g. a GUI tweak and a database fix) in the same commit.
+
+### Code Style
+
+- Add comments explaining what a function, class, or non-obvious block of code does, not just what each line does. Every method should have at least a short comment or docstring describing its purpose, parameters, and return value.
+- Follow the existing MVC-inspired structure:
+  - **models/** stay free of Tkinter and SQL code.
+  - **views/** only handle GUI layout and user interaction, and should call controllers rather than talking to the database directly.
+  - **controllers/** hold validation and database logic, and raise custom exceptions from `utils/exceptions.py` instead of letting raw errors bubble up to the views.
+- Use clear, descriptive names for variables, functions, and classes (e.g. `get_appointments_by_doctor()` instead of `get_data()`).
+- Keep functions short and focused on a single responsibility; break large functions into smaller, reusable ones.
+
+### Testing Your Changes
+
+- Test your changes locally against the shared MySQL server before pushing.
+- Make sure your changes don't break existing features for other roles (Doctor, Nurse/Secretary, Admin).
+- If you add a new exception, confirm it's caught and displayed properly in the relevant view.
+
+### Submitting Changes
+
+1. Push your branch and open a pull request (or notify the team directly if working without GitHub PRs).
+2. Briefly describe what your change does and which files/modules it touches.
+3. Have at least one teammate review the change before merging, when possible.
+4. Resolve any merge conflicts carefully, especially in shared files like `config/settings.py` and `database/schema.sql`.
+
+---
+
 *Final Project Instructions:*
 
 ## CMSC 203 – Object-Oriented Programming
