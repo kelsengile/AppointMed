@@ -62,7 +62,6 @@ AppointMed/
 │   │   │   └── 🐍 nurse_dashboard.py  
 │   │   ├── 📁 shared                  # Screens used by every role
 │   │   │   └── 🐍 login_view.py       
-│   │   └── 🐍 __init__.py
 │   ├── 🐍 main.py                     # Entry point — run this on every client device
 │   └── 📄 requirements.txt            # Python dependencies to install
 ├── 📝 CONTRIBUTING.md                 
