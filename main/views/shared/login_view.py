@@ -10,6 +10,7 @@ the app at a different host without editing any files.
 import customtkinter as ctk
 
 from config import settings
+from config.connection_store import load_remembered, save_remembered
 from controllers.auth_controller import AuthController
 from database.initializer import ensure_database_ready
 from utils.exceptions import AppointMedError
@@ -112,8 +113,12 @@ class LoginView(ctk.CTk):
             font=ctk.CTkFont(size=12), text_color="gray50", wraplength=280
         ).pack(pady=(0, 20))
 
-        host_entry = self._labeled_entry(modal, "Server address (IP)", settings.DB_CONFIG["host"])
-        username_entry = self._labeled_entry(modal, "Username", settings.DB_CONFIG["user"])
+        remembered = load_remembered()
+        default_host = remembered["host"] if remembered else settings.DB_CONFIG["host"]
+        default_user = remembered["user"] if remembered else settings.DB_CONFIG["user"]
+
+        host_entry = self._labeled_entry(modal, "Server address (IP)", default_host)
+        username_entry = self._labeled_entry(modal, "Username", default_user)
         password_entry = self._labeled_entry(modal, "Password", "", show="*")
 
         status_label = ctk.CTkLabel(modal, text="", text_color="#d64545", wraplength=280)
@@ -146,6 +151,7 @@ class LoginView(ctk.CTk):
                 return
 
             status_label.configure(text_color="#2F855A", text="Connected successfully.")
+            save_remembered(host, username)
             modal.after(700, modal.destroy)
 
         ctk.CTkButton(modal, text="Connect", command=connect).pack(pady=24)
