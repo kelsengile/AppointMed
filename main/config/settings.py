@@ -9,7 +9,7 @@ DB_CONFIG = {
     "host": "localhost",       # replace with your central server's IP for multi-device access
     "port": 3306,
     "user": "root",
-    "password": "Kelsengile29",
+    "password": "password",
     "database": "appointmed_db",
 }
 
