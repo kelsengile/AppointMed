@@ -37,8 +37,6 @@ class AdminDashboard(ctk.CTk):
         self._build_ui()
         self._load_users()
 
-    # ---------- layout ----------
-
     def _build_ui(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=24, pady=(20, 4))
@@ -67,8 +65,6 @@ class AdminDashboard(ctk.CTk):
         for widget in self.list_frame.winfo_children():
             widget.destroy()
 
-    # ---------- data ----------
-
     def _load_users(self):
         self._clear_list()
         try:
@@ -82,8 +78,6 @@ class AdminDashboard(ctk.CTk):
 
         for user in users:
             self._add_user_row(user)
-
-    # ---------- user rows ----------
 
     def _add_user_row(self, user):
         row = ctk.CTkFrame(self.list_frame, corner_radius=10)
@@ -125,8 +119,6 @@ class AdminDashboard(ctk.CTk):
         except AppointMedError as e:
             messagebox.showerror("Error", str(e))
         self._load_users()
-
-    # ---------- add user form ----------
 
     def _open_add_form(self):
         form = ctk.CTkToplevel(self)

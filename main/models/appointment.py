@@ -23,7 +23,7 @@ class Appointment:
     doctor_id: int
     scheduled_time: datetime
     reason: str
-    status: str = "Scheduled"  # Scheduled, Checked-in, Completed, Cancelled
+    status: str = "Scheduled"
 
     def mark_completed(self):
         self.status = "Completed"

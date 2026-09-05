@@ -4,14 +4,13 @@ Same logic/controller as before, just modern widgets instead of plain ttk.
 """
 
 import customtkinter as ctk
-from tkinter import messagebox
 
 from controllers.auth_controller import AuthController
 from utils.exceptions import AppointMedError
 from models.user import Doctor, Nurse, Admin
 
-ctk.set_appearance_mode("light")       # "light", "dark", or "system"
-ctk.set_default_color_theme("blue")    # built-in theme; can point to a custom .json later
+ctk.set_appearance_mode("light")
+ctk.set_default_color_theme("blue")
 
 
 class LoginView(ctk.CTk):
