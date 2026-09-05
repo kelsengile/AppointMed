@@ -35,3 +35,12 @@ CREATE TABLE IF NOT EXISTS appointments (
     FOREIGN KEY (patient_id) REFERENCES patients(id),
     FOREIGN KEY (doctor_id) REFERENCES users(id)
 );
+
+-- Default admin account so there's always a way to log in and create
+-- everyone else (doctors, nurses) from inside the app.
+-- username: admin   password: admin123
+-- CHANGE THIS PASSWORD after first login in a real deployment.
+INSERT INTO users (username, password_hash, full_name, role)
+SELECT 'admin', '$2b$12$h.pRIt4ry8kG15BxpNSEu.lNzk2xJMVok5nHAw.ycdUVI19SFBXx2',
+       'System Administrator', 'admin'
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
