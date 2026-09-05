@@ -19,14 +19,6 @@ class UserController:
             )
             return db.fetchall()
 
-    def get_all_doctors(self) -> list[dict]:
-        with DBConnector() as db:
-            db.execute(
-                "SELECT id, full_name, specialization FROM users WHERE role='doctor' "
-                "ORDER BY full_name"
-            )
-            return db.fetchall()
-
     def add_user(self, username: str, password: str, full_name: str, role: str,
                  specialization: str = None, assigned_doctor_id: int = None) -> int:
         if not username or not password or not full_name:

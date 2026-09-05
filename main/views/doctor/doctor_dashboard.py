@@ -1,13 +1,12 @@
 """
 Doctor's dashboard — CustomTkinter version.
 Shows today's appointments as cards with status badges, plus quick
-actions (mark completed / cancel). Pulls real data through
-AppointmentController; falls back to sample rows if the DB isn't
-reachable yet, so you can preview the UI before MySQL is fully wired up.
+actions (mark completed). Falls back to sample rows if the DB isn't
+reachable yet, so the UI is previewable independently.
 """
 
 import customtkinter as ctk
-from datetime import datetime, date
+from datetime import date
 
 from controllers.appointment_controller import AppointmentController
 from utils.exceptions import AppointMedError
@@ -22,7 +21,6 @@ STATUS_COLORS = {
     "Cancelled": ("#FBE7E7", "#C53030"),
 }
 
-# Used only if the database isn't reachable yet, so the UI is still previewable
 SAMPLE_APPOINTMENTS = [
     {"id": 1, "time": "9:00 AM", "patient": "Liam Mercado", "reason": "Follow-up checkup", "status": "Checked-in"},
     {"id": 2, "time": "9:30 AM", "patient": "Rosa Torres", "reason": "New patient consult", "status": "Scheduled"},
@@ -40,8 +38,6 @@ class DoctorDashboard(ctk.CTk):
         self.geometry("900x640")
         self._build_ui()
         self._load_appointments()
-
-    # ---------- layout ----------
 
     def _build_ui(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
@@ -68,8 +64,6 @@ class DoctorDashboard(ctk.CTk):
         for widget in self.list_frame.winfo_children():
             widget.destroy()
 
-    # ---------- data ----------
-
     def _load_appointments(self):
         self._clear_list()
         try:
@@ -87,7 +81,6 @@ class DoctorDashboard(ctk.CTk):
                 for r in rows
             ]
         except AppointMedError:
-            # DB not reachable yet — preview with sample data instead of an empty screen
             appointments = SAMPLE_APPOINTMENTS
 
         if not appointments:
@@ -99,8 +92,6 @@ class DoctorDashboard(ctk.CTk):
 
         for appt in appointments:
             self._add_appointment_card(appt)
-
-    # ---------- UI pieces ----------
 
     def _add_appointment_card(self, appt):
         card = ctk.CTkFrame(self.list_frame, corner_radius=10)
@@ -121,12 +112,11 @@ class DoctorDashboard(ctk.CTk):
         ).pack(fill="x")
 
         bg, fg = STATUS_COLORS.get(appt["status"], STATUS_COLORS["Scheduled"])
-        badge = ctk.CTkLabel(
+        ctk.CTkLabel(
             card, text=appt["status"], fg_color=bg, text_color=fg,
             corner_radius=8, width=90, height=26,
             font=ctk.CTkFont(size=11, weight="bold")
-        )
-        badge.pack(side="right", padx=(8, 16))
+        ).pack(side="right", padx=(8, 16))
 
         if appt["status"] not in ("Completed", "Cancelled"):
             ctk.CTkButton(
@@ -139,13 +129,11 @@ class DoctorDashboard(ctk.CTk):
         try:
             self.appointment_controller.update_status(appt["id"], "Completed")
         except AppointMedError:
-            pass  # in sample/offline mode there's nothing to persist
+            pass
         self._load_appointments()
 
 
 if __name__ == "__main__":
-    # Quick standalone preview using a fake doctor object, so you can see
-    # the UI without needing a live login flow.
     class _FakeDoctor:
         user_id = 1
         def dashboard_title(self):

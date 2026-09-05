@@ -1,8 +1,7 @@
 """
 Nurse/Secretary dashboard — CustomTkinter version.
 Scoped to nurse.assigned_doctor_id: this nurse only ever sees and manages
-one doctor's schedule. Includes an "Add appointment" form since this is
-the role that books appointments on the doctor's behalf.
+one doctor's schedule.
 """
 
 import customtkinter as ctk
@@ -39,8 +38,6 @@ class NurseDashboard(ctk.CTk):
         self._build_ui()
         self._load_appointments()
 
-    # ---------- layout ----------
-
     def _build_ui(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=24, pady=(20, 4))
@@ -72,8 +69,6 @@ class NurseDashboard(ctk.CTk):
         for widget in self.list_frame.winfo_children():
             widget.destroy()
 
-    # ---------- data ----------
-
     def _load_appointments(self):
         self._clear_list()
         try:
@@ -102,8 +97,6 @@ class NurseDashboard(ctk.CTk):
 
         for appt in appointments:
             self._add_appointment_card(appt)
-
-    # ---------- appointment cards ----------
 
     def _add_appointment_card(self, appt):
         card = ctk.CTkFrame(self.list_frame, corner_radius=10)
@@ -144,13 +137,11 @@ class NurseDashboard(ctk.CTk):
             messagebox.showerror("Error", str(e))
         self._load_appointments()
 
-    # ---------- add appointment form ----------
-
     def _open_add_form(self):
         form = ctk.CTkToplevel(self)
         form.title("Add Appointment")
         form.geometry("380x420")
-        form.grab_set()  # modal
+        form.grab_set()
 
         ctk.CTkLabel(
             form, text="New Appointment", font=ctk.CTkFont(size=16, weight="bold")
