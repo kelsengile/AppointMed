@@ -3,28 +3,23 @@ AppointMed — entry point.
 Run this file on every client device; each one connects to the same
 central database (see config/settings.py) so all users stay in sync.
 
-On startup, this automatically applies database/schema.sql if the
-database/tables don't exist yet — no manual MySQL Workbench step needed.
-The one thing that IS still required on the server device: MySQL Server
-itself must be installed and running (see README.md).
+The app is usable even with NO database connection: it always opens
+the login window. If a database is reachable, it's set up automatically
+(tables + default admin created if missing). If not, the login screen
+still opens — the user can use "Connect to Server" to point the app at
+a database, or just see a clear "can't reach the server" message when
+they try to log in.
 """
 
-import tkinter as tk
-from tkinter import messagebox
-
 from database.initializer import ensure_database_ready
-from utils.exceptions import AppointMedError
 
 if __name__ == "__main__":
+    # Best-effort auto-setup. Failure here is expected and fine if no
+    # database is reachable yet — the login window still opens either way.
     try:
         ensure_database_ready()
-    except AppointMedError as e:
-        # Show a plain error dialog instead of crashing with a traceback,
-        # since at this point no other window exists yet.
-        root = tk.Tk()
-        root.withdraw()
-        messagebox.showerror("Database setup failed", str(e))
-        raise SystemExit(1)
+    except Exception:
+        pass
 
     from views.shared.login_view import LoginView
     app = LoginView()
