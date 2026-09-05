@@ -28,7 +28,7 @@ Ortega, Xavier Kent C.
 
 ---
 
-## Coursework Project
+## Coursework Project:
 
 **Laguna State Polytechnic University** | **College of Computer Studies**  
 **CMSC 203 – Object-Oriented Programming**  
