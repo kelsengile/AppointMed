@@ -10,11 +10,11 @@ AppointMed is an all-in-one clinic management platform built to help healthcare 
 
 ## Tech Stack:
 
-**Frontend:**  CustomTkinter 
-**Backend:**  Python 3
-**Database:**  MySQL (Community Server), MySQL Workbench 
-**Version Control:** Git & GitHub 
-**Other Tools & Libraries:**  `mysql-connector-python`, `bcrypt`, `tkcalendar`, `PyInstaller`
+**Frontend:**  CustomTkinter  
+**Backend:**  Python 3  
+**Database:**  MySQL Server & MySQL Workbench  
+**Version Control:** Git & GitHub  
+**Other Tools & Libraries:**  `mysql-connector-python`, `bcrypt`, `tkcalendar`, `PyInstaller`  
 
 ---
 
@@ -28,7 +28,7 @@ Ortega, Xavier Kent C.
 
 ---
 
-## Coursework Project
+## Coursework Project:
 
 **Laguna State Polytechnic University** | **College of Computer Studies**  
 **CMSC 203 – Object-Oriented Programming**  

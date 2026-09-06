@@ -16,25 +16,23 @@ class DBConnector:
         with DBConnector() as db:
             db.execute("SELECT * FROM appointments")
             rows = db.fetchall()
+
+    Pass include_database=False to connect to the SERVER only, without
+    selecting a specific database — needed the very first time, before
+    appointmed_db has even been created (see database/initializer.py).
     """
 
-    _instance = None  # simple singleton so the app reuses one connection
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self):
-        if hasattr(self, "_initialized"):
-            return
+    def __init__(self, include_database: bool = True):
+        self._include_database = include_database
         self._connection = None
         self._cursor = None
-        self._initialized = True
 
     def connect(self):
         try:
-            self._connection = mysql.connector.connect(**DB_CONFIG)
+            config = dict(DB_CONFIG)
+            if not self._include_database:
+                config.pop("database", None)
+            self._connection = mysql.connector.connect(**config)
             self._cursor = self._connection.cursor(dictionary=True)
         except MySQLError as e:
             raise DatabaseConnectionError(f"Could not connect to database: {e}")

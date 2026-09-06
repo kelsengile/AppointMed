@@ -16,7 +16,6 @@ class User(ABC):
         self._full_name = full_name
         self.__password_hash = _password_hash  # name-mangled -> encapsulation
 
-    # --- encapsulated access ---
     @property
     def user_id(self):
         return self._user_id
@@ -30,19 +29,14 @@ class User(ABC):
         return self._full_name
 
     def check_password(self, plain_password: str, verify_fn) -> bool:
-        """verify_fn is injected (e.g. bcrypt.checkpw) to keep this class
-        free of a hard dependency on a specific hashing library."""
         return verify_fn(plain_password, self.__password_hash)
 
-    # --- polymorphic hook every subclass must implement ---
     @abstractmethod
     def dashboard_title(self) -> str:
-        """Returns the label shown at the top of this role's dashboard."""
         raise NotImplementedError
 
     @abstractmethod
     def permissions(self) -> list[str]:
-        """Returns the list of actions this role is allowed to perform."""
         raise NotImplementedError
 
     def __repr__(self):

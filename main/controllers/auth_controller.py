@@ -22,7 +22,7 @@ class AuthController:
         if not row or not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
             raise InvalidCredentialsError("Incorrect username or password.")
 
-        role = row["role"]  # 'doctor' | 'nurse' | 'admin'
+        role = row["role"]
         if role == "doctor":
             return Doctor(row["id"], row["username"], row["full_name"],
                           row["password_hash"], row["specialization"])
