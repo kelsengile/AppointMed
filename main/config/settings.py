@@ -8,8 +8,8 @@ app has one obvious place to read connection info from.
 DB_CONFIG = {
     "host": "",       # replace with your central server's IP for multi-device access
     "port": 3306,
-    "user": "",
-    "password": "",
+    "user": "root",
+    "password": "password",
     "database": "appointmed_db",
 }
 
