@@ -1,10 +1,10 @@
 """
-Login window — CustomTkinter version.
+Login window — built with CustomTkinter.
 
-Works even with no database connection: the window always opens. If the
-app can't reach a database, logging in will just show a clear error
-instead of crashing, and the user can use "Connect to Server" to point
-the app at a different host without editing any files.
+This window opens even if there is no database connection. If the app
+cannot reach a database, trying to log in just shows an error message
+instead of crashing, and the user can click "Connect to Server" to
+point the app at a different host without editing any files.
 """
 
 import customtkinter as ctk
@@ -27,9 +27,9 @@ class LoginView(ctk.CTk):
         self.geometry("400x520")
         self.resizable(False, False)
         self.auth_controller = AuthController()
-        self._build_ui()
+        self.build_ui()
 
-    def _build_ui(self):
+    def build_ui(self):
         card = ctk.CTkFrame(self, corner_radius=16)
         card.pack(expand=True, fill="both", padx=30, pady=30)
 
@@ -52,27 +52,30 @@ class LoginView(ctk.CTk):
             card, placeholder_text="Password", show="*", width=260, height=40
         )
         self.password_entry.pack(pady=(0, 28))
-        self.password_entry.bind("<Return>", lambda e: self._handle_login())
+        self.password_entry.bind("<Return>", self.on_enter_pressed)
 
         ctk.CTkButton(
             card, text="Log in", width=260, height=42,
             font=ctk.CTkFont(size=14, weight="bold"),
-            command=self._handle_login
+            command=self.handle_login
         ).pack()
 
         self.status_label = ctk.CTkLabel(card, text="", text_color="#d64545", wraplength=260)
         self.status_label.pack(pady=(16, 0))
 
-        # "Connect to Server" — lets the user (re)point the app at a
-        # database without editing config/settings.py by hand.
+        # "Connect to Server" lets the user point the app at a database
+        # without having to open and edit config/settings.py by hand.
         ctk.CTkButton(
             card, text="Connect to Server", width=260, height=32,
             fg_color="transparent", border_width=1, border_color="gray70",
             text_color="gray30", hover_color="gray90",
-            command=self._open_connect_modal
+            command=self.open_connect_modal
         ).pack(pady=(20, 0))
 
-    def _handle_login(self):
+    def on_enter_pressed(self, event):
+        self.handle_login()
+
+    def handle_login(self):
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
         try:
@@ -82,9 +85,9 @@ class LoginView(ctk.CTk):
             return
 
         self.destroy()
-        self._open_dashboard(user)
+        self.open_dashboard(user)
 
-    def _open_dashboard(self, user):
+    def open_dashboard(self, user):
         if isinstance(user, Doctor):
             from views.doctor.doctor_dashboard import DoctorDashboard
             DoctorDashboard(user).mainloop()
@@ -97,7 +100,7 @@ class LoginView(ctk.CTk):
 
     # ---------- Connect to Server modal ----------
 
-    def _open_connect_modal(self):
+    def open_connect_modal(self):
         modal = ctk.CTkToplevel(self)
         modal.title("Connect to Server")
         modal.geometry("360x420")
@@ -114,12 +117,16 @@ class LoginView(ctk.CTk):
         ).pack(pady=(0, 20))
 
         remembered = load_remembered()
-        default_host = remembered["host"] if remembered else settings.DB_CONFIG["host"]
-        default_user = remembered["user"] if remembered else settings.DB_CONFIG["user"]
+        if remembered:
+            default_host = remembered["host"]
+            default_user = remembered["user"]
+        else:
+            default_host = settings.DB_CONFIG["host"]
+            default_user = settings.DB_CONFIG["user"]
 
-        host_entry = self._labeled_entry(modal, "Server address (IP)", default_host)
-        username_entry = self._labeled_entry(modal, "Username", default_user)
-        password_entry = self._labeled_entry(modal, "Password", "", show="*")
+        host_entry = self.labeled_entry(modal, "Server address (IP)", default_host)
+        username_entry = self.labeled_entry(modal, "Username", default_user)
+        password_entry = self.labeled_entry(modal, "Password", "", show="*")
 
         status_label = ctk.CTkLabel(modal, text="", text_color="#d64545", wraplength=280)
         status_label.pack(pady=(10, 0))
@@ -133,8 +140,8 @@ class LoginView(ctk.CTk):
                 status_label.configure(text="Server address and username are required.")
                 return
 
-            # Try the new settings before committing to them, so a bad
-            # entry doesn't leave the app pointed at a broken config.
+            # Try the new settings before keeping them, so a typo does
+            # not leave the app pointed at a broken configuration.
             previous = dict(settings.DB_CONFIG)
             settings.DB_CONFIG["host"] = host
             settings.DB_CONFIG["user"] = username
@@ -146,7 +153,7 @@ class LoginView(ctk.CTk):
             try:
                 ensure_database_ready()
             except AppointMedError as e:
-                settings.DB_CONFIG.update(previous)  # roll back on failure
+                settings.DB_CONFIG.update(previous)  # go back to the old settings
                 status_label.configure(text_color="#d64545", text=str(e))
                 return
 
@@ -156,9 +163,12 @@ class LoginView(ctk.CTk):
 
         ctk.CTkButton(modal, text="Connect", command=connect).pack(pady=24)
 
-    def _labeled_entry(self, parent, label_text, default_value="", show=None):
+    def labeled_entry(self, parent, label_text, default_value="", show=None):
         ctk.CTkLabel(parent, text=label_text, anchor="w").pack(fill="x", padx=30, pady=(6, 2))
-        entry = ctk.CTkEntry(parent, width=300, show=show) if show else ctk.CTkEntry(parent, width=300)
+        if show:
+            entry = ctk.CTkEntry(parent, width=300, show=show)
+        else:
+            entry = ctk.CTkEntry(parent, width=300)
         if default_value:
             entry.insert(0, default_value)
         entry.pack(padx=30)

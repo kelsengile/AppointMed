@@ -1,7 +1,7 @@
 """
-Nurse/Secretary dashboard — CustomTkinter version.
-Scoped to nurse.assigned_doctor_id: this nurse only ever sees and manages
-one doctor's schedule.
+Nurse/Secretary dashboard — built with CustomTkinter.
+Only shows and manages the schedule of the one doctor this nurse is
+assigned to (nurse.assigned_doctor_id).
 """
 
 import customtkinter as ctk
@@ -35,10 +35,10 @@ class NurseDashboard(ctk.CTk):
 
         self.title(nurse.dashboard_title())
         self.geometry("900x680")
-        self._build_ui()
-        self._load_appointments()
+        self.build_ui()
+        self.load_appointments()
 
-    def _build_ui(self):
+    def build_ui(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=24, pady=(20, 4))
 
@@ -49,42 +49,45 @@ class NurseDashboard(ctk.CTk):
 
         ctk.CTkButton(
             header, text="+ Add appointment", width=150,
-            command=self._open_add_form
+            command=self.open_add_form
         ).pack(side="right", padx=(8, 0))
         ctk.CTkButton(
             header, text="Refresh", width=90, fg_color="gray60",
-            command=self._load_appointments
+            command=self.load_appointments
         ).pack(side="right")
 
+        subtitle = ("Managing schedule for Doctor #" + str(self.nurse.assigned_doctor_id) +
+                    " — " + date.today().strftime("%A, %B %d"))
         ctk.CTkLabel(
-            self, text=f"Managing schedule for Doctor #{self.nurse.assigned_doctor_id} — "
-                       f"{date.today().strftime('%A, %B %d')}",
+            self, text=subtitle,
             font=ctk.CTkFont(size=13), text_color="gray50"
         ).pack(anchor="w", padx=24, pady=(0, 16))
 
         self.list_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.list_frame.pack(fill="both", expand=True, padx=24, pady=(0, 20))
 
-    def _clear_list(self):
+    def clear_list(self):
         for widget in self.list_frame.winfo_children():
             widget.destroy()
 
-    def _load_appointments(self):
-        self._clear_list()
+    def load_appointments(self):
+        self.clear_list()
         try:
             rows = self.appointment_controller.get_schedule_for_doctor(
                 self.nurse.assigned_doctor_id, date.today().isoformat()
             )
-            appointments = [
-                {
+            appointments = []
+            for r in rows:
+                patient_name = r.get("patient_name")
+                if not patient_name:
+                    patient_name = "Patient #" + str(r["patient_id"])
+                appointments.append({
                     "id": r["id"],
                     "time": r["scheduled_time"].strftime("%-I:%M %p"),
-                    "patient": r.get("patient_name", f"Patient #{r['patient_id']}"),
+                    "patient": patient_name,
                     "reason": r["reason"],
                     "status": r["status"],
-                }
-                for r in rows
-            ]
+                })
         except AppointMedError:
             appointments = SAMPLE_APPOINTMENTS
 
@@ -96,9 +99,9 @@ class NurseDashboard(ctk.CTk):
             return
 
         for appt in appointments:
-            self._add_appointment_card(appt)
+            self.add_appointment_card(appt)
 
-    def _add_appointment_card(self, appt):
+    def add_appointment_card(self, appt):
         card = ctk.CTkFrame(self.list_frame, corner_radius=10)
         card.pack(fill="x", pady=6)
 
@@ -116,28 +119,30 @@ class NurseDashboard(ctk.CTk):
             info, text=appt["reason"], font=ctk.CTkFont(size=12), text_color="gray50", anchor="w"
         ).pack(fill="x")
 
-        bg, fg = STATUS_COLORS.get(appt["status"], STATUS_COLORS["Scheduled"])
+        colors = STATUS_COLORS.get(appt["status"], STATUS_COLORS["Scheduled"])
+        bg = colors[0]
+        fg = colors[1]
         ctk.CTkLabel(
             card, text=appt["status"], fg_color=bg, text_color=fg,
             corner_radius=8, width=90, height=26,
             font=ctk.CTkFont(size=11, weight="bold")
         ).pack(side="right", padx=(8, 16))
 
-        if appt["status"] not in ("Completed", "Cancelled"):
+        if appt["status"] != "Completed" and appt["status"] != "Cancelled":
             ctk.CTkButton(
                 card, text="Cancel", width=70, height=26,
                 fg_color="#C53030", hover_color="#9B2C2C",
-                command=lambda a=appt: self._cancel_appointment(a)
+                command=lambda a=appt: self.cancel_appointment(a)
             ).pack(side="right", padx=(8, 0))
 
-    def _cancel_appointment(self, appt):
+    def cancel_appointment(self, appt):
         try:
             self.appointment_controller.update_status(appt["id"], "Cancelled")
         except AppointMedError as e:
             messagebox.showerror("Error", str(e))
-        self._load_appointments()
+        self.load_appointments()
 
-    def _open_add_form(self):
+    def open_add_form(self):
         form = ctk.CTkToplevel(self)
         form.title("Add Appointment")
         form.geometry("380x420")
@@ -147,9 +152,9 @@ class NurseDashboard(ctk.CTk):
             form, text="New Appointment", font=ctk.CTkFont(size=16, weight="bold")
         ).pack(pady=(20, 16))
 
-        patient_id_entry = self._labeled_entry(form, "Patient ID")
-        time_entry = self._labeled_entry(form, "Date & time (YYYY-MM-DD HH:MM)")
-        reason_entry = self._labeled_entry(form, "Reason")
+        patient_id_entry = self.labeled_entry(form, "Patient ID")
+        time_entry = self.labeled_entry(form, "Date & time (YYYY-MM-DD HH:MM)")
+        reason_entry = self.labeled_entry(form, "Reason")
 
         status_label = ctk.CTkLabel(form, text="", text_color="#d64545")
         status_label.pack(pady=(4, 0))
@@ -168,7 +173,7 @@ class NurseDashboard(ctk.CTk):
                     patient_id, self.nurse.assigned_doctor_id, scheduled_time, reason
                 )
                 form.destroy()
-                self._load_appointments()
+                self.load_appointments()
             except AppointMedError as e:
                 status_label.configure(text=str(e))
             except ValueError:
@@ -176,7 +181,7 @@ class NurseDashboard(ctk.CTk):
 
         ctk.CTkButton(form, text="Add appointment", command=submit).pack(pady=24)
 
-    def _labeled_entry(self, parent, label_text):
+    def labeled_entry(self, parent, label_text):
         ctk.CTkLabel(parent, text=label_text, anchor="w").pack(
             fill="x", padx=30, pady=(10, 2)
         )

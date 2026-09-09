@@ -1,11 +1,10 @@
 """
-Remembers the last-used database host + username across app restarts,
-so returning users don't have to retype the server address every time.
+Remembers the last-used database host and username so the user does not
+have to type the server address every time they open the app.
 
-The password is deliberately NEVER saved here — only host and username
-persist to disk. This is plain JSON, not encrypted, so it's meant for
-convenience (not secrets) — good enough for a class project, but worth
-noting as a limitation in real deployments.
+We never save the password here, only the host and username. This is
+just a plain text file (JSON), so it is not secure - it is only meant
+to save the user some typing, which is fine for a class project.
 """
 
 import json
@@ -14,26 +13,32 @@ import os
 STORE_PATH = os.path.join(os.path.dirname(__file__), "remembered_connection.json")
 
 
-def load_remembered() -> dict | None:
-    """Returns {"host": ..., "user": ...} if a connection was saved before,
-    or None if nothing has been remembered yet (or the file is unreadable)."""
+def load_remembered():
+    """Returns a dictionary like {"host": ..., "user": ...} if we saved a
+    connection before. Returns None if nothing was saved yet or the file
+    could not be read."""
     if not os.path.exists(STORE_PATH):
         return None
+
     try:
-        with open(STORE_PATH, "r") as f:
-            data = json.load(f)
-        if "host" in data and "user" in data:
-            return data
+        file = open(STORE_PATH, "r")
+        data = json.load(file)
+        file.close()
     except (json.JSONDecodeError, OSError):
-        pass
+        return None
+
+    if "host" in data and "user" in data:
+        return data
     return None
 
 
-def save_remembered(host: str, user: str):
-    """Saves the host + username so next launch can pre-fill them.
-    Never call this with a password — only host/user are meant to persist."""
+def save_remembered(host, user):
+    """Saves the host and username to a file so next time the app opens,
+    it can fill them in automatically. Never pass a password in here."""
     try:
-        with open(STORE_PATH, "w") as f:
-            json.dump({"host": host, "user": user}, f)
+        file = open(STORE_PATH, "w")
+        json.dump({"host": host, "user": user}, file)
+        file.close()
     except OSError:
-        pass  # non-fatal — worst case, the user just has to retype it next time
+        # Not a big deal if this fails - the user just types it again.
+        pass
