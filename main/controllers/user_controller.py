@@ -1,7 +1,6 @@
 """
 Business logic for managing user accounts (Doctors, Nurses, Admins).
-Used by the Admin dashboard — kept separate from AuthController, which
-only handles logging in.
+Used by the Admin dashboard.
 """
 
 import bcrypt
@@ -11,7 +10,7 @@ from utils.exceptions import RecordNotFoundError, EmptyFieldError
 
 class UserController:
 
-    def get_all_users(self) -> list[dict]:
+    def get_all_users(self):
         with DBConnector() as db:
             db.execute(
                 "SELECT id, username, full_name, role, specialization, assigned_doctor_id "
@@ -19,8 +18,8 @@ class UserController:
             )
             return db.fetchall()
 
-    def add_user(self, username: str, password: str, full_name: str, role: str,
-                 specialization: str = None, assigned_doctor_id: int = None) -> int:
+    def add_user(self, username, password, full_name, role,
+                 specialization=None, assigned_doctor_id=None):
         if not username or not password or not full_name:
             raise EmptyFieldError("Username, password, and full name are required.")
 
@@ -32,10 +31,10 @@ class UserController:
                 "specialization, assigned_doctor_id) VALUES (%s, %s, %s, %s, %s, %s)",
                 (username, password_hash, full_name, role, specialization, assigned_doctor_id),
             )
-            return db._cursor.lastrowid
+            return db.cursor.lastrowid
 
-    def delete_user(self, user_id: int):
+    def delete_user(self, user_id):
         with DBConnector() as db:
             db.execute("DELETE FROM users WHERE id=%s", (user_id,))
-            if db._cursor.rowcount == 0:
-                raise RecordNotFoundError(f"No user with id {user_id}.")
+            if db.cursor.rowcount == 0:
+                raise RecordNotFoundError("No user with id " + str(user_id) + ".")

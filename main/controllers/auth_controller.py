@@ -1,6 +1,7 @@
 """
-Handles login/authentication and returns the correct User subclass
-so the GUI knows which dashboard to open (polymorphism in action).
+Handles logging in. If the username and password are correct, it builds
+and returns the right kind of User object (Doctor, Nurse, or Admin) so
+the GUI knows which dashboard window to open.
 """
 
 import bcrypt
@@ -11,7 +12,7 @@ from utils.exceptions import InvalidCredentialsError, EmptyFieldError
 
 class AuthController:
 
-    def login(self, username: str, password: str):
+    def login(self, username, password):
         if not username or not password:
             raise EmptyFieldError("Username and password are required.")
 
@@ -19,7 +20,11 @@ class AuthController:
             db.execute("SELECT * FROM users WHERE username=%s", (username,))
             row = db.fetchone()
 
-        if not row or not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
+        if not row:
+            raise InvalidCredentialsError("Incorrect username or password.")
+
+        password_matches = bcrypt.checkpw(password.encode(), row["password_hash"].encode())
+        if not password_matches:
             raise InvalidCredentialsError("Incorrect username or password.")
 
         role = row["role"]

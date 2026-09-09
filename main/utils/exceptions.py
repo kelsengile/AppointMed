@@ -1,42 +1,44 @@
 """
 Custom exceptions for AppointMed.
-Satisfies the "minimum of one custom exception" requirement, with room
-to grow — each error case gets its own class so callers can catch
-precisely and the GUI layer can show a friendly message per case.
+
+Instead of letting normal Python errors show confusing messages to the
+user, we raise one of these instead. Each type of problem gets its own
+class, so the code that catches them knows exactly what went wrong.
 """
 
 
 class AppointMedError(Exception):
-    """Base class for all application-specific errors."""
+    """Base class for all of our own custom errors. Every error below
+    is a kind of AppointMedError, so the views can catch just this one
+    class and still handle every case."""
     pass
 
 
 class InvalidCredentialsError(AppointMedError):
-    """Raised when login username/password is incorrect."""
+    """Raised when the username or password typed on login is wrong."""
     pass
 
 
 class DoubleBookingError(AppointMedError):
-    """Raised when an appointment slot is already taken for a doctor."""
+    """Raised when a doctor already has an appointment at that time."""
     pass
 
 
 class InvalidAppointmentTimeError(AppointMedError):
-    """Raised when an appointment is scheduled outside clinic hours
-    or in the past."""
+    """Raised when an appointment is scheduled in the past."""
     pass
 
 
 class EmptyFieldError(AppointMedError):
-    """Raised when a required form field is left blank."""
+    """Raised when a required form field was left blank."""
     pass
 
 
 class RecordNotFoundError(AppointMedError):
-    """Raised when a search/edit/delete targets a record that doesn't exist."""
+    """Raised when trying to update or delete a record that does not exist."""
     pass
 
 
 class DatabaseConnectionError(AppointMedError):
-    """Raised when the app cannot reach the central database server."""
+    """Raised when the app cannot reach the database server."""
     pass
