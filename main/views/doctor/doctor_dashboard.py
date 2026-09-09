@@ -1,8 +1,8 @@
 """
-Doctor's dashboard — CustomTkinter version.
-Shows today's appointments as cards with status badges, plus quick
-actions (mark completed). Falls back to sample rows if the DB isn't
-reachable yet, so the UI is previewable independently.
+Doctor's dashboard — built with CustomTkinter.
+Shows today's appointments as cards with a status badge, plus a
+"Complete" button. If the database is not reachable yet, it shows some
+sample rows instead, so the screen can still be looked at on its own.
 """
 
 import customtkinter as ctk
@@ -36,10 +36,10 @@ class DoctorDashboard(ctk.CTk):
 
         self.title(doctor.dashboard_title())
         self.geometry("900x640")
-        self._build_ui()
-        self._load_appointments()
+        self.build_ui()
+        self.load_appointments()
 
-    def _build_ui(self):
+    def build_ui(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=24, pady=(20, 8))
 
@@ -49,37 +49,39 @@ class DoctorDashboard(ctk.CTk):
         ).pack(side="left")
 
         ctk.CTkButton(
-            header, text="Refresh", width=90, command=self._load_appointments
+            header, text="Refresh", width=90, command=self.load_appointments
         ).pack(side="right")
 
         ctk.CTkLabel(
-            self, text=f"Today — {date.today().strftime('%A, %B %d')}",
+            self, text="Today — " + date.today().strftime("%A, %B %d"),
             font=ctk.CTkFont(size=13), text_color="gray50"
         ).pack(anchor="w", padx=24, pady=(0, 16))
 
         self.list_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.list_frame.pack(fill="both", expand=True, padx=24, pady=(0, 20))
 
-    def _clear_list(self):
+    def clear_list(self):
         for widget in self.list_frame.winfo_children():
             widget.destroy()
 
-    def _load_appointments(self):
-        self._clear_list()
+    def load_appointments(self):
+        self.clear_list()
         try:
             rows = self.appointment_controller.get_schedule_for_doctor(
                 self.doctor.user_id, date.today().isoformat()
             )
-            appointments = [
-                {
+            appointments = []
+            for r in rows:
+                patient_name = r.get("patient_name")
+                if not patient_name:
+                    patient_name = "Patient #" + str(r["patient_id"])
+                appointments.append({
                     "id": r["id"],
                     "time": r["scheduled_time"].strftime("%-I:%M %p"),
-                    "patient": r.get("patient_name", f"Patient #{r['patient_id']}"),
+                    "patient": patient_name,
                     "reason": r["reason"],
                     "status": r["status"],
-                }
-                for r in rows
-            ]
+                })
         except AppointMedError:
             appointments = SAMPLE_APPOINTMENTS
 
@@ -91,9 +93,9 @@ class DoctorDashboard(ctk.CTk):
             return
 
         for appt in appointments:
-            self._add_appointment_card(appt)
+            self.add_appointment_card(appt)
 
-    def _add_appointment_card(self, appt):
+    def add_appointment_card(self, appt):
         card = ctk.CTkFrame(self.list_frame, corner_radius=10)
         card.pack(fill="x", pady=6)
 
@@ -111,32 +113,34 @@ class DoctorDashboard(ctk.CTk):
             info, text=appt["reason"], font=ctk.CTkFont(size=12), text_color="gray50", anchor="w"
         ).pack(fill="x")
 
-        bg, fg = STATUS_COLORS.get(appt["status"], STATUS_COLORS["Scheduled"])
+        colors = STATUS_COLORS.get(appt["status"], STATUS_COLORS["Scheduled"])
+        bg = colors[0]
+        fg = colors[1]
         ctk.CTkLabel(
             card, text=appt["status"], fg_color=bg, text_color=fg,
             corner_radius=8, width=90, height=26,
             font=ctk.CTkFont(size=11, weight="bold")
         ).pack(side="right", padx=(8, 16))
 
-        if appt["status"] not in ("Completed", "Cancelled"):
+        if appt["status"] != "Completed" and appt["status"] != "Cancelled":
             ctk.CTkButton(
                 card, text="Complete", width=80, height=26,
                 fg_color="#2F855A", hover_color="#276749",
-                command=lambda a=appt: self._mark_completed(a)
+                command=lambda a=appt: self.mark_completed(a)
             ).pack(side="right", padx=(8, 0))
 
-    def _mark_completed(self, appt):
+    def mark_completed(self, appt):
         try:
             self.appointment_controller.update_status(appt["id"], "Completed")
         except AppointMedError:
             pass
-        self._load_appointments()
+        self.load_appointments()
 
 
 if __name__ == "__main__":
-    class _FakeDoctor:
+    class FakeDoctor:
         user_id = 1
         def dashboard_title(self):
             return "Dr. Juan Diaz — Pediatrics"
 
-    DoctorDashboard(_FakeDoctor()).mainloop()
+    DoctorDashboard(FakeDoctor()).mainloop()

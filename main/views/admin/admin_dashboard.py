@@ -1,7 +1,7 @@
 """
-Admin dashboard — CustomTkinter version.
-Full visibility: lists all Doctor/Nurse/Admin accounts and lets the
-admin add new ones, including assigning a nurse to a doctor.
+Admin dashboard — built with CustomTkinter.
+Lists every Doctor/Nurse/Admin account, and lets the admin add new
+ones, including assigning a nurse to a doctor.
 """
 
 import customtkinter as ctk
@@ -34,10 +34,10 @@ class AdminDashboard(ctk.CTk):
 
         self.title(admin.dashboard_title())
         self.geometry("980x680")
-        self._build_ui()
-        self._load_users()
+        self.build_ui()
+        self.load_users()
 
-    def _build_ui(self):
+    def build_ui(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=24, pady=(20, 4))
 
@@ -47,11 +47,11 @@ class AdminDashboard(ctk.CTk):
         ).pack(side="left")
 
         ctk.CTkButton(
-            header, text="+ Add user", width=120, command=self._open_add_form
+            header, text="+ Add user", width=120, command=self.open_add_form
         ).pack(side="right", padx=(8, 0))
         ctk.CTkButton(
             header, text="Refresh", width=90, fg_color="gray60",
-            command=self._load_users
+            command=self.load_users
         ).pack(side="right")
 
         ctk.CTkLabel(
@@ -61,12 +61,12 @@ class AdminDashboard(ctk.CTk):
         self.list_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.list_frame.pack(fill="both", expand=True, padx=24, pady=(0, 20))
 
-    def _clear_list(self):
+    def clear_list(self):
         for widget in self.list_frame.winfo_children():
             widget.destroy()
 
-    def _load_users(self):
-        self._clear_list()
+    def load_users(self):
+        self.clear_list()
         try:
             users = self.user_controller.get_all_users()
         except AppointMedError:
@@ -77,9 +77,9 @@ class AdminDashboard(ctk.CTk):
             return
 
         for user in users:
-            self._add_user_row(user)
+            self.add_user_row(user)
 
-    def _add_user_row(self, user):
+    def add_user_row(self, user):
         row = ctk.CTkFrame(self.list_frame, corner_radius=10)
         row.pack(fill="x", pady=5)
 
@@ -89,16 +89,18 @@ class AdminDashboard(ctk.CTk):
             info, text=user["full_name"], font=ctk.CTkFont(size=14, weight="bold"), anchor="w"
         ).pack(fill="x")
 
-        subtitle = f"@{user['username']}"
+        subtitle = "@" + user["username"]
         if user["role"] == "doctor" and user.get("specialization"):
-            subtitle += f" · {user['specialization']}"
+            subtitle = subtitle + " · " + user["specialization"]
         if user["role"] == "nurse" and user.get("assigned_doctor_id"):
-            subtitle += f" · assigned to doctor #{user['assigned_doctor_id']}"
+            subtitle = subtitle + " · assigned to doctor #" + str(user["assigned_doctor_id"])
         ctk.CTkLabel(
             info, text=subtitle, font=ctk.CTkFont(size=12), text_color="gray50", anchor="w"
         ).pack(fill="x")
 
-        bg, fg = ROLE_COLORS.get(user["role"], ROLE_COLORS["admin"])
+        colors = ROLE_COLORS.get(user["role"], ROLE_COLORS["admin"])
+        bg = colors[0]
+        fg = colors[1]
         ctk.CTkLabel(
             row, text=user["role"].capitalize(), fg_color=bg, text_color=fg,
             corner_radius=8, width=80, height=26,
@@ -108,19 +110,20 @@ class AdminDashboard(ctk.CTk):
         ctk.CTkButton(
             row, text="Delete", width=70, height=26,
             fg_color="#C53030", hover_color="#9B2C2C",
-            command=lambda u=user: self._delete_user(u)
+            command=lambda u=user: self.delete_user(u)
         ).pack(side="right", padx=(8, 0))
 
-    def _delete_user(self, user):
-        if not messagebox.askyesno("Confirm", f"Delete account for {user['full_name']}?"):
+    def delete_user(self, user):
+        confirmed = messagebox.askyesno("Confirm", "Delete account for " + user["full_name"] + "?")
+        if not confirmed:
             return
         try:
             self.user_controller.delete_user(user["id"])
         except AppointMedError as e:
             messagebox.showerror("Error", str(e))
-        self._load_users()
+        self.load_users()
 
-    def _open_add_form(self):
+    def open_add_form(self):
         form = ctk.CTkToplevel(self)
         form.title("Add User")
         form.geometry("380x560")
@@ -130,17 +133,17 @@ class AdminDashboard(ctk.CTk):
             form, text="New User Account", font=ctk.CTkFont(size=16, weight="bold")
         ).pack(pady=(20, 16))
 
-        username_entry = self._labeled_entry(form, "Username")
-        password_entry = self._labeled_entry(form, "Password", show="*")
-        full_name_entry = self._labeled_entry(form, "Full name")
+        username_entry = self.labeled_entry(form, "Username")
+        password_entry = self.labeled_entry(form, "Password", show="*")
+        full_name_entry = self.labeled_entry(form, "Full name")
 
         ctk.CTkLabel(form, text="Role", anchor="w").pack(fill="x", padx=30, pady=(10, 2))
         role_var = ctk.StringVar(value="doctor")
         role_menu = ctk.CTkOptionMenu(form, values=["doctor", "nurse", "admin"], variable=role_var)
         role_menu.pack(padx=30, fill="x")
 
-        specialization_entry = self._labeled_entry(form, "Specialization (doctors only)")
-        doctor_id_entry = self._labeled_entry(form, "Assigned doctor ID (nurses only)")
+        specialization_entry = self.labeled_entry(form, "Specialization (doctors only)")
+        doctor_id_entry = self.labeled_entry(form, "Assigned doctor ID (nurses only)")
 
         status_label = ctk.CTkLabel(form, text="", text_color="#d64545")
         status_label.pack(pady=(4, 0))
@@ -148,16 +151,25 @@ class AdminDashboard(ctk.CTk):
         def submit():
             try:
                 role = role_var.get()
+
+                specialization = None
+                if role == "doctor":
+                    specialization = specialization_entry.get().strip() or None
+
+                assigned_doctor_id = None
+                if role == "nurse" and doctor_id_entry.get().strip():
+                    assigned_doctor_id = int(doctor_id_entry.get())
+
                 self.user_controller.add_user(
                     username=username_entry.get().strip(),
                     password=password_entry.get().strip(),
                     full_name=full_name_entry.get().strip(),
                     role=role,
-                    specialization=specialization_entry.get().strip() or None if role == "doctor" else None,
-                    assigned_doctor_id=int(doctor_id_entry.get()) if role == "nurse" and doctor_id_entry.get().strip() else None,
+                    specialization=specialization,
+                    assigned_doctor_id=assigned_doctor_id,
                 )
                 form.destroy()
-                self._load_users()
+                self.load_users()
             except AppointMedError as e:
                 status_label.configure(text=str(e))
             except ValueError:
@@ -165,8 +177,11 @@ class AdminDashboard(ctk.CTk):
 
         ctk.CTkButton(form, text="Create account", command=submit).pack(pady=24)
 
-    def _labeled_entry(self, parent, label_text, show=None):
+    def labeled_entry(self, parent, label_text, show=None):
         ctk.CTkLabel(parent, text=label_text, anchor="w").pack(fill="x", padx=30, pady=(10, 2))
-        entry = ctk.CTkEntry(parent, width=300, show=show) if show else ctk.CTkEntry(parent, width=300)
+        if show:
+            entry = ctk.CTkEntry(parent, width=300, show=show)
+        else:
+            entry = ctk.CTkEntry(parent, width=300)
         entry.pack(padx=30)
         return entry

@@ -1,29 +1,28 @@
 """
-Appointment and Patient data models.
-Kept as plain, focused classes (models should not know about Tkinter or SQL).
+Simple data classes for Patient and Appointment. These just hold data -
+they don't know anything about Tkinter (the GUI) or SQL (the database).
 """
 
-from dataclasses import dataclass
 from datetime import datetime
 
 
-@dataclass
 class Patient:
-    patient_id: int
-    full_name: str
-    birthdate: str
-    contact_number: str
-    address: str = ""
+    def __init__(self, patient_id, full_name, birthdate, contact_number, address=""):
+        self.patient_id = patient_id
+        self.full_name = full_name
+        self.birthdate = birthdate
+        self.contact_number = contact_number
+        self.address = address
 
 
-@dataclass
 class Appointment:
-    appointment_id: int
-    patient: Patient
-    doctor_id: int
-    scheduled_time: datetime
-    reason: str
-    status: str = "Scheduled"
+    def __init__(self, appointment_id, patient, doctor_id, scheduled_time, reason, status="Scheduled"):
+        self.appointment_id = appointment_id
+        self.patient = patient
+        self.doctor_id = doctor_id
+        self.scheduled_time = scheduled_time
+        self.reason = reason
+        self.status = status
 
     def mark_completed(self):
         self.status = "Completed"
@@ -31,5 +30,7 @@ class Appointment:
     def cancel(self):
         self.status = "Cancelled"
 
-    def is_upcoming(self) -> bool:
-        return self.scheduled_time > datetime.now() and self.status == "Scheduled"
+    def is_upcoming(self):
+        if self.scheduled_time > datetime.now() and self.status == "Scheduled":
+            return True
+        return False
