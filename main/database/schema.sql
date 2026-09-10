@@ -9,11 +9,11 @@
 -- 3. The assigned doctor sees the appointee. The doctor's examination
 --    creates/links a patient record, and the doctor decides to either
 --    (a) schedule a follow-up appointment, or (b) close the encounter
---    to history.
--- 4. The nurse bills the patient for the session (invoice_type='Session').
--- 5. The pharmacist bills the patient for the prescription
---    (invoice_type='Prescription'), based on the itemized prescription.
--- 6. Rooms are a simple availability table that a nurse or doctor can
+--    to history. The doctor may also write a prescription, which is
+--    handed directly to the patient to buy elsewhere (no pharmacist
+--    role or in-house billing for it).
+-- 4. The nurse bills the patient for the session.
+-- 5. Rooms are a simple availability table that a nurse or doctor can
 --    update (enforced by application logic, since role checks on FK
 --    targets aren't expressible in plain SQL).
 
@@ -21,14 +21,14 @@ CREATE DATABASE IF NOT EXISTS appointmed_db;
 USE appointmed_db;
 
 -- ============================================================
--- USERS: doctors, nurses, pharmacists, admins
+-- USERS: doctors, nurses, admins
 -- ============================================================
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
-    role ENUM('doctor', 'nurse', 'pharmacist', 'admin') NOT NULL,
+    role ENUM('doctor', 'nurse', 'admin') NOT NULL,
     specialization VARCHAR(100) NULL,          -- doctors only
     assigned_doctor_id INT NULL,               -- nurses only: which doctor they support
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -131,16 +131,18 @@ CREATE TABLE IF NOT EXISTS examinations (
 );
 
 -- ============================================================
--- PRESCRIPTIONS: written by the doctor during/after examination.
--- Itemized so the pharmacist has line items to bill against.
+-- PRESCRIPTIONS: written by the doctor during/after examination
+-- and given directly to the patient to purchase elsewhere.
+-- There is no pharmacist role and no in-house billing for these;
+-- they exist purely as a record of what was prescribed.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS prescriptions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     examination_id INT NOT NULL,
     patient_id INT NOT NULL,
     doctor_id INT NOT NULL,
-    status ENUM('Pending Billing', 'Billed', 'Fulfilled') NOT NULL DEFAULT 'Pending Billing',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes VARCHAR(255),                 -- optional general instructions
+    issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (examination_id) REFERENCES examinations(id),
     FOREIGN KEY (patient_id) REFERENCES patients(id),
     FOREIGN KEY (doctor_id) REFERENCES users(id)
@@ -152,35 +154,26 @@ CREATE TABLE IF NOT EXISTS prescription_items (
     medicine_name VARCHAR(150) NOT NULL,
     dosage VARCHAR(100),
     quantity INT NOT NULL DEFAULT 1,
-    unit_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    instructions VARCHAR(255),          -- e.g. "Take twice daily after meals"
     FOREIGN KEY (prescription_id) REFERENCES prescriptions(id)
 );
 
 -- ============================================================
--- INVOICES: covers BOTH billing paths —
---   invoice_type = 'Session'      -> issued by a nurse, tied to an appointment
---   invoice_type = 'Prescription' -> issued by a pharmacist, tied to a prescription
+-- INVOICES: session billing only, issued by a nurse against
+-- an appointment.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS invoices (
     id INT AUTO_INCREMENT PRIMARY KEY,
     patient_id INT NOT NULL,
-    appointment_id INT NULL,            -- required for Session invoices
-    prescription_id INT NULL,           -- required for Prescription invoices
-    invoice_type ENUM('Session', 'Prescription') NOT NULL,
-    issued_by INT NOT NULL,             -- nurse for Session, pharmacist for Prescription
+    appointment_id INT NOT NULL,
+    issued_by INT NOT NULL,             -- nurse who issued the invoice
     amount DECIMAL(10,2) NOT NULL,
     status ENUM('Unpaid', 'Paid', 'Cancelled') NOT NULL DEFAULT 'Unpaid',
     issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     paid_at TIMESTAMP NULL,
     FOREIGN KEY (patient_id) REFERENCES patients(id),
     FOREIGN KEY (appointment_id) REFERENCES appointments(id),
-    FOREIGN KEY (prescription_id) REFERENCES prescriptions(id),
-    FOREIGN KEY (issued_by) REFERENCES users(id),
-    CONSTRAINT chk_invoice_target CHECK (
-        (invoice_type = 'Session' AND appointment_id IS NOT NULL AND prescription_id IS NULL)
-        OR
-        (invoice_type = 'Prescription' AND prescription_id IS NOT NULL AND appointment_id IS NULL)
-    )
+    FOREIGN KEY (issued_by) REFERENCES users(id)
 );
 
 -- ============================================================
