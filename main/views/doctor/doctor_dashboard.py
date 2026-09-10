@@ -1,8 +1,7 @@
 """
 Doctor's dashboard — built with CustomTkinter.
 Shows today's appointments as cards with a status badge, plus a
-"Complete" button. If the database is not reachable yet, it shows some
-sample rows instead, so the screen can still be looked at on its own.
+"Complete" button.
 """
 
 import customtkinter as ctk
@@ -20,13 +19,6 @@ STATUS_COLORS = {
     "Completed": ("#E3F6E8", "#2F855A"),
     "Cancelled": ("#FBE7E7", "#C53030"),
 }
-
-SAMPLE_APPOINTMENTS = [
-    {"id": 1, "time": "9:00 AM", "patient": "Liam Mercado", "reason": "Follow-up checkup", "status": "Checked-in"},
-    {"id": 2, "time": "9:30 AM", "patient": "Rosa Torres", "reason": "New patient consult", "status": "Scheduled"},
-    {"id": 3, "time": "10:15 AM", "patient": "Kian Ang", "reason": "Vaccination", "status": "Scheduled"},
-]
-
 
 class DoctorDashboard(ctk.CTk):
     def __init__(self, doctor):
@@ -72,18 +64,19 @@ class DoctorDashboard(ctk.CTk):
             )
             appointments = []
             for r in rows:
-                patient_name = r.get("patient_name")
+                record = dict(r)
+                patient_name = record.get("patient_name")
                 if not patient_name:
-                    patient_name = "Patient #" + str(r["patient_id"])
+                    patient_name = "Patient #" + str(record["patient_id"])
                 appointments.append({
-                    "id": r["id"],
-                    "time": r["scheduled_time"].strftime("%-I:%M %p"),
+                    "id": record["id"],
+                    "time": record["scheduled_time"].strftime("%-I:%M %p"),
                     "patient": patient_name,
-                    "reason": r["reason"],
-                    "status": r["status"],
+                    "reason": record["reason"],
+                    "status": record["status"],
                 })
         except AppointMedError:
-            appointments = SAMPLE_APPOINTMENTS
+            appointments = []
 
         if not appointments:
             ctk.CTkLabel(
@@ -135,12 +128,3 @@ class DoctorDashboard(ctk.CTk):
         except AppointMedError:
             pass
         self.load_appointments()
-
-
-if __name__ == "__main__":
-    class FakeDoctor:
-        user_id = 1
-        def dashboard_title(self):
-            return "Dr. Juan Diaz — Pediatrics"
-
-    DoctorDashboard(FakeDoctor()).mainloop()

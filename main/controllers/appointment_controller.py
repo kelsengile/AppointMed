@@ -30,7 +30,7 @@ class AppointmentController:
                 "VALUES (%s, %s, %s, %s, 'Scheduled')",
                 (patient_id, doctor_id, scheduled_time, reason),
             )
-            return db.cursor.lastrowid
+            return db.lastrowid
 
     def get_schedule_for_doctor(self, doctor_id, date):
         with DBConnector() as db:
@@ -47,11 +47,11 @@ class AppointmentController:
                 "UPDATE appointments SET status=%s WHERE id=%s",
                 (new_status, appointment_id),
             )
-            if db.cursor.rowcount == 0:
+            if db.rowcount == 0:
                 raise RecordNotFoundError("No appointment with id " + str(appointment_id) + ".")
 
     def delete_appointment(self, appointment_id):
         with DBConnector() as db:
             db.execute("DELETE FROM appointments WHERE id=%s", (appointment_id,))
-            if db.cursor.rowcount == 0:
+            if db.rowcount == 0:
                 raise RecordNotFoundError("No appointment with id " + str(appointment_id) + ".")
