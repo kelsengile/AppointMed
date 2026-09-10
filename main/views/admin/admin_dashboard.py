@@ -17,14 +17,8 @@ ROLE_COLORS = {
     "doctor": ("#E3F0FF", "#2B6CB0"),
     "nurse": ("#F3E8FF", "#6B46C1"),
     "admin": ("#FBE7E7", "#C53030"),
+    "pharmacist": ("#FBE7E7", "#30C549"),
 }
-
-SAMPLE_USERS = [
-    {"id": 1, "full_name": "Juan Diaz", "username": "drdiaz", "role": "doctor", "specialization": "Pediatrics", "assigned_doctor_id": None},
-    {"id": 2, "full_name": "Jane Santos", "username": "nursejane", "role": "nurse", "specialization": None, "assigned_doctor_id": 1},
-    {"id": 3, "full_name": "System Administrator", "username": "admin", "role": "admin", "specialization": None, "assigned_doctor_id": None},
-]
-
 
 class AdminDashboard(ctk.CTk):
     def __init__(self, admin):
@@ -70,7 +64,7 @@ class AdminDashboard(ctk.CTk):
         try:
             users = self.user_controller.get_all_users()
         except AppointMedError:
-            users = SAMPLE_USERS
+            users = []
 
         if not users:
             ctk.CTkLabel(self.list_frame, text="No users found.", text_color="gray50").pack(pady=40)
