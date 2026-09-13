@@ -23,11 +23,6 @@ STATUS_COLORS = {
     "Cancelled": ("#FBE7E7", "#C53030"),
 }
 
-SAMPLE_APPOINTMENTS = [
-    {"id": 1, "time": "9:00 AM", "patient": "Liam Mercado", "reason": "Follow-up checkup", "status": "Checked-in"},
-    {"id": 2, "time": "9:30 AM", "patient": "Rosa Torres", "reason": "New patient consult", "status": "Scheduled"},
-    {"id": 3, "time": "10:15 AM", "patient": "Kian Ang", "reason": "Vaccination", "status": "Scheduled"},
-]
 
 # ---------------------------------------------------------------------------
 # NAV_ITEMS drives the whole sidebar: every button, its icon, and where it
@@ -440,18 +435,19 @@ class DoctorDashboard(ctk.CTk):
             )
             appointments = []
             for r in rows:
-                patient_name = r.get("patient_name")
+                record = dict(r)
+                patient_name = record.get("patient_name")
                 if not patient_name:
-                    patient_name = "Patient #" + str(r["patient_id"])
+                    patient_name = "Patient #" + str(record["patient_id"])
                 appointments.append({
-                    "id": r["id"],
-                    "time": r["scheduled_time"].strftime("%-I:%M %p"),
+                    "id": record["id"],
+                    "time": record["scheduled_time"].strftime("%-I:%M %p"),
                     "patient": patient_name,
-                    "reason": r["reason"],
-                    "status": r["status"],
+                    "reason": record["reason"],
+                    "status": record["status"],
                 })
         except AppointMedError:
-            appointments = SAMPLE_APPOINTMENTS
+            appointments = []
 
         if not appointments:
             ctk.CTkLabel(

@@ -31,10 +31,10 @@ class UserController:
                 "specialization, assigned_doctor_id) VALUES (%s, %s, %s, %s, %s, %s)",
                 (username, password_hash, full_name, role, specialization, assigned_doctor_id),
             )
-            return db.cursor.lastrowid
+            return db.lastrowid
 
     def delete_user(self, user_id):
         with DBConnector() as db:
             db.execute("DELETE FROM users WHERE id=%s", (user_id,))
-            if db.cursor.rowcount == 0:
+            if db.rowcount == 0:
                 raise RecordNotFoundError("No user with id " + str(user_id) + ".")
