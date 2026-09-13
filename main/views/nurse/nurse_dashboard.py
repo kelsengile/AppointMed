@@ -121,6 +121,24 @@ class NurseDashboard(ctk.CTk):
         )
         self.profile_name_label.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
+        # === NEW: make the whole profile block clickable ===============
+        # Same pattern as the admin dashboard: CTkFrame/CTkLabel don't
+        # have a `command=`, so we bind the raw "<Button-1>" (left click)
+        # on the frame, the avatar, and the name label that way
+        # it doesn't matter which part of the row is actually clicked.
+        # The click routes to switch_view("profile"), which swaps in the
+        # profile page in the main content area, exactly like clicking
+        # Appointments/Doctor/Room/etc. does no separate popup window.
+        clickable_widgets = (self.profile_frame, self.profile_avatar, self.profile_name_label)
+        for widget in clickable_widgets:
+            widget.bind("<Button-1>", lambda e: self.switch_view("profile"))
+            # Hand cursor + hover highlight on enter/leave, matching the
+            # nav buttons' hover_color, so the row visually reads as
+            # clickable just like they do.
+            widget.bind("<Enter>", self._on_profile_hover_enter)
+            widget.bind("<Leave>", self._on_profile_hover_leave)
+        # =================================================================
+
         # --- navigation buttons, built from NAV_ITEMS ---
         # "top" and "middle" items both stack from the top (in order);
         # "bottom" items get pinned to the floor of the sidebar.
@@ -157,6 +175,21 @@ class NurseDashboard(ctk.CTk):
         )
         self.nav_buttons[item["key"]] = btn
         return btn
+
+    # === NEW: profile block hover handlers ===============================
+    def _on_profile_hover_enter(self, event=None):
+        """Mouse entered the profile row: show a hand cursor and give
+        the row the same subtle highlight the nav buttons use on hover,
+        so it reads as one consistent, clickable family."""
+        self.profile_frame.configure(fg_color="#2A3040")
+        self.profile_frame.configure(cursor="hand2")
+        self.profile_avatar.configure(cursor="hand2")
+        self.profile_name_label.configure(cursor="hand2")
+
+    def _on_profile_hover_leave(self, event=None):
+        """Mouse left the profile row: undo the hover highlight."""
+        self.profile_frame.configure(fg_color="transparent")
+    # =====================================================================
 
     # ------------------------------------------------------------------
     # SIDEBAR ANIMATION
@@ -255,6 +288,12 @@ class NurseDashboard(ctk.CTk):
                 self.content_frame, f"{item['label']} window"
             )
 
+        # NEW: "profile" isn't a sidebar nav button (it's not in
+        # NAV_ITEMS), but it's routed to exactly the same way — it's
+        # just another entry in this pages dict, raised with tkraise()
+        # when the profile row up in the sidebar is clicked.
+        self.pages["profile"] = self.build_profile_page(self.content_frame)
+
         for page in self.pages.values():
             page.place(relx=0, rely=0, relwidth=1, relheight=1)
 
@@ -295,6 +334,61 @@ class NurseDashboard(ctk.CTk):
 
         return page
 
+    def build_profile_page(self, parent):
+        """NEW: "My Account" page for the nurse. Shown in the main
+        content area (same spot as Appointments/Doctor/Room/etc.) when
+        the nurse clicks their avatar/name in the sidebar, instead of
+        popping up a separate window. Replace the placeholder fields
+        below with real edit-profile widgets whenever you're ready to
+        make this functional."""
+        page = ctk.CTkFrame(parent, fg_color="transparent")
+
+        header = ctk.CTkFrame(page, fg_color="transparent")
+        header.pack(fill="x", padx=24, pady=(20, 4))
+        ctk.CTkLabel(
+            header, text="My Account",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            page, text="Account details", font=ctk.CTkFont(size=13), text_color="gray50"
+        ).pack(anchor="w", padx=24, pady=(0, 16))
+
+        card = ctk.CTkFrame(page, corner_radius=10)
+        card.pack(fill="x", padx=24)
+
+        avatar_row = ctk.CTkFrame(card, fg_color="transparent")
+        avatar_row.pack(fill="x", padx=20, pady=20)
+
+        ctk.CTkLabel(
+            avatar_row, text="", width=64, height=64, corner_radius=32,
+            fg_color="#3A4152"
+        ).pack(side="left")
+
+        text_col = ctk.CTkFrame(avatar_row, fg_color="transparent")
+        text_col.pack(side="left", padx=(16, 0), fill="x", expand=True)
+
+        ctk.CTkLabel(
+            text_col, text=getattr(self.nurse, "full_name", "Nurse"),
+            font=ctk.CTkFont(size=16, weight="bold"), anchor="w"
+        ).pack(fill="x")
+        ctk.CTkLabel(
+            text_col, text="@" + getattr(self.nurse, "username", "nurse"),
+            font=ctk.CTkFont(size=12), text_color="gray50", anchor="w"
+        ).pack(fill="x", pady=(2, 0))
+        ctk.CTkLabel(
+            text_col, text="Nurse",
+            fg_color="#F3E8FF", text_color="#6B46C1",
+            corner_radius=8, font=ctk.CTkFont(size=11, weight="bold")
+        ).pack(anchor="w", pady=(8, 0), ipadx=8, ipady=2)
+
+        ctk.CTkLabel(
+            card, text="Assigned doctor: #" + str(self.nurse.assigned_doctor_id),
+            font=ctk.CTkFont(size=12), text_color="gray50", anchor="w"
+        ).pack(fill="x", padx=20, pady=(0, 20))
+
+        return page
+
     def build_placeholder_page(self, parent, text):
         """Doctor / Room / Notifications / Invoice / History / Settings /
         Help don't have real functionality yet, so each just shows a big
@@ -311,8 +405,9 @@ class NurseDashboard(ctk.CTk):
         self.pages[key].tkraise()
 
     def switch_view(self, key):
-        """Wired to every nav button's command=. Updates which page is
-        showing and re-highlights the active button."""
+        """Wired to every nav button's command= (and now the profile
+        row too). Updates which page is showing and re-highlights the
+        active button."""
         self.current_view = key
         self.show_page(key)
         self.highlight_active_button()

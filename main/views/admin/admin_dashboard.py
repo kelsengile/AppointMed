@@ -126,6 +126,29 @@ class AdminDashboard(ctk.CTk):
         )
         self.profile_name_label.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
+        # === NEW: make the whole profile block clickable ===============
+        # We want clicking anywhere on the avatar/name row (not just a button)
+        # to open the account profile. CTkFrame/CTkLabel don't
+        # have a `command=` option like CTkButton does, so instead we
+        # bind the raw "<Button-1>" (left click) event on each of the
+        # three widgets that make up the row: the frame itself, the
+        # avatar circle, and the name label. That way it doesn't matter
+        # which part the admin actually clicks on.
+        clickable_widgets = (self.profile_frame, self.profile_avatar, self.profile_name_label)
+        for widget in clickable_widgets:
+            # CHANGED: instead of opening a separate popup window, this
+            # now calls switch_view("profile") — the exact same routing
+            # used by the sidebar nav buttons — so the profile content
+            # swaps in on the right-hand side like Users/Server/etc.
+            widget.bind("<Button-1>", lambda e: self.switch_view("profile"))
+            # Swap the mouse cursor to a "hand" pointer on hover so it's
+            # visually obvious the row is clickable, and restore it when
+            # the mouse leaves. This is the same affordance a normal
+            # button gives you "for free".
+            widget.bind("<Enter>", self._on_profile_hover_enter)
+            widget.bind("<Leave>", self._on_profile_hover_leave)
+        # =================================================================
+
         # --- navigation buttons, built from NAV_ITEMS ---
         # Items are split into a "top" group (Users, Server) and a
         # "bottom" group (Settings, Help) so Settings/Help can be pinned
@@ -164,6 +187,25 @@ class AdminDashboard(ctk.CTk):
         )
         self.nav_buttons[item["key"]] = btn
         return btn
+
+    # === NEW: profile block hover + click handlers ======================
+    def _on_profile_hover_enter(self, event=None):
+        """Mouse entered the profile row: show a hand cursor and give
+        the row a subtle highlight, same hover_color used by the nav
+        buttons, so it reads as one consistent, clickable family."""
+        self.profile_frame.configure(fg_color="#2A3040")
+        self.profile_frame.configure(cursor="hand2")
+        self.profile_avatar.configure(cursor="hand2")
+        self.profile_name_label.configure(cursor="hand2")
+
+    def _on_profile_hover_leave(self, event=None):
+        """Mouse left the profile row: undo the hover highlight."""
+        self.profile_frame.configure(fg_color="transparent")
+
+    # (open_profile_popup was removed — the profile is now a normal page
+    # inside the content area, built by build_profile_page() below, and
+    # shown the same way any other sidebar page is shown.)
+    # =====================================================================
 
     # ------------------------------------------------------------------
     # SIDEBAR ANIMATION
@@ -273,6 +315,11 @@ class AdminDashboard(ctk.CTk):
             "server": self.build_placeholder_page(self.content_frame, "Server window"),
             "settings": self.build_placeholder_page(self.content_frame, "Settings window"),
             "help": self.build_placeholder_page(self.content_frame, "Help window"),
+            # NEW: "profile" isn't a sidebar nav button (it's not in
+            # NAV_ITEMS), but it's routed to exactly the same way — it's
+            # just another entry in this pages dict, raised with
+            # tkraise() when the profile row up in the sidebar is clicked.
+            "profile": self.build_profile_page(self.content_frame),
         }
         for page in self.pages.values():
             page.place(relx=0, rely=0, relwidth=1, relheight=1)
@@ -306,6 +353,56 @@ class AdminDashboard(ctk.CTk):
 
         self.list_frame = ctk.CTkScrollableFrame(page, fg_color="transparent")
         self.list_frame.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+
+        return page
+
+    def build_profile_page(self, parent):
+        """NEW: "My Account" page. Shown in the main content area (same
+        spot as Users/Server/Settings/Help) when the admin clicks their
+        avatar/name in the sidebar, instead of popping up a separate
+        window. Replace the placeholder fields below with real
+        edit-profile widgets (change password, etc.) whenever you're
+        ready to make this functional."""
+        page = ctk.CTkFrame(parent, fg_color="transparent")
+
+        header = ctk.CTkFrame(page, fg_color="transparent")
+        header.pack(fill="x", padx=24, pady=(20, 4))
+        ctk.CTkLabel(
+            header, text="My Account",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            page, text="Account details", font=ctk.CTkFont(size=13), text_color="gray50"
+        ).pack(anchor="w", padx=24, pady=(0, 16))
+
+        card = ctk.CTkFrame(page, corner_radius=10)
+        card.pack(fill="x", padx=24)
+
+        avatar_row = ctk.CTkFrame(card, fg_color="transparent")
+        avatar_row.pack(fill="x", padx=20, pady=20)
+
+        ctk.CTkLabel(
+            avatar_row, text="", width=64, height=64, corner_radius=32,
+            fg_color="#3A4152"
+        ).pack(side="left")
+
+        text_col = ctk.CTkFrame(avatar_row, fg_color="transparent")
+        text_col.pack(side="left", padx=(16, 0), fill="x", expand=True)
+
+        ctk.CTkLabel(
+            text_col, text=getattr(self.admin, "full_name", "Admin"),
+            font=ctk.CTkFont(size=16, weight="bold"), anchor="w"
+        ).pack(fill="x")
+        ctk.CTkLabel(
+            text_col, text="@" + getattr(self.admin, "username", "admin"),
+            font=ctk.CTkFont(size=12), text_color="gray50", anchor="w"
+        ).pack(fill="x", pady=(2, 0))
+        ctk.CTkLabel(
+            text_col, text="Administrator",
+            fg_color=ROLE_COLORS["admin"][0], text_color=ROLE_COLORS["admin"][1],
+            corner_radius=8, font=ctk.CTkFont(size=11, weight="bold")
+        ).pack(anchor="w", pady=(8, 0), ipadx=8, ipady=2)
 
         return page
 
