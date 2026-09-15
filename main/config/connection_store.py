@@ -13,7 +13,7 @@ import os
 STORE_PATH = os.path.join(os.path.dirname(__file__), "remembered_connection.json")
 
 
-def load_remembered():
+def load_remembered() -> dict[str, str] | None:
     """Returns a dictionary like {"host": ..., "user": ...} if we saved a
     connection before. Returns None if nothing was saved yet or the file
     could not be read."""
@@ -21,14 +21,18 @@ def load_remembered():
         return None
 
     try:
-        file = open(STORE_PATH, "r")
-        data = json.load(file)
-        file.close()
+        with open(STORE_PATH, "r", encoding="utf-8") as file:
+            data = json.load(file)
     except (json.JSONDecodeError, OSError):
         return None
 
-    if "host" in data and "user" in data:
-        return data
+    if not isinstance(data, dict):
+        return None
+
+    host = data.get("host")
+    user = data.get("user")
+    if isinstance(host, str) and isinstance(user, str) and host and user:
+        return {"host": host, "user": user}
     return None
 
 
