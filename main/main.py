@@ -19,7 +19,7 @@ if __name__ == "__main__":
     # If we remembered a host/username from before, use it now, so a
     # returning user does not have to type the server address again.
     remembered = load_remembered()
-    if remembered:
+    if remembered is not None:
         settings.DB_CONFIG["host"] = remembered["host"]
         settings.DB_CONFIG["user"] = remembered["user"]
 
