@@ -8,8 +8,10 @@ Same two-part layout as the other dashboards:
     | (nav)     |  one "page" per nav button     |
     +-----------+--------------------------------+
 
-Only the "Appointments" page has real content right now (today's schedule
-as cards with a status badge and a "Complete" button). Every other nav
+Only the "Appointments" page has real content right now (the upcoming
+schedule as cards grouped by day, each with a status badge and a button
+to advance it; the list re-reads the database periodically so anything a
+nurse books shows up on its own). Every other nav
 item already has its OWN build_*_page() method waiting in section 5 —
 build_doctor_page(), build_room_page(), build_notifications_page(),
 build_invoice_page(), build_history_page(), build_settings_page(),
@@ -39,10 +41,13 @@ Anything you skip step (b) and (c) for automatically gets a placeholder.
 
 import time
 import customtkinter as ctk
-from datetime import date
+from tkinter import messagebox
+from datetime import date, timedelta
 
 from controllers.appointment_controller import AppointmentController
+from controllers.user_controller import UserController
 from utils.exceptions import AppointMedError
+from utils.formatting import format_time
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -62,9 +67,15 @@ AVATAR_BG = "#3A4152"       # the blank circle standing in for a photo
 
 MUTED_TEXT = "gray50"       # subtitles / secondary info
 PLACEHOLDER_TEXT = "gray30" # the big "… window" label
+ERROR_TEXT = "#d64545"
+SUCCESS_TEXT = "#2F855A"
 
 COMPLETE_BG = "#2F855A"
 COMPLETE_HOVER = "#276749"
+
+CANCEL_BG = "#C53030"
+CANCEL_HOVER = "#9B2C2C"
+REFRESH_BG = "gray60"
 
 DOCTOR_BADGE_BG = "#E3F0FF"
 DOCTOR_BADGE_FG = "#2B6CB0"
@@ -73,6 +84,7 @@ DOCTOR_BADGE_FG = "#2B6CB0"
 STATUS_COLORS = {
     "Scheduled": ("#EEF1F4", "#4A5568"),
     "Checked-in": ("#FFF6DC", "#B7791F"),
+    "Examined": ("#E3F0FF", "#2B6CB0"),
     "Completed": ("#E3F6E8", "#2F855A"),
     "Cancelled": ("#FBE7E7", "#C53030"),
 }
@@ -117,6 +129,12 @@ class DoctorDashboard(ctk.CTk):
     ANIMATION_DURATION_S = 0.32
     ANIMATION_FRAME_MS = 8
 
+    # How often the schedule re-reads the database on its own. A nurse
+    # books appointments from a different machine, so without this the
+    # doctor would only ever see what existed the moment they logged in
+    # (or last pressed Refresh).
+    AUTO_REFRESH_MS = 20000
+
     # ===================================================================
     # 2. WINDOW SETUP
     # ===================================================================
@@ -124,6 +142,7 @@ class DoctorDashboard(ctk.CTk):
         super().__init__()
         self.doctor = doctor
         self.appointment_controller = AppointmentController()
+        self.user_controller = UserController()
 
         # --- state the sidebar reads and writes ---
         self.sidebar_expanded = True         # is the panel currently open?
@@ -135,6 +154,7 @@ class DoctorDashboard(ctk.CTk):
         self.geometry(self.WINDOW_SIZE)
         self.build_ui()
         self.load_appointments()
+        self.schedule_auto_refresh()
 
     def build_ui(self):
         """`body` is a plain container holding the sidebar on the left and
@@ -388,7 +408,7 @@ class DoctorDashboard(ctk.CTk):
         self.pages[PROFILE_KEY] = self.build_profile_page(self.content_frame)
 
         # place() with relwidth/relheight 1 stacks every page full-size on
-        # top of the others; tkraise() then picks the visible one.
+        # top of the others; lift() then picks the visible one.
         for page in self.pages.values():
             page.place(relx=0, rely=0, relwidth=1, relheight=1)
 
@@ -411,7 +431,7 @@ class DoctorDashboard(ctk.CTk):
         ).pack(side="right")
 
         ctk.CTkLabel(
-            page, text="Today — " + date.today().strftime("%A, %B %d"),
+            page, text="Upcoming — from today onward, newly booked visits appear automatically",
             font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
         ).pack(anchor="w", padx=24, pady=(0, 16))
 
@@ -424,10 +444,15 @@ class DoctorDashboard(ctk.CTk):
 
     def build_profile_page(self, parent):
         """"My Account" — shown in the same spot as the other pages when
-        the doctor clicks their avatar/name in the sidebar. Replace the
-        read-only fields below with real edit-profile widgets whenever
-        you're ready."""
-        page = ctk.CTkFrame(parent, fg_color="transparent")
+        the doctor clicks their avatar/name in the sidebar. Has a summary
+        card at the top, then two small forms: one to edit name/
+        specialization, one to change the password. Both talk to
+        UserController, which is where the actual validation and the
+        UPDATE statements live."""
+        # A scrollable frame instead of a plain one so the page can grow
+        # past the visible window height (e.g. once both edit forms are
+        # opened) without anything getting cut off.
+        page = ctk.CTkScrollableFrame(parent, fg_color="transparent")
 
         header = ctk.CTkFrame(page, fg_color="transparent")
         header.pack(fill="x", padx=24, pady=(20, 4))
@@ -440,6 +465,7 @@ class DoctorDashboard(ctk.CTk):
             page, text="Account details", font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
         ).pack(anchor="w", padx=24, pady=(0, 16))
 
+        # --- summary card: avatar, name, username, role badge ----------
         card = ctk.CTkFrame(page, corner_radius=10)
         card.pack(fill="x", padx=24)
 
@@ -455,10 +481,13 @@ class DoctorDashboard(ctk.CTk):
         text_col = ctk.CTkFrame(avatar_row, fg_color="transparent")
         text_col.pack(side="left", padx=(16, 0), fill="x", expand=True)
 
-        ctk.CTkLabel(
+        # Stored on self so save_profile_details() can update this text in
+        # place after a successful save, instead of rebuilding the page.
+        self.profile_page_name_label = ctk.CTkLabel(
             text_col, text=getattr(self.doctor, "full_name", "Doctor"),
             font=ctk.CTkFont(size=16, weight="bold"), anchor="w"
-        ).pack(fill="x")
+        )
+        self.profile_page_name_label.pack(fill="x")
         ctk.CTkLabel(
             text_col, text="@" + getattr(self.doctor, "username", "doctor"),
             font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
@@ -469,18 +498,149 @@ class DoctorDashboard(ctk.CTk):
             corner_radius=8, font=ctk.CTkFont(size=11, weight="bold")
         ).pack(anchor="w", pady=(8, 0), ipadx=8, ipady=2)
 
-        specialization = getattr(self.doctor, "specialization", None)
-        if specialization:
-            ctk.CTkLabel(
-                card, text="Specialization: " + specialization,
-                font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
-            ).pack(fill="x", padx=20, pady=(0, 20))
-        else:
-            # An invisible 4px strip, so the card's bottom edge sits in the
-            # same place whether or not there's a specialization to show.
-            ctk.CTkFrame(card, fg_color="transparent", height=4).pack(fill="x")
+        ctk.CTkFrame(card, fg_color="transparent", height=4).pack(fill="x")
+
+        # --- edit details form -------------------------------------------
+        details_card = ctk.CTkFrame(page, corner_radius=10)
+        details_card.pack(fill="x", padx=24, pady=(16, 0))
+
+        details_header = ctk.CTkFrame(details_card, fg_color="transparent")
+        details_header.pack(fill="x", padx=20, pady=(16, 8))
+        ctk.CTkLabel(
+            details_header, text="Edit details", font=ctk.CTkFont(size=13, weight="bold"), anchor="w"
+        ).pack(side="left")
+        self.details_edit_btn = ctk.CTkButton(
+            details_header, text="Edit", width=70, height=26,
+            fg_color=REFRESH_BG, command=self.toggle_details_edit
+        )
+        self.details_edit_btn.pack(side="right")
+
+        # Everything below is the actual editable form. It's built here but
+        # NOT packed yet — it only appears once "Edit" is pressed, via
+        # toggle_details_edit().
+        self.details_form = ctk.CTkFrame(details_card, fg_color="transparent")
+
+        ctk.CTkLabel(self.details_form, text="Full name", anchor="w").pack(fill="x", padx=20)
+        self.profile_fullname_entry = ctk.CTkEntry(self.details_form, width=300)
+        self.profile_fullname_entry.insert(0, getattr(self.doctor, "full_name", ""))
+        self.profile_fullname_entry.pack(anchor="w", padx=20, pady=(2, 10))
+
+        ctk.CTkLabel(self.details_form, text="Specialization", anchor="w").pack(fill="x", padx=20)
+        self.profile_specialization_entry = ctk.CTkEntry(self.details_form, width=300)
+        self.profile_specialization_entry.insert(0, getattr(self.doctor, "specialization", "") or "")
+        self.profile_specialization_entry.pack(anchor="w", padx=20, pady=(2, 6))
+
+        self.profile_details_status = ctk.CTkLabel(self.details_form, text="", text_color=ERROR_TEXT)
+        self.profile_details_status.pack(anchor="w", padx=20)
+
+        ctk.CTkButton(
+            self.details_form, text="Save changes", width=140, command=self.save_profile_details
+        ).pack(anchor="w", padx=20, pady=(10, 20))
+
+        # --- change password form ----------------------------------------
+        password_card = ctk.CTkFrame(page, corner_radius=10)
+        password_card.pack(fill="x", padx=24, pady=(16, 20))
+
+        password_header = ctk.CTkFrame(password_card, fg_color="transparent")
+        password_header.pack(fill="x", padx=20, pady=(16, 8))
+        ctk.CTkLabel(
+            password_header, text="Change password", font=ctk.CTkFont(size=13, weight="bold"), anchor="w"
+        ).pack(side="left")
+        self.password_edit_btn = ctk.CTkButton(
+            password_header, text="Edit", width=70, height=26,
+            fg_color=REFRESH_BG, command=self.toggle_password_edit
+        )
+        self.password_edit_btn.pack(side="right")
+
+        # Hidden until "Edit" is pressed, same as details_form above.
+        self.password_form = ctk.CTkFrame(password_card, fg_color="transparent")
+
+        self.current_password_entry = ctk.CTkEntry(
+            self.password_form, width=300, show="*", placeholder_text="Current password"
+        )
+        self.current_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
+
+        self.new_password_entry = ctk.CTkEntry(
+            self.password_form, width=300, show="*", placeholder_text="New password"
+        )
+        self.new_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
+
+        self.confirm_password_entry = ctk.CTkEntry(
+            self.password_form, width=300, show="*", placeholder_text="Confirm new password"
+        )
+        self.confirm_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
+
+        self.profile_password_status = ctk.CTkLabel(self.password_form, text="", text_color=ERROR_TEXT)
+        self.profile_password_status.pack(anchor="w", padx=20)
+
+        ctk.CTkButton(
+            self.password_form, text="Update password", width=140, command=self.save_profile_password
+        ).pack(anchor="w", padx=20, pady=(10, 20))
 
         return page
+
+    def toggle_details_edit(self):
+        """Shows/hides the "Edit details" form. The button doubles as
+        Edit/Cancel depending on whether the form is currently open."""
+        if self.details_form.winfo_ismapped():
+            self.details_form.pack_forget()
+            self.details_edit_btn.configure(text="Edit")
+        else:
+            self.details_form.pack(fill="x")
+            self.details_edit_btn.configure(text="Cancel")
+
+    def toggle_password_edit(self):
+        """Shows/hides the "Change password" form, same Edit/Cancel pattern
+        as toggle_details_edit()."""
+        if self.password_form.winfo_ismapped():
+            self.password_form.pack_forget()
+            self.password_edit_btn.configure(text="Edit")
+        else:
+            self.password_form.pack(fill="x")
+            self.password_edit_btn.configure(text="Cancel")
+
+    def save_profile_details(self):
+        """Handles the "Save changes" button on the details form."""
+        full_name = self.profile_fullname_entry.get().strip()
+        specialization = self.profile_specialization_entry.get().strip()
+
+        if not specialization:
+            self.profile_details_status.configure(
+                text_color=ERROR_TEXT, text="Specialization is required."
+            )
+            return
+
+        try:
+            self.user_controller.update_details(self.doctor.user_id, full_name, specialization)
+        except AppointMedError as e:
+            self.profile_details_status.configure(text_color=ERROR_TEXT, text=str(e))
+            return
+
+        # Reflect the change immediately, everywhere the name/title shows
+        # up, without needing to log out and back in.
+        self.doctor.full_name = full_name
+        self.doctor.specialization = specialization
+        self.profile_page_name_label.configure(text=full_name)
+        self.profile_name_label.configure(text=full_name)
+        self.title(self.doctor.dashboard_title())
+        self.profile_details_status.configure(text_color=SUCCESS_TEXT, text="Saved.")
+
+    def save_profile_password(self):
+        """Handles the "Update password" button on the password form."""
+        current = self.current_password_entry.get().strip()
+        new = self.new_password_entry.get().strip()
+        confirm = self.confirm_password_entry.get().strip()
+
+        try:
+            self.user_controller.change_password(self.doctor.user_id, current, new, confirm)
+        except AppointMedError as e:
+            self.profile_password_status.configure(text_color=ERROR_TEXT, text=str(e))
+            return
+
+        self.current_password_entry.delete(0, "end")
+        self.new_password_entry.delete(0, "end")
+        self.confirm_password_entry.delete(0, "end")
+        self.profile_password_status.configure(text_color=SUCCESS_TEXT, text="Password updated.")
 
     # -------------------------------------------------------------------
     # SCREENS STILL TO BE BUILT
@@ -563,8 +723,17 @@ class DoctorDashboard(ctk.CTk):
         self.highlight_active_button()
 
     def show_page(self, key):
-        """Bring one stacked page to the front."""
-        self.pages[key].tkraise()
+        """Bring one stacked page to the front.
+
+        Use lift(), NOT tkraise(). They are the same method on a normal
+        widget, but a CTkScrollableFrame (which the profile page is, so
+        it can scroll) is really two frames: an outer one that gets
+        placed, and the inner one you add widgets to. CustomTkinter
+        redirects lift() to that outer frame but leaves tkraise() on the
+        inner one - so tkraise() here raised a frame that isn't part of
+        the page stack at all, and clicking the profile row appeared to
+        do nothing."""
+        self.pages[key].lift()
 
     def highlight_active_button(self):
         """Blue background on the current page's button, transparent on the
@@ -585,27 +754,40 @@ class DoctorDashboard(ctk.CTk):
 
     def load_appointments(self):
         """Redraw the whole schedule from scratch. Called on start-up,
-        after Refresh, and after an appointment is completed."""
+        every AUTO_REFRESH_MS, after Refresh, and after an appointment is
+        completed."""
         self.clear_list()
-        appointments = self.fetch_todays_appointments()
+        appointments = self.fetch_upcoming_appointments()
 
         if not appointments:
             ctk.CTkLabel(
-                self.list_frame, text="No appointments scheduled for today.",
+                self.list_frame, text="No upcoming appointments.",
                 text_color=MUTED_TEXT
             ).pack(pady=40)
             return
 
+        # The rows arrive sorted by scheduled_time, so a day heading is
+        # needed exactly when the date changes from the previous card.
+        current_day = None
         for appt in appointments:
+            if appt["date"] != current_day:
+                current_day = appt["date"]
+                self.add_day_heading(current_day)
             self.add_appointment_card(appt)
 
-    def fetch_todays_appointments(self):
-        """Ask the controller for today's rows and flatten them into plain
-        dicts the UI can read. Returns [] if anything goes wrong, so a
-        database hiccup shows an empty schedule instead of crashing."""
+    def fetch_upcoming_appointments(self):
+        """Ask the controller for today's and every later day's rows, and
+        flatten them into plain dicts the UI can read. Returns [] if
+        anything goes wrong, so a database hiccup shows an empty schedule
+        instead of crashing.
+
+        This deliberately spans more than today: a nurse can only book a
+        slot that hasn't happened yet, so most of what they add lands on
+        a later date. A today-only list would leave the doctor staring at
+        an empty screen while appointments piled up behind it."""
         try:
-            rows = self.appointment_controller.get_schedule_for_doctor(
-                self.doctor.user_id, date.today().isoformat()
+            rows = self.appointment_controller.get_upcoming_for_doctor(
+                self.doctor.user_id
             )
         except AppointMedError:
             return []
@@ -613,19 +795,54 @@ class DoctorDashboard(ctk.CTk):
         appointments = []
         for row in rows:
             record = dict(row)
-            # Fall back to an ID if the join didn't give us a name.
-            patient_name = record.get("patient_name")
-            if not patient_name:
-                patient_name = "Patient #" + str(record["patient_id"])
-
+            scheduled_time = record["scheduled_time"]
             appointments.append({
                 "id": record["id"],
-                "time": record["scheduled_time"].strftime("%-I:%M %p"),
-                "patient": patient_name,
-                "reason": record["reason"],
+                # Kept as a real date object, not a string, so
+                # load_appointments() can compare one card's day against
+                # the next without any parsing.
+                "date": scheduled_time.date(),
+                "time": format_time(scheduled_time),
+                # `full_name` is the appointee's name, always present on
+                # the row - it's filled in the moment the nurse books the
+                # appointment, well before a patient record may exist.
+                "patient": record["full_name"],
+                "reason": record["reason"] or "No reason given",
                 "status": record["status"],
             })
         return appointments
+
+    def add_day_heading(self, day):
+        """A small date label separating one day's cards from the next."""
+        ctk.CTkLabel(
+            self.list_frame, text=self.day_label(day),
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=MUTED_TEXT, anchor="w"
+        ).pack(fill="x", pady=(14, 2), padx=4)
+
+    @staticmethod
+    def day_label(day):
+        """"Today"/"Tomorrow" for the two days a doctor cares about most,
+        the plain date for everything further out."""
+        today = date.today()
+        if day == today:
+            return "TODAY — " + day.strftime("%A, %B %d")
+        if day == today + timedelta(days=1):
+            return "TOMORROW — " + day.strftime("%A, %B %d")
+        return day.strftime("%A, %B %d").upper()
+
+    def schedule_auto_refresh(self):
+        """Queue the next automatic reload."""
+        self.after(self.AUTO_REFRESH_MS, self.auto_refresh)
+
+    def auto_refresh(self):
+        """Reload the schedule, then queue the next reload. The
+        winfo_exists() check stops the loop from firing into a window
+        that's already been closed."""
+        if not self.winfo_exists():
+            return
+        self.load_appointments()
+        self.schedule_auto_refresh()
 
     def add_appointment_card(self, appt):
         """One row: time | patient + reason | status badge | action."""
@@ -656,19 +873,30 @@ class DoctorDashboard(ctk.CTk):
 
         # Nothing left to do on an appointment that's already finished.
         if appt["status"] not in FINISHED_STATUSES:
+            next_status = self.appointment_controller.next_status(appt["status"])
+            if next_status:
+                ctk.CTkButton(
+                    card, text="Mark " + next_status, width=120, height=26,
+                    fg_color=COMPLETE_BG, hover_color=COMPLETE_HOVER,
+                    # default-argument trick again, so each card's button
+                    # remembers its own appointment and target status
+                    command=lambda a=appt, s=next_status: self.change_status(a, s)
+                ).pack(side="right", padx=(8, 0))
+
             ctk.CTkButton(
-                card, text="Complete", width=80, height=26,
-                fg_color=COMPLETE_BG, hover_color=COMPLETE_HOVER,
-                # default-argument trick again, so each card's button
-                # remembers its own appointment
-                command=lambda a=appt: self.mark_completed(a)
+                card, text="Cancel", width=70, height=26,
+                fg_color=CANCEL_BG, hover_color=CANCEL_HOVER,
+                command=lambda a=appt: self.change_status(a, "Cancelled")
             ).pack(side="right", padx=(8, 0))
 
-    def mark_completed(self, appt):
+    def change_status(self, appt, new_status):
+        """Walks an appointment forward through Scheduled -> Checked-in ->
+        Examined -> Completed (one click at a time via the "Mark ..."
+        button), or cancels it outright."""
         try:
-            self.appointment_controller.update_status(appt["id"], "Completed")
-        except AppointMedError:
-            pass  # reloading below will show the unchanged status
+            self.appointment_controller.update_status(appt["id"], new_status)
+        except AppointMedError as e:
+            messagebox.showerror("Error", str(e))
         self.load_appointments()
 
 
@@ -677,7 +905,9 @@ class DoctorDashboard(ctk.CTk):
 if __name__ == "__main__":
     class FakeDoctor:
         user_id = 1
+        username = "jdiaz"
         full_name = "Dr. Juan Diaz"
+        specialization = "Pediatrics"
 
         def dashboard_title(self):
             return "Dr. Juan Diaz — Pediatrics"
