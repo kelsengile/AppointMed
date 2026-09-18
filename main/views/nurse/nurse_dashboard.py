@@ -41,10 +41,12 @@ Anything you skip step (b) and (c) for automatically gets a placeholder.
 import time
 import customtkinter as ctk
 from tkinter import messagebox
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from controllers.appointment_controller import AppointmentController
+from controllers.user_controller import UserController
 from utils.exceptions import AppointMedError
+from utils.formatting import format_time, format_datetime
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -65,7 +67,10 @@ AVATAR_BG = "#3A4152"       # the blank circle standing in for a photo
 MUTED_TEXT = "gray50"       # subtitles / secondary info
 PLACEHOLDER_TEXT = "gray30" # the big "… window" label
 ERROR_TEXT = "#d64545"
+SUCCESS_TEXT = "#2F855A"
 
+CHECKIN_BG = "#2B6CB0"
+CHECKIN_HOVER = "#2C5282"
 CANCEL_BG = "#C53030"
 CANCEL_HOVER = "#9B2C2C"
 REFRESH_BG = "gray60"
@@ -77,15 +82,13 @@ NURSE_BADGE_FG = "#6B46C1"
 STATUS_COLORS = {
     "Scheduled": ("#EEF1F4", "#4A5568"),
     "Checked-in": ("#FFF6DC", "#B7791F"),
+    "Examined": ("#E3F0FF", "#2B6CB0"),
     "Completed": ("#E3F6E8", "#2F855A"),
     "Cancelled": ("#FBE7E7", "#C53030"),
 }
 
 # Statuses that are already finished, so no action button is drawn.
 FINISHED_STATUSES = ("Completed", "Cancelled")
-
-# The format the "Date & time" field on the add-appointment form expects.
-DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
 # NAV_ITEMS drives the whole sidebar: every button, its icon, and where it
 # sits. Add/remove a dict here and the sidebar updates itself — you never
@@ -131,6 +134,7 @@ class NurseDashboard(ctk.CTk):
         super().__init__()
         self.nurse = nurse
         self.appointment_controller = AppointmentController()
+        self.user_controller = UserController()
 
         # --- state the sidebar reads and writes ---
         self.sidebar_expanded = True         # is the panel currently open?
@@ -395,7 +399,7 @@ class NurseDashboard(ctk.CTk):
         self.pages[PROFILE_KEY] = self.build_profile_page(self.content_frame)
 
         # place() with relwidth/relheight 1 stacks every page full-size on
-        # top of the others; tkraise() then picks the visible one.
+        # top of the others; lift() then picks the visible one.
         for page in self.pages.values():
             page.place(relx=0, rely=0, relwidth=1, relheight=1)
 
@@ -438,10 +442,14 @@ class NurseDashboard(ctk.CTk):
 
     def build_profile_page(self, parent):
         """"My Account" — shown in the same spot as the other pages when
-        the nurse clicks their avatar/name in the sidebar. Replace the
-        read-only fields below with real edit-profile widgets whenever
-        you're ready."""
-        page = ctk.CTkFrame(parent, fg_color="transparent")
+        the nurse clicks their avatar/name in the sidebar. Has a summary
+        card at the top, then two small forms: one to edit their name,
+        one to change the password. Both talk to UserController, which
+        is where the actual validation and the UPDATE statements live."""
+        # A scrollable frame instead of a plain one so the page can grow
+        # past the visible window height (e.g. once both edit forms are
+        # opened) without anything getting cut off.
+        page = ctk.CTkScrollableFrame(parent, fg_color="transparent")
 
         header = ctk.CTkFrame(page, fg_color="transparent")
         header.pack(fill="x", padx=24, pady=(20, 4))
@@ -454,6 +462,7 @@ class NurseDashboard(ctk.CTk):
             page, text="Account details", font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
         ).pack(anchor="w", padx=24, pady=(0, 16))
 
+        # --- summary card: avatar, name, username, role badge ----------
         card = ctk.CTkFrame(page, corner_radius=10)
         card.pack(fill="x", padx=24)
 
@@ -469,10 +478,13 @@ class NurseDashboard(ctk.CTk):
         text_col = ctk.CTkFrame(avatar_row, fg_color="transparent")
         text_col.pack(side="left", padx=(16, 0), fill="x", expand=True)
 
-        ctk.CTkLabel(
+        # Stored on self so save_profile_details() can update this text in
+        # place after a successful save, instead of rebuilding the page.
+        self.profile_page_name_label = ctk.CTkLabel(
             text_col, text=getattr(self.nurse, "full_name", "Nurse"),
             font=ctk.CTkFont(size=16, weight="bold"), anchor="w"
-        ).pack(fill="x")
+        )
+        self.profile_page_name_label.pack(fill="x")
         ctk.CTkLabel(
             text_col, text="@" + getattr(self.nurse, "username", "nurse"),
             font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
@@ -488,7 +500,134 @@ class NurseDashboard(ctk.CTk):
             font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
         ).pack(fill="x", padx=20, pady=(0, 20))
 
+        # --- edit details form -------------------------------------------
+        details_card = ctk.CTkFrame(page, corner_radius=10)
+        details_card.pack(fill="x", padx=24, pady=(16, 0))
+
+        details_header = ctk.CTkFrame(details_card, fg_color="transparent")
+        details_header.pack(fill="x", padx=20, pady=(16, 8))
+        ctk.CTkLabel(
+            details_header, text="Edit details", font=ctk.CTkFont(size=13, weight="bold"), anchor="w"
+        ).pack(side="left")
+        self.details_edit_btn = ctk.CTkButton(
+            details_header, text="Edit", width=70, height=26,
+            fg_color=REFRESH_BG, command=self.toggle_details_edit
+        )
+        self.details_edit_btn.pack(side="right")
+
+        # Everything below is the actual editable form. It's built here but
+        # NOT packed yet — it only appears once "Edit" is pressed, via
+        # toggle_details_edit().
+        self.details_form = ctk.CTkFrame(details_card, fg_color="transparent")
+
+        ctk.CTkLabel(self.details_form, text="Full name", anchor="w").pack(fill="x", padx=20)
+        self.profile_fullname_entry = ctk.CTkEntry(self.details_form, width=300)
+        self.profile_fullname_entry.insert(0, getattr(self.nurse, "full_name", ""))
+        self.profile_fullname_entry.pack(anchor="w", padx=20, pady=(2, 6))
+
+        self.profile_details_status = ctk.CTkLabel(self.details_form, text="", text_color=ERROR_TEXT)
+        self.profile_details_status.pack(anchor="w", padx=20)
+
+        ctk.CTkButton(
+            self.details_form, text="Save changes", width=140, command=self.save_profile_details
+        ).pack(anchor="w", padx=20, pady=(10, 20))
+
+        # --- change password form ----------------------------------------
+        password_card = ctk.CTkFrame(page, corner_radius=10)
+        password_card.pack(fill="x", padx=24, pady=(16, 20))
+
+        password_header = ctk.CTkFrame(password_card, fg_color="transparent")
+        password_header.pack(fill="x", padx=20, pady=(16, 8))
+        ctk.CTkLabel(
+            password_header, text="Change password", font=ctk.CTkFont(size=13, weight="bold"), anchor="w"
+        ).pack(side="left")
+        self.password_edit_btn = ctk.CTkButton(
+            password_header, text="Edit", width=70, height=26,
+            fg_color=REFRESH_BG, command=self.toggle_password_edit
+        )
+        self.password_edit_btn.pack(side="right")
+
+        # Hidden until "Edit" is pressed, same as details_form above.
+        self.password_form = ctk.CTkFrame(password_card, fg_color="transparent")
+
+        self.current_password_entry = ctk.CTkEntry(
+            self.password_form, width=300, show="*", placeholder_text="Current password"
+        )
+        self.current_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
+
+        self.new_password_entry = ctk.CTkEntry(
+            self.password_form, width=300, show="*", placeholder_text="New password"
+        )
+        self.new_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
+
+        self.confirm_password_entry = ctk.CTkEntry(
+            self.password_form, width=300, show="*", placeholder_text="Confirm new password"
+        )
+        self.confirm_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
+
+        self.profile_password_status = ctk.CTkLabel(self.password_form, text="", text_color=ERROR_TEXT)
+        self.profile_password_status.pack(anchor="w", padx=20)
+
+        ctk.CTkButton(
+            self.password_form, text="Update password", width=140, command=self.save_profile_password
+        ).pack(anchor="w", padx=20, pady=(10, 20))
+
         return page
+
+    def toggle_details_edit(self):
+        """Shows/hides the "Edit details" form. The button doubles as
+        Edit/Cancel depending on whether the form is currently open."""
+        if self.details_form.winfo_ismapped():
+            self.details_form.pack_forget()
+            self.details_edit_btn.configure(text="Edit")
+        else:
+            self.details_form.pack(fill="x")
+            self.details_edit_btn.configure(text="Cancel")
+
+    def toggle_password_edit(self):
+        """Shows/hides the "Change password" form, same Edit/Cancel pattern
+        as toggle_details_edit()."""
+        if self.password_form.winfo_ismapped():
+            self.password_form.pack_forget()
+            self.password_edit_btn.configure(text="Edit")
+        else:
+            self.password_form.pack(fill="x")
+            self.password_edit_btn.configure(text="Cancel")
+
+    def save_profile_details(self):
+        """Handles the "Save changes" button on the details form."""
+        full_name = self.profile_fullname_entry.get().strip()
+
+        try:
+            self.user_controller.update_details(self.nurse.user_id, full_name)
+        except AppointMedError as e:
+            self.profile_details_status.configure(text_color=ERROR_TEXT, text=str(e))
+            return
+
+        # Reflect the change immediately, everywhere the name shows up,
+        # without needing to log out and back in.
+        self.nurse.full_name = full_name
+        self.profile_page_name_label.configure(text=full_name)
+        self.profile_name_label.configure(text=full_name)
+        self.title(self.nurse.dashboard_title())
+        self.profile_details_status.configure(text_color=SUCCESS_TEXT, text="Saved.")
+
+    def save_profile_password(self):
+        """Handles the "Update password" button on the password form."""
+        current = self.current_password_entry.get().strip()
+        new = self.new_password_entry.get().strip()
+        confirm = self.confirm_password_entry.get().strip()
+
+        try:
+            self.user_controller.change_password(self.nurse.user_id, current, new, confirm)
+        except AppointMedError as e:
+            self.profile_password_status.configure(text_color=ERROR_TEXT, text=str(e))
+            return
+
+        self.current_password_entry.delete(0, "end")
+        self.new_password_entry.delete(0, "end")
+        self.confirm_password_entry.delete(0, "end")
+        self.profile_password_status.configure(text_color=SUCCESS_TEXT, text="Password updated.")
 
     # -------------------------------------------------------------------
     # SCREENS STILL TO BE BUILT
@@ -571,8 +710,17 @@ class NurseDashboard(ctk.CTk):
         self.highlight_active_button()
 
     def show_page(self, key):
-        """Bring one stacked page to the front."""
-        self.pages[key].tkraise()
+        """Bring one stacked page to the front.
+
+        Use lift(), NOT tkraise(). They are the same method on a normal
+        widget, but a CTkScrollableFrame (which the profile page is, so
+        it can scroll) is really two frames: an outer one that gets
+        placed, and the inner one you add widgets to. CustomTkinter
+        redirects lift() to that outer frame but leaves tkraise() on the
+        inner one - so tkraise() here raised a frame that isn't part of
+        the page stack at all, and clicking the profile row appeared to
+        do nothing."""
+        self.pages[key].lift()
 
     def highlight_active_button(self):
         """Blue background on the current page's button, transparent on the
@@ -622,16 +770,13 @@ class NurseDashboard(ctk.CTk):
         appointments = []
         for row in rows:
             record = dict(row)
-            # Fall back to an ID if the join didn't give us a name.
-            patient_name = record.get("patient_name")
-            if not patient_name:
-                patient_name = "Patient #" + str(record["patient_id"])
-
             appointments.append({
                 "id": record["id"],
-                "time": record["scheduled_time"].strftime("%-I:%M %p"),
-                "patient": patient_name,
-                "reason": record["reason"],
+                "time": format_time(record["scheduled_time"]),
+                # `full_name` is the appointee's name, always present on
+                # the row - it's what the nurse typed in when booking it.
+                "patient": record["full_name"],
+                "reason": record["reason"] or "No reason given",
                 "status": record["status"],
             })
         return appointments
@@ -663,6 +808,16 @@ class NurseDashboard(ctk.CTk):
             font=ctk.CTkFont(size=11, weight="bold")
         ).pack(side="right", padx=(8, 16))
 
+        # A nurse's job is checking people in when they arrive; once a
+        # doctor has actually seen them (Examined onward) it's out of the
+        # nurse's hands, so "Check in" only shows up for Scheduled visits.
+        if appt["status"] == "Scheduled":
+            ctk.CTkButton(
+                card, text="Check in", width=80, height=26,
+                fg_color=CHECKIN_BG, hover_color=CHECKIN_HOVER,
+                command=lambda a=appt: self.change_status(a, "Checked-in")
+            ).pack(side="right", padx=(8, 0))
+
         # Nothing left to cancel on an appointment that's already finished.
         if appt["status"] not in FINISHED_STATUSES:
             ctk.CTkButton(
@@ -670,12 +825,12 @@ class NurseDashboard(ctk.CTk):
                 fg_color=CANCEL_BG, hover_color=CANCEL_HOVER,
                 # default-argument trick again, so each card's button
                 # remembers its own appointment
-                command=lambda a=appt: self.cancel_appointment(a)
+                command=lambda a=appt: self.change_status(a, "Cancelled")
             ).pack(side="right", padx=(8, 0))
 
-    def cancel_appointment(self, appt):
+    def change_status(self, appt, new_status):
         try:
-            self.appointment_controller.update_status(appt["id"], "Cancelled")
+            self.appointment_controller.update_status(appt["id"], new_status)
         except AppointMedError as e:
             messagebox.showerror("Error", str(e))
         self.load_appointments()
@@ -684,47 +839,114 @@ class NurseDashboard(ctk.CTk):
     # ADD-APPOINTMENT FORM (a small pop-up window)
     # ------------------------------------------------------------------
     def open_add_form(self):
+        """Books either a walk-in or a converted notification (the walk-in
+        case is the default here - notifications aren't built yet). The
+        appointee's name is collected directly since there isn't a
+        patient record yet - one only gets created once a doctor
+        actually examines them.
+
+        Date and time are picked from dropdowns instead of typed as free
+        text - that removes the whole "did I type the format right?"
+        class of mistake, so the only way this form can fail is a real
+        business rule (blank name, double-booked slot, etc.)."""
         form = ctk.CTkToplevel(self)
         form.title("Add Appointment")
-        form.geometry("380x420")
+        form.geometry("380x480")
         form.grab_set()  # modal: blocks clicks on the dashboard behind it
 
         ctk.CTkLabel(
             form, text="New Appointment", font=ctk.CTkFont(size=16, weight="bold")
         ).pack(pady=(20, 16))
 
-        patient_id_entry = self.labeled_entry(form, "Patient ID")
-        time_entry = self.labeled_entry(form, "Date & time (YYYY-MM-DD HH:MM)")
-        reason_entry = self.labeled_entry(form, "Reason")
+        full_name_entry = self.labeled_entry(form, "Patient / appointee name")
 
-        status_label = ctk.CTkLabel(form, text="", text_color=ERROR_TEXT)
+        # --- date & time, as dropdowns instead of a typed field ---------
+        ctk.CTkLabel(form, text="Date & time", anchor="w").pack(
+            fill="x", padx=30, pady=(10, 2)
+        )
+        date_time_row = ctk.CTkFrame(form, fg_color="transparent")
+        date_time_row.pack(padx=30, fill="x")
+
+        date_choices = self._upcoming_date_choices()
+        date_combo = ctk.CTkComboBox(
+            date_time_row, values=list(date_choices.keys()), width=190
+        )
+        date_combo.set(next(iter(date_choices)))
+        date_combo.pack(side="left")
+
+        hour_combo = ctk.CTkComboBox(
+            date_time_row, values=[f"{h:02d}" for h in range(24)], width=52
+        )
+        hour_combo.set("09")
+        hour_combo.pack(side="left", padx=(6, 2))
+
+        ctk.CTkLabel(date_time_row, text=":").pack(side="left")
+
+        minute_combo = ctk.CTkComboBox(
+            date_time_row, values=["00", "15", "30", "45"], width=52
+        )
+        minute_combo.set("00")
+        minute_combo.pack(side="left", padx=(2, 0))
+
+        reason_entry = self.labeled_entry(form, "Reason for visit")
+
+        status_label = ctk.CTkLabel(form, text="", text_color=ERROR_TEXT, wraplength=300)
         status_label.pack(pady=(4, 0))
 
-        # Defined inside open_add_form() so it can read the entry widgets
-        # above directly, without storing them on self.
+        # Defined inside open_add_form() so it can read the widgets above
+        # directly, without storing them all on self.
         def submit():
             try:
-                patient_id = int(patient_id_entry.get().strip())
-                scheduled_time = datetime.strptime(
-                    time_entry.get().strip(), DATETIME_FORMAT
-                )
+                full_name = full_name_entry.get().strip()
                 reason = reason_entry.get().strip()
-                if not reason:
-                    raise ValueError("Reason is required.")
 
+                # The combo boxes can only ever hold values we put there,
+                # so this can't raise ValueError the way typed text could.
+                chosen_date = date_choices[date_combo.get()]
+                chosen_time = datetime.strptime(
+                    f"{hour_combo.get()}:{minute_combo.get()}", "%H:%M"
+                ).time()
+                scheduled_time = datetime.combine(chosen_date, chosen_time)
+
+                # No patient record yet at booking time - that only gets
+                # created once a doctor examines the appointee, so this
+                # is always None here.
                 self.appointment_controller.add_appointment(
-                    patient_id, self.nurse.assigned_doctor_id, scheduled_time, reason
+                    full_name=full_name,
+                    doctor_id=self.nurse.assigned_doctor_id,
+                    nurse_id=self.nurse.user_id,
+                    scheduled_time=scheduled_time,
+                    reason=reason,
+                    patient_id=None,
                 )
                 form.destroy()
                 self.load_appointments()
+                messagebox.showinfo(
+                    "Appointment booked",
+                    full_name + " is scheduled for " +
+                    format_datetime(scheduled_time) + "."
+                )
             except AppointMedError as e:
-                # Business-rule problems (slot taken, unknown patient, etc.)
+                # Business-rule problems (slot taken, blank name, etc.) -
+                # the only kind of error this form can still hit.
                 status_label.configure(text=str(e))
-            except ValueError:
-                # int() or strptime() failed, or the reason was blank
-                status_label.configure(text="Check your input format and try again.")
 
         ctk.CTkButton(form, text="Add appointment", command=submit).pack(pady=24)
+
+    @staticmethod
+    def _upcoming_date_choices(days_ahead=30):
+        """Today plus the next `days_ahead` days, as a dict mapping a
+        friendly label (what shows up in the dropdown) to the actual
+        date object it stands for. A dict keeps the two in lockstep
+        without needing a second, parallel list to search through."""
+        choices = {}
+        for offset in range(days_ahead + 1):
+            day = date.today() + timedelta(days=offset)
+            label = day.strftime("%a, %b %d %Y")
+            if offset == 0:
+                label += " (today)"
+            choices[label] = day
+        return choices
 
     @staticmethod
     def labeled_entry(parent, label_text):

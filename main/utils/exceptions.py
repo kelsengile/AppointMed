@@ -39,6 +39,11 @@ class RecordNotFoundError(AppointMedError):
     pass
 
 
+class PasswordMismatchError(AppointMedError):
+    """Raised when a new password and its confirmation do not match."""
+    pass
+
+
 class DatabaseConnectionError(AppointMedError):
     """Raised when the app cannot reach the database server."""
     pass
