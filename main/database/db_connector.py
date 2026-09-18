@@ -11,21 +11,19 @@ from mysql.connector import Error as MySQLError
 from config.settings import DB_CONFIG
 from utils.exceptions import DatabaseConnectionError
 
+#     Small wrapper around a MySQL connection.
+
+#    Use it like this:
+
+#        with DBConnector() as db:
+#            db.execute("SELECT * FROM appointments")
+#            rows = db.fetchall()
+
+#    If include_database is False, it connects to the MySQL server only,
+#    without picking a specific database. This is used the very first
+#    time, before the appointmed_db database even exists yet.
 
 class DBConnector:
-    """Small wrapper around a MySQL connection.
-
-    Use it like this:
-
-        with DBConnector() as db:
-            db.execute("SELECT * FROM appointments")
-            rows = db.fetchall()
-
-    If include_database is False, it connects to the MySQL server only,
-    without picking a specific database. This is used the very first
-    time, before the appointmed_db database even exists yet.
-    """
-
     def __init__(self, include_database=True):
         self.include_database = include_database
         self.connection: Any = None

@@ -26,12 +26,12 @@ from utils.exceptions import DatabaseConnectionError
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
 
 
-def ensure_database_ready():
-    """Connects to the MySQL server and runs schema.sql if the database
-    or tables are not there yet. It is safe to call this every time the
-    app starts, because the schema uses "IF NOT EXISTS" everywhere, so
-    running it again on an already set up database just does nothing."""
+#   Connects to the MySQL server and runs schema.sql if the database
+#    or tables are not there yet. It is safe to call this every time the
+#    app starts, because the schema uses "IF NOT EXISTS" everywhere, so
+#    running it again on an already set up database just does nothing.
 
+def ensure_database_ready():
     if not os.path.exists(SCHEMA_PATH):
         raise FileNotFoundError("schema.sql not found at " + SCHEMA_PATH)
 
@@ -39,10 +39,12 @@ def ensure_database_ready():
     schema_sql = schema_file.read()
     schema_file.close()
 
-    # Break the file into separate statements, since the mysql-connector
-    # library we're using can only run one SQL statement at a time.
+# Break the file into separate statements, since the mysql-connector
+# library we're using can only run one SQL statement at a time.
+
     raw_statements = schema_sql.split(";")
     statements = []
+
     for statement in raw_statements:
         statement = statement.strip()
         if statement != "":
