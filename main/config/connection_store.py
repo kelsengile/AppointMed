@@ -12,11 +12,12 @@ import os
 
 STORE_PATH = os.path.join(os.path.dirname(__file__), "remembered_connection.json")
 
+#   Returns a dictionary like {"host": ..., "user": ...} if we saved a
+#   connection before. Returns None if nothing was saved yet or the file
+#   could not be read.
 
 def load_remembered() -> dict[str, str] | None:
-    """Returns a dictionary like {"host": ..., "user": ...} if we saved a
-    connection before. Returns None if nothing was saved yet or the file
-    could not be read."""
+
     if not os.path.exists(STORE_PATH):
         return None
 
@@ -36,13 +37,13 @@ def load_remembered() -> dict[str, str] | None:
     return None
 
 
+#   Saves the host and username to a file so next time the app opens,
+#   it can fill them in automatically. Never pass a password in here.
+
 def save_remembered(host, user):
-    """Saves the host and username to a file so next time the app opens,
-    it can fill them in automatically. Never pass a password in here."""
     try:
         file = open(STORE_PATH, "w")
         json.dump({"host": host, "user": user}, file)
         file.close()
     except OSError:
-        # Not a big deal if this fails - the user just types it again.
         pass
