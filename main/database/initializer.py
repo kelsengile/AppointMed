@@ -69,21 +69,18 @@ def ensure_database_ready():
     schema_sql = schema_file.read()
     schema_file.close()
 
-# Break the file into separate statements, since the mysql-connector
-# library we're using can only run one SQL statement at a time.
-
-    raw_statements = schema_sql.split(";")
-    statements = []
-
-    for statement in raw_statements:
-        statement = statement.strip()
-        if statement != "":
-            statements.append(statement)
+    statements = _split_statements(schema_sql)
 
     try:
         with DBConnector(include_database=False) as db:
             for statement in statements:
                 db.execute(statement)
+            # The schema's last statement seeds the default admin account.
+            # Commit explicitly rather than trusting execute() to have
+            # spotted it - without this, a fresh install ends up with all
+            # the tables but no account to log in with, because the row is
+            # thrown away the moment this connection closes.
+            db.commit()
         _migrate_appointments_table()
     except DatabaseConnectionError as e:
         raise DatabaseConnectionError(
@@ -91,6 +88,34 @@ def ensure_database_ready():
             "Server is installed and running, and that config/settings.py "
             "has the correct host/user/password. Original error: " + str(e)
         )
+
+
+def _split_statements(schema_sql):
+    """schema.sql as a list of single statements, comments removed.
+
+    The mysql-connector library can only run one statement per call, so
+    the file has to be split on ";". Dropping the comment lines first
+    matters more than it looks: a chunk that still carries its "-- ..."
+    banner starts with a comment rather than its own keyword, which
+    hides what the statement actually is from anything downstream that
+    inspects it.
+
+    This is a deliberately simple splitter - it assumes no ";" or "--"
+    ever appears inside a quoted string in schema.sql, which holds for
+    this project's schema."""
+    kept_lines = []
+    for line in schema_sql.splitlines():
+        stripped = line.strip()
+        if stripped == "" or stripped.startswith("--") or stripped.startswith("#"):
+            continue
+        kept_lines.append(line)
+
+    statements = []
+    for chunk in "\n".join(kept_lines).split(";"):
+        chunk = chunk.strip()
+        if chunk != "":
+            statements.append(chunk)
+    return statements
 
 
 def _migrate_appointments_table():

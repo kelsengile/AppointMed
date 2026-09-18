@@ -25,11 +25,13 @@ if __name__ == "__main__":
 
     # Try to set up the database automatically. If this fails (for
     # example, no database is reachable yet), that is fine - the login
-    # window still opens either way.
+    # window still opens either way. The reason is printed to the
+    # console rather than swallowed, so "I can't log in" can be told
+    # apart from "the server was never reachable" without guesswork.
     try:
         ensure_database_ready()
-    except Exception:
-        pass
+    except Exception as e:
+        print("[AppointMed] Database setup skipped: " + str(e))
 
     from views.shared.login_view import LoginView
     app = LoginView()
