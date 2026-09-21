@@ -19,11 +19,13 @@ HOW THIS FILE IS ORGANISED (read the section banners as you scroll):
     7. PAGE ROUTING      — which page is visible
     8. USER LIST DATA    — talking to the controller
 
-Only the "Users" page has real content right now. Every other nav item
-already has its OWN build_*_page() method waiting in section 5 —
-build_server_page(), build_settings_page(), build_help_page(). Each
-returns the shared placeholder for now, so you can work on one screen at
-a time without touching anything else.
+Only the "Users" and "Appointments" pages have real content right now
+(plus "My Account", reached by clicking the avatar/name in the sidebar -
+that page is the shared ProfilePage in views/shared/profile_page.py).
+Every other nav item already has its OWN build_*_page() method waiting in
+section 5 — build_server_page(), build_settings_page(), build_help_page().
+Each returns the shared placeholder for now, so you can work on one screen
+at a time without touching anything else.
 
 WANT TO FILL IN AN EXISTING SCREEN? Open its build_*_page() in section 5
 and replace the one placeholder line with your own widgets. Nothing else
@@ -42,8 +44,10 @@ from tkinter import messagebox
 
 from controllers.user_controller import UserController
 from controllers.appointment_controller import AppointmentController
+from utils.avatar import render_avatar
 from utils.exceptions import AppointMedError
 from utils.formatting import format_time
+from views.shared.profile_page import ProfilePage
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -59,7 +63,7 @@ SIDEBAR_BG = "#1A1F2B"      # dark navy panel
 SIDEBAR_HOVER = "#2A3040"   # slightly lighter, used on mouse-over
 SIDEBAR_ACTIVE = "#2B6CB0"  # blue highlight on the current nav button
 SIDEBAR_TEXT = "white"
-AVATAR_BG = "#3A4152"       # the blank circle standing in for a photo
+AVATAR_BG = "#3A4152"       # background of the initials shown when there's no photo
 
 MUTED_TEXT = "gray50"       # subtitles / secondary info
 PLACEHOLDER_TEXT = "gray30" # the big "… window" label
@@ -70,8 +74,13 @@ DELETE_BG = "#C53030"
 DELETE_HOVER = "#9B2C2C"
 REFRESH_BG = "gray60"
 
-# Role badge colours: (background, text). Used by the user list and the
-# profile card.
+# --- add-user modal colours -------------------------------------------
+FORM_HEADER_BG = "#1A1F2B"
+FORM_HEADER_SUBTEXT = "#A9B4C4"
+FORM_FIELD_BG = "#F4F6F8"
+FORM_HINT_TEXT = "gray55"
+
+# Role badge colours: (background, text). Used by the user list.
 ROLE_COLORS = {
     "doctor": ("#E3F0FF", "#2B6CB0"),
     "nurse": ("#F3E8FF", "#6B46C1"),
@@ -84,6 +93,7 @@ ROLE_COLORS = {
 STATUS_COLORS = {
     "Scheduled": ("#EEF1F4", "#4A5568"),
     "Checked-in": ("#FFF6DC", "#B7791F"),
+    "Consulting": ("#E6FFFA", "#2C7A7B"),
     "Examined": ("#E3F0FF", "#2B6CB0"),
     "Completed": ("#E3F6E8", "#2F855A"),
     "Cancelled": ("#FBE7E7", "#C53030"),
@@ -134,6 +144,10 @@ class AdminDashboard(ctk.CTk):
         self.current_view = "users"        # which page is on screen right now
         self.nav_buttons = {}              # key -> CTkButton, filled in below
         self.pages = {}                    # key -> page frame, filled in below
+
+        # The profile picture lives in the database; fetch it once here
+        # so the sidebar can show it the moment the window opens.
+        self.avatar_bytes = self.load_avatar()
 
         self.title(admin.dashboard_title())
         self.geometry(self.WINDOW_SIZE)
@@ -191,14 +205,12 @@ class AdminDashboard(ctk.CTk):
         self.profile_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         self.profile_frame.pack(fill="x", padx=8, pady=(0, 20))
 
-        # Blank placeholder avatar: just a plain circle, no initials/photo
-        # yet. Swap this out later for a real picture with something like:
-        #   from PIL import Image
-        #   img = ctk.CTkImage(Image.open("avatar.png"), size=(40, 40))
-        #   self.profile_avatar.configure(image=img, text="")
+        # Round profile picture, or the person's initials if they haven't
+        # set one. Kept fresh by refresh_sidebar_profile().
         self.profile_avatar = ctk.CTkLabel(
             self.profile_frame, text="", width=40, height=40,
-            corner_radius=20, fg_color=AVATAR_BG
+            fg_color="transparent",
+            image=render_avatar(self.avatar_bytes, self.admin.full_name, 40, bg=AVATAR_BG)
         )
         self.profile_avatar.pack(side="left")
 
@@ -403,10 +415,12 @@ class AdminDashboard(ctk.CTk):
         header = ctk.CTkFrame(page, fg_color="transparent")
         header.pack(fill="x", padx=24, pady=(20, 4))
 
-        ctk.CTkLabel(
+        # Kept on self so a rename in "My Account" can update it live.
+        self.users_title = ctk.CTkLabel(
             header, text=self.admin.dashboard_title(),
             font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
+        )
+        self.users_title.pack(side="left")
 
         ctk.CTkButton(
             header, text="+ Add user", width=120, command=self.open_add_form
@@ -461,192 +475,41 @@ class AdminDashboard(ctk.CTk):
         return page
 
     def build_profile_page(self, parent):
-        """"My Account" — shown in the same spot as the other pages when
-        the admin clicks their avatar/name in the sidebar. Has a summary
-        card at the top, then two small forms: one to edit their name,
-        one to change the password. Both talk to UserController, which
-        is where the actual validation and the UPDATE statements live."""
-        # A scrollable frame instead of a plain one so the page can grow
-        # past the visible window height (e.g. once both edit forms are
-        # opened) without anything getting cut off.
-        page = ctk.CTkScrollableFrame(parent, fg_color="transparent")
-
-        header = ctk.CTkFrame(page, fg_color="transparent")
-        header.pack(fill="x", padx=24, pady=(20, 4))
-        ctk.CTkLabel(
-            header, text="My Account",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
-
-        ctk.CTkLabel(
-            page, text="Account details", font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
-        ).pack(anchor="w", padx=24, pady=(0, 16))
-
-        # --- summary card: avatar, name, username, role badge ----------
-        card = ctk.CTkFrame(page, corner_radius=10)
-        card.pack(fill="x", padx=24)
-
-        avatar_row = ctk.CTkFrame(card, fg_color="transparent")
-        avatar_row.pack(fill="x", padx=20, pady=20)
-
-        # Big blank avatar circle, same placeholder idea as the sidebar one.
-        ctk.CTkLabel(
-            avatar_row, text="", width=64, height=64, corner_radius=32,
-            fg_color=AVATAR_BG
-        ).pack(side="left")
-
-        text_col = ctk.CTkFrame(avatar_row, fg_color="transparent")
-        text_col.pack(side="left", padx=(16, 0), fill="x", expand=True)
-
-        # Stored on self so save_profile_details() can update this text in
-        # place after a successful save, instead of rebuilding the page.
-        self.profile_page_name_label = ctk.CTkLabel(
-            text_col, text=getattr(self.admin, "full_name", "Admin"),
-            font=ctk.CTkFont(size=16, weight="bold"), anchor="w"
+        """"My Account" - the shared profile screen (photo, name, username,
+        password). It lives in views/shared/profile_page.py so every role
+        gets the same page; this just hands it this dashboard's user."""
+        self.profile_page = ProfilePage(
+            parent, self.admin, "admin", self.user_controller,
+            avatar_bytes=self.avatar_bytes,
+            on_change=self.on_profile_changed
         )
-        self.profile_page_name_label.pack(fill="x")
-        ctk.CTkLabel(
-            text_col, text="@" + getattr(self.admin, "username", "admin"),
-            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
-        ).pack(fill="x", pady=(2, 0))
+        return self.profile_page
 
-        badge_bg, badge_fg = ROLE_COLORS["admin"]
-        ctk.CTkLabel(
-            text_col, text="Administrator",
-            fg_color=badge_bg, text_color=badge_fg,
-            corner_radius=8, font=ctk.CTkFont(size=11, weight="bold")
-        ).pack(anchor="w", pady=(8, 0), ipadx=8, ipady=2)
-
-        ctk.CTkFrame(card, fg_color="transparent", height=4).pack(fill="x")
-
-        # --- edit details form -------------------------------------------
-        details_card = ctk.CTkFrame(page, corner_radius=10)
-        details_card.pack(fill="x", padx=24, pady=(16, 0))
-
-        details_header = ctk.CTkFrame(details_card, fg_color="transparent")
-        details_header.pack(fill="x", padx=20, pady=(16, 8))
-        ctk.CTkLabel(
-            details_header, text="Edit details", font=ctk.CTkFont(size=13, weight="bold"), anchor="w"
-        ).pack(side="left")
-        self.details_edit_btn = ctk.CTkButton(
-            details_header, text="Edit", width=70, height=26,
-            fg_color=REFRESH_BG, command=self.toggle_details_edit
-        )
-        self.details_edit_btn.pack(side="right")
-
-        # Everything below is the actual editable form. It's built here but
-        # NOT packed yet — it only appears once "Edit" is pressed, via
-        # toggle_details_edit().
-        self.details_form = ctk.CTkFrame(details_card, fg_color="transparent")
-
-        ctk.CTkLabel(self.details_form, text="Full name", anchor="w").pack(fill="x", padx=20)
-        self.profile_fullname_entry = ctk.CTkEntry(self.details_form, width=300)
-        self.profile_fullname_entry.insert(0, getattr(self.admin, "full_name", ""))
-        self.profile_fullname_entry.pack(anchor="w", padx=20, pady=(2, 6))
-
-        self.profile_details_status = ctk.CTkLabel(self.details_form, text="", text_color=ERROR_TEXT)
-        self.profile_details_status.pack(anchor="w", padx=20)
-
-        ctk.CTkButton(
-            self.details_form, text="Save changes", width=140, command=self.save_profile_details
-        ).pack(anchor="w", padx=20, pady=(10, 20))
-
-        # --- change password form ----------------------------------------
-        password_card = ctk.CTkFrame(page, corner_radius=10)
-        password_card.pack(fill="x", padx=24, pady=(16, 20))
-
-        password_header = ctk.CTkFrame(password_card, fg_color="transparent")
-        password_header.pack(fill="x", padx=20, pady=(16, 8))
-        ctk.CTkLabel(
-            password_header, text="Change password", font=ctk.CTkFont(size=13, weight="bold"), anchor="w"
-        ).pack(side="left")
-        self.password_edit_btn = ctk.CTkButton(
-            password_header, text="Edit", width=70, height=26,
-            fg_color=REFRESH_BG, command=self.toggle_password_edit
-        )
-        self.password_edit_btn.pack(side="right")
-
-        # Hidden until "Edit" is pressed, same as details_form above.
-        self.password_form = ctk.CTkFrame(password_card, fg_color="transparent")
-
-        self.current_password_entry = ctk.CTkEntry(
-            self.password_form, width=300, show="*", placeholder_text="Current password"
-        )
-        self.current_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
-
-        self.new_password_entry = ctk.CTkEntry(
-            self.password_form, width=300, show="*", placeholder_text="New password"
-        )
-        self.new_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
-
-        self.confirm_password_entry = ctk.CTkEntry(
-            self.password_form, width=300, show="*", placeholder_text="Confirm new password"
-        )
-        self.confirm_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
-
-        self.profile_password_status = ctk.CTkLabel(self.password_form, text="", text_color=ERROR_TEXT)
-        self.profile_password_status.pack(anchor="w", padx=20)
-
-        ctk.CTkButton(
-            self.password_form, text="Update password", width=140, command=self.save_profile_password
-        ).pack(anchor="w", padx=20, pady=(10, 20))
-
-        return page
-
-    def toggle_details_edit(self):
-        """Shows/hides the "Edit details" form. The button doubles as
-        Edit/Cancel depending on whether the form is currently open."""
-        if self.details_form.winfo_ismapped():
-            self.details_form.pack_forget()
-            self.details_edit_btn.configure(text="Edit")
-        else:
-            self.details_form.pack(fill="x")
-            self.details_edit_btn.configure(text="Cancel")
-
-    def toggle_password_edit(self):
-        """Shows/hides the "Change password" form, same Edit/Cancel pattern
-        as toggle_details_edit()."""
-        if self.password_form.winfo_ismapped():
-            self.password_form.pack_forget()
-            self.password_edit_btn.configure(text="Edit")
-        else:
-            self.password_form.pack(fill="x")
-            self.password_edit_btn.configure(text="Cancel")
-
-    def save_profile_details(self):
-        """Handles the "Save changes" button on the details form."""
-        full_name = self.profile_fullname_entry.get().strip()
-
+    def load_avatar(self):
+        """This user's stored picture, or None (also None if the database
+        can't be reached - initials are shown instead)."""
         try:
-            self.user_controller.update_details(self.admin.user_id, full_name)
-        except AppointMedError as e:
-            self.profile_details_status.configure(text_color=ERROR_TEXT, text=str(e))
-            return
+            return self.user_controller.get_avatar(self.admin.user_id)
+        except AppointMedError:
+            return None
 
-        # Reflect the change immediately, everywhere the name shows up,
-        # without needing to log out and back in.
-        self.admin.full_name = full_name
-        self.profile_page_name_label.configure(text=full_name)
-        self.profile_name_label.configure(text=full_name)
+    def on_profile_changed(self):
+        """Called by the profile page after any successful save. It has
+        already updated self.admin in place, so just redraw whatever
+        shows the name, title or picture."""
+        self.avatar_bytes = self.profile_page.avatar_bytes
+        self.refresh_sidebar_profile()
         self.title(self.admin.dashboard_title())
-        self.profile_details_status.configure(text_color=SUCCESS_TEXT, text="Saved.")
+        self.users_title.configure(text=self.admin.dashboard_title())
+        # The admin's own row in the user list shows their name/username.
+        self.load_users()
 
-    def save_profile_password(self):
-        """Handles the "Update password" button on the password form."""
-        current = self.current_password_entry.get().strip()
-        new = self.new_password_entry.get().strip()
-        confirm = self.confirm_password_entry.get().strip()
-
-        try:
-            self.user_controller.change_password(self.admin.user_id, current, new, confirm)
-        except AppointMedError as e:
-            self.profile_password_status.configure(text_color=ERROR_TEXT, text=str(e))
-            return
-
-        self.current_password_entry.delete(0, "end")
-        self.new_password_entry.delete(0, "end")
-        self.confirm_password_entry.delete(0, "end")
-        self.profile_password_status.configure(text_color=SUCCESS_TEXT, text="Password updated.")
+    def refresh_sidebar_profile(self):
+        """Redraw the avatar and name at the top of the sidebar."""
+        self.profile_name_label.configure(text=self.admin.full_name)
+        self.profile_avatar.configure(
+            image=render_avatar(self.avatar_bytes, self.admin.full_name, 40, bg=AVATAR_BG)
+        )
 
     # -------------------------------------------------------------------
     # SCREENS STILL TO BE BUILT
@@ -789,16 +652,26 @@ class AdminDashboard(ctk.CTk):
             command=lambda u=user: self.delete_user(u)
         ).pack(side="right", padx=(8, 0))
 
-    @staticmethod
-    def user_subtitle(user):
+    def user_subtitle(self, user):
         """Second line of a row: "@jdoe · Pediatrics" or
-        "@jdoe · assigned to doctor #3"."""
+        "@jdoe · assigned to Dr. Juan Diaz"."""
         subtitle = "@" + user["username"]
         if user["role"] == "doctor" and user.get("specialization"):
             subtitle = subtitle + " · " + user["specialization"]
         if user["role"] == "nurse" and user.get("assigned_doctor_id"):
-            subtitle = subtitle + " · assigned to doctor #" + str(user["assigned_doctor_id"])
+            subtitle = subtitle + " · assigned to " + self._doctor_display_name(
+                user["assigned_doctor_id"]
+            )
         return subtitle
+
+    def _doctor_display_name(self, doctor_id):
+        """"Dr. Juan Diaz" for a given doctor id, falling back to the bare
+        id if the account can no longer be found (e.g. it was deleted)."""
+        try:
+            doctor = self.user_controller.get_user_by_id(doctor_id)
+            return "Dr. " + doctor["full_name"]
+        except AppointMedError:
+            return "doctor #" + str(doctor_id)
 
     def delete_user(self, user):
         confirmed = messagebox.askyesno("Confirm", "Delete account for " + user["full_name"] + "?")
@@ -867,31 +740,125 @@ class AdminDashboard(ctk.CTk):
 
     # ------------------------------------------------------------------
     # ADD-USER FORM (a small pop-up window)
+    #
+    # Redesigned to feel like a proper form instead of a bare stack of
+    # labels: a dark header banner, placeholder text INSIDE each entry
+    # instead of a separate caption above it, a segmented control for the
+    # role (clearer than a dropdown for just 3 choices), and only ONE
+    # role-specific field visible at a time - it swaps in place the
+    # instant the role changes.
+    #
+    # Nurses are now assigned to a doctor by typing that doctor's
+    # USERNAME (e.g. "jdiaz") rather than an internal numeric id, which
+    # nobody creating the account would otherwise know off-hand.
     # ------------------------------------------------------------------
     def open_add_form(self):
         form = ctk.CTkToplevel(self)
         form.title("Add User")
-        form.geometry("380x560")
+        form.geometry("440x640")
+        form.minsize(440, 640)
         form.grab_set()  # modal: blocks clicks on the dashboard behind it
 
+        # --- header banner ------------------------------------------------
+        header = ctk.CTkFrame(form, fg_color=FORM_HEADER_BG, corner_radius=0, height=92)
+        header.pack(fill="x")
+        header.pack_propagate(False)
         ctk.CTkLabel(
-            form, text="New User Account", font=ctk.CTkFont(size=16, weight="bold")
-        ).pack(pady=(20, 16))
+            header, text="➕  Add New User",
+            font=ctk.CTkFont(size=19, weight="bold"), text_color="white"
+        ).pack(anchor="w", padx=28, pady=(22, 2))
+        ctk.CTkLabel(
+            header, text="Create a doctor, nurse, or admin account",
+            font=ctk.CTkFont(size=12), text_color=FORM_HEADER_SUBTEXT
+        ).pack(anchor="w", padx=28)
 
-        username_entry = self.labeled_entry(form, "Username")
-        password_entry = self.labeled_entry(form, "Password", show="*")
-        full_name_entry = self.labeled_entry(form, "Full name")
+        # --- scrollable body, in case the window gets resized smaller -----
+        body = ctk.CTkScrollableFrame(form, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=26, pady=(20, 0))
 
-        ctk.CTkLabel(form, text="Role", anchor="w").pack(fill="x", padx=30, pady=(10, 2))
+        def section_label(text):
+            ctk.CTkLabel(
+                body, text=text, font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=MUTED_TEXT, anchor="w"
+            ).pack(fill="x", pady=(14, 6))
+
+        section_label("Username")
+        username_entry = ctk.CTkEntry(
+            body, placeholder_text="e.g. jdoe", height=40,
+            fg_color=FORM_FIELD_BG, border_width=0, corner_radius=8
+        )
+        username_entry.pack(fill="x")
+
+        section_label("Password")
+        password_entry = ctk.CTkEntry(
+            body, placeholder_text="Temporary password", show="*", height=40,
+            fg_color=FORM_FIELD_BG, border_width=0, corner_radius=8
+        )
+        password_entry.pack(fill="x")
+
+        section_label("Full name")
+        full_name_entry = ctk.CTkEntry(
+            body, placeholder_text="e.g. Juan Dela Cruz", height=40,
+            fg_color=FORM_FIELD_BG, border_width=0, corner_radius=8
+        )
+        full_name_entry.pack(fill="x")
+
+        section_label("Role")
         role_var = ctk.StringVar(value="doctor")
-        role_menu = ctk.CTkOptionMenu(form, values=["doctor", "nurse", "admin"], variable=role_var)
-        role_menu.pack(padx=30, fill="x")
+        role_selector = ctk.CTkSegmentedButton(
+            body, values=["doctor", "nurse", "admin"], variable=role_var,
+            height=38, selected_color=SIDEBAR_ACTIVE, selected_hover_color=SIDEBAR_ACTIVE,
+            command=lambda _choice: update_role_fields()
+        )
+        role_selector.pack(fill="x")
 
-        specialization_entry = self.labeled_entry(form, "Specialization (doctors only)")
-        doctor_id_entry = self.labeled_entry(form, "Assigned doctor ID (nurses only)")
+        # --- role-specific field: only one of these two is ever shown ----
+        specialization_wrap = ctk.CTkFrame(body, fg_color="transparent")
+        ctk.CTkLabel(
+            specialization_wrap, text="Specialization",
+            font=ctk.CTkFont(size=12, weight="bold"), text_color=MUTED_TEXT, anchor="w"
+        ).pack(fill="x", pady=(14, 6))
+        specialization_entry = ctk.CTkEntry(
+            specialization_wrap, placeholder_text="e.g. Pediatrics", height=40,
+            fg_color=FORM_FIELD_BG, border_width=0, corner_radius=8
+        )
+        specialization_entry.pack(fill="x")
 
-        status_label = ctk.CTkLabel(form, text="", text_color=ERROR_TEXT)
-        status_label.pack(pady=(4, 0))
+        doctor_username_wrap = ctk.CTkFrame(body, fg_color="transparent")
+        ctk.CTkLabel(
+            doctor_username_wrap, text="Assigned doctor's username",
+            font=ctk.CTkFont(size=12, weight="bold"), text_color=MUTED_TEXT, anchor="w"
+        ).pack(fill="x", pady=(14, 6))
+        doctor_username_entry = ctk.CTkEntry(
+            doctor_username_wrap, placeholder_text="e.g. jdiaz", height=40,
+            fg_color=FORM_FIELD_BG, border_width=0, corner_radius=8
+        )
+        doctor_username_entry.pack(fill="x")
+        ctk.CTkLabel(
+            doctor_username_wrap,
+            text="The nurse will manage this doctor's schedule.",
+            font=ctk.CTkFont(size=11), text_color=FORM_HINT_TEXT, anchor="w"
+        ).pack(fill="x", pady=(4, 0))
+
+        def update_role_fields():
+            """Shows the field that matches the currently selected role,
+            and hides the other one - so a doctor's form never shows a
+            stray "assigned doctor" box and vice versa."""
+            specialization_wrap.pack_forget()
+            doctor_username_wrap.pack_forget()
+            role = role_var.get()
+            if role == "doctor":
+                specialization_wrap.pack(fill="x")
+            elif role == "nurse":
+                doctor_username_wrap.pack(fill="x")
+
+        update_role_fields()
+
+        status_label = ctk.CTkLabel(
+            body, text="", text_color=ERROR_TEXT, wraplength=360,
+            anchor="w", justify="left", font=ctk.CTkFont(size=12)
+        )
+        status_label.pack(fill="x", pady=(16, 4))
 
         # Defined inside open_add_form() so it can read the entry widgets
         # above directly, without storing them on self.
@@ -905,8 +872,22 @@ class AdminDashboard(ctk.CTk):
                     specialization = specialization_entry.get().strip() or None
 
                 assigned_doctor_id = None
-                if role == "nurse" and doctor_id_entry.get().strip():
-                    assigned_doctor_id = int(doctor_id_entry.get())
+                if role == "nurse":
+                    doctor_username = doctor_username_entry.get().strip()
+                    if doctor_username:
+                        try:
+                            doctor_row = self.user_controller.get_user_by_username(doctor_username)
+                        except AppointMedError:
+                            status_label.configure(
+                                text="No user found with the username \"" + doctor_username + "\"."
+                            )
+                            return
+                        if doctor_row["role"] != "doctor":
+                            status_label.configure(
+                                text="\"" + doctor_username + "\" is not a doctor account."
+                            )
+                            return
+                        assigned_doctor_id = doctor_row["id"]
 
                 self.user_controller.add_user(
                     username=username_entry.get().strip(),
@@ -921,16 +902,29 @@ class AdminDashboard(ctk.CTk):
             except AppointMedError as e:
                 # Business-rule problems (duplicate username, etc.)
                 status_label.configure(text=str(e))
-            except ValueError:
-                # int() failed on the doctor ID
-                status_label.configure(text="Assigned doctor ID must be a number.")
 
-        ctk.CTkButton(form, text="Create account", command=submit).pack(pady=24)
+        # --- footer buttons -------------------------------------------------
+        footer = ctk.CTkFrame(form, fg_color="transparent")
+        footer.pack(fill="x", padx=26, pady=(4, 22))
+
+        ctk.CTkButton(
+            footer, text="Cancel", width=110, height=40,
+            fg_color="transparent", border_width=1, border_color="gray70",
+            text_color="gray30", hover_color="gray90",
+            command=form.destroy
+        ).pack(side="right")
+        ctk.CTkButton(
+            footer, text="Create account", width=160, height=40,
+            fg_color=SIDEBAR_ACTIVE, hover_color="#2C5282",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=submit
+        ).pack(side="right", padx=(0, 10))
 
     @staticmethod
     def labeled_entry(parent, label_text, show=None):
-        """Label above an entry box — the pattern every form field uses.
-        Pass show="*" to mask the text for passwords."""
+        """Label above an entry box — kept for any other screen that still
+        wants the plain label+entry pattern. The Add User form above now
+        uses placeholder text inside each field instead."""
         ctk.CTkLabel(parent, text=label_text, anchor="w").pack(fill="x", padx=30, pady=(10, 2))
         if show:
             entry = ctk.CTkEntry(parent, width=300, show=show)

@@ -47,3 +47,26 @@ class PasswordMismatchError(AppointMedError):
 class DatabaseConnectionError(AppointMedError):
     """Raised when the app cannot reach the database server."""
     pass
+
+
+class ConsultationInProgressError(AppointMedError):
+    """Raised when a doctor tries to start a second consultation while
+    another patient is still being consulted."""
+    pass
+
+
+class UsernameTakenError(AppointMedError):
+    """Raised when a user tries to change their username to one that
+    another account already uses."""
+    pass
+
+
+class InvalidInputError(AppointMedError):
+    """Raised when a value is filled in but is not acceptable (for
+    example a username with spaces in it)."""
+    pass
+
+
+class InvalidImageError(AppointMedError):
+    """Raised when a chosen profile picture cannot be read or is too big."""
+    pass
