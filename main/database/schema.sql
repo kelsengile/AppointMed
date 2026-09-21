@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
     role ENUM('doctor', 'nurse', 'admin') NOT NULL,
     specialization VARCHAR(100) NULL,          -- doctors only
     assigned_doctor_id INT NULL,               -- nurses only: which doctor they support
+    avatar MEDIUMBLOB NULL,                    -- profile picture (small JPEG)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (assigned_doctor_id) REFERENCES users(id)
 );

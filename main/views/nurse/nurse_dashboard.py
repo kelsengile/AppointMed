@@ -57,7 +57,10 @@ from datetime import date, datetime, timedelta
 from controllers.appointment_controller import AppointmentController
 from controllers.user_controller import UserController
 from utils.exceptions import AppointMedError
+from utils.avatar import render_avatar
 from utils.formatting import format_datetime, format_time
+
+from views.shared.profile_page import ProfilePage
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -671,6 +674,10 @@ class NurseDashboard(ctk.CTk):
         self.nav_buttons = {}                # key -> CTkButton, filled in below
         self.pages = {}                      # key -> page frame, filled in below
 
+        # The profile picture lives in the database; fetch it once here
+        # so the sidebar can show it the moment the window opens.
+        self.avatar_bytes = self.load_avatar()
+
         self.title(nurse.dashboard_title())
         self.geometry(self.WINDOW_SIZE)
         self.build_ui()
@@ -726,13 +733,12 @@ class NurseDashboard(ctk.CTk):
         self.profile_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         self.profile_frame.pack(fill="x", padx=8, pady=(0, 20))
 
-        # Plain circle, no photo yet. Swap in a real picture later with:
-        #   from PIL import Image
-        #   img = ctk.CTkImage(Image.open("avatar.png"), size=(40, 40))
-        #   self.profile_avatar.configure(image=img, text="")
+        # Round profile picture, or the person's initials if they haven't
+        # set one. Kept fresh by refresh_sidebar_profile().
         self.profile_avatar = ctk.CTkLabel(
             self.profile_frame, text="", width=40, height=40,
-            corner_radius=20, fg_color=AVATAR_BG
+            fg_color="transparent",
+            image=render_avatar(self.avatar_bytes, self.nurse.full_name, 40, bg=AVATAR_BG)
         )
         self.profile_avatar.pack(side="left")
 
@@ -943,10 +949,12 @@ class NurseDashboard(ctk.CTk):
         header = ctk.CTkFrame(page, fg_color="transparent")
         header.pack(fill="x", padx=24, pady=(20, 4))
 
-        ctk.CTkLabel(
+        # Kept on self so a rename in "My Account" can update it live.
+        self.appointments_title = ctk.CTkLabel(
             header, text=self.nurse.dashboard_title(),
             font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
+        )
+        self.appointments_title.pack(side="left")
 
         ctk.CTkButton(
             header, text="+ Add appointment", width=150,
@@ -977,193 +985,39 @@ class NurseDashboard(ctk.CTk):
         return page
 
     def build_profile_page(self, parent):
-        """"My Account" — shown in the same spot as the other pages when
-        the nurse clicks their avatar/name in the sidebar. Has a summary
-        card at the top, then two small forms: one to edit their name,
-        one to change the password. Both talk to UserController, which
-        is where the actual validation and the UPDATE statements live."""
-        # A scrollable frame instead of a plain one so the page can grow
-        # past the visible window height (e.g. once both edit forms are
-        # opened) without anything getting cut off.
-        page = ctk.CTkScrollableFrame(parent, fg_color="transparent")
-
-        header = ctk.CTkFrame(page, fg_color="transparent")
-        header.pack(fill="x", padx=24, pady=(20, 4))
-        ctk.CTkLabel(
-            header, text="My Account",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
-
-        ctk.CTkLabel(
-            page, text="Account details", font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
-        ).pack(anchor="w", padx=24, pady=(0, 16))
-
-        # --- summary card: avatar, name, username, role badge ----------
-        card = ctk.CTkFrame(page, corner_radius=10)
-        card.pack(fill="x", padx=24)
-
-        avatar_row = ctk.CTkFrame(card, fg_color="transparent")
-        avatar_row.pack(fill="x", padx=20, pady=20)
-
-        # Big blank avatar circle, same placeholder idea as the sidebar one.
-        ctk.CTkLabel(
-            avatar_row, text="", width=64, height=64, corner_radius=32,
-            fg_color=AVATAR_BG
-        ).pack(side="left")
-
-        text_col = ctk.CTkFrame(avatar_row, fg_color="transparent")
-        text_col.pack(side="left", padx=(16, 0), fill="x", expand=True)
-
-        # Stored on self so save_profile_details() can update this text in
-        # place after a successful save, instead of rebuilding the page.
-        self.profile_page_name_label = ctk.CTkLabel(
-            text_col, text=getattr(self.nurse, "full_name", "Nurse"),
-            font=ctk.CTkFont(size=16, weight="bold"), anchor="w"
+        """"My Account" - the shared profile screen (photo, name, username,
+        password). It lives in views/shared/profile_page.py so every role
+        gets the same page; this just hands it this dashboard's user."""
+        self.profile_page = ProfilePage(
+            parent, self.nurse, "nurse", self.user_controller,
+            avatar_bytes=self.avatar_bytes,
+            on_change=self.on_profile_changed
         )
-        self.profile_page_name_label.pack(fill="x")
-        ctk.CTkLabel(
-            text_col, text="@" + getattr(self.nurse, "username", "nurse"),
-            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
-        ).pack(fill="x", pady=(2, 0))
-        ctk.CTkLabel(
-            text_col, text="Nurse",
-            fg_color=NURSE_BADGE_BG, text_color=NURSE_BADGE_FG,
-            corner_radius=8, font=ctk.CTkFont(size=11, weight="bold")
-        ).pack(anchor="w", pady=(8, 0), ipadx=8, ipady=2)
+        return self.profile_page
 
-        ctk.CTkLabel(
-            card, text="Assigned doctor: #" + str(self.nurse.assigned_doctor_id),
-            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
-        ).pack(fill="x", padx=20, pady=(0, 20))
-
-        # --- edit details form -------------------------------------------
-        details_card = ctk.CTkFrame(page, corner_radius=10)
-        details_card.pack(fill="x", padx=24, pady=(16, 0))
-
-        details_header = ctk.CTkFrame(details_card, fg_color="transparent")
-        details_header.pack(fill="x", padx=20, pady=(16, 8))
-        ctk.CTkLabel(
-            details_header, text="Edit details", font=ctk.CTkFont(size=13, weight="bold"), anchor="w"
-        ).pack(side="left")
-        self.details_edit_btn = ctk.CTkButton(
-            details_header, text="Edit", width=70, height=26,
-            fg_color=REFRESH_BG, command=self.toggle_details_edit
-        )
-        self.details_edit_btn.pack(side="right")
-
-        # Everything below is the actual editable form. It's built here but
-        # NOT packed yet — it only appears once "Edit" is pressed, via
-        # toggle_details_edit().
-        self.details_form = ctk.CTkFrame(details_card, fg_color="transparent")
-
-        ctk.CTkLabel(self.details_form, text="Full name", anchor="w").pack(fill="x", padx=20)
-        self.profile_fullname_entry = ctk.CTkEntry(self.details_form, width=300)
-        self.profile_fullname_entry.insert(0, getattr(self.nurse, "full_name", ""))
-        self.profile_fullname_entry.pack(anchor="w", padx=20, pady=(2, 6))
-
-        self.profile_details_status = ctk.CTkLabel(self.details_form, text="", text_color=ERROR_TEXT)
-        self.profile_details_status.pack(anchor="w", padx=20)
-
-        ctk.CTkButton(
-            self.details_form, text="Save changes", width=140, command=self.save_profile_details
-        ).pack(anchor="w", padx=20, pady=(10, 20))
-
-        # --- change password form ----------------------------------------
-        password_card = ctk.CTkFrame(page, corner_radius=10)
-        password_card.pack(fill="x", padx=24, pady=(16, 20))
-
-        password_header = ctk.CTkFrame(password_card, fg_color="transparent")
-        password_header.pack(fill="x", padx=20, pady=(16, 8))
-        ctk.CTkLabel(
-            password_header, text="Change password", font=ctk.CTkFont(size=13, weight="bold"), anchor="w"
-        ).pack(side="left")
-        self.password_edit_btn = ctk.CTkButton(
-            password_header, text="Edit", width=70, height=26,
-            fg_color=REFRESH_BG, command=self.toggle_password_edit
-        )
-        self.password_edit_btn.pack(side="right")
-
-        # Hidden until "Edit" is pressed, same as details_form above.
-        self.password_form = ctk.CTkFrame(password_card, fg_color="transparent")
-
-        self.current_password_entry = ctk.CTkEntry(
-            self.password_form, width=300, show="*", placeholder_text="Current password"
-        )
-        self.current_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
-
-        self.new_password_entry = ctk.CTkEntry(
-            self.password_form, width=300, show="*", placeholder_text="New password"
-        )
-        self.new_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
-
-        self.confirm_password_entry = ctk.CTkEntry(
-            self.password_form, width=300, show="*", placeholder_text="Confirm new password"
-        )
-        self.confirm_password_entry.pack(anchor="w", padx=20, pady=(0, 6))
-
-        self.profile_password_status = ctk.CTkLabel(self.password_form, text="", text_color=ERROR_TEXT)
-        self.profile_password_status.pack(anchor="w", padx=20)
-
-        ctk.CTkButton(
-            self.password_form, text="Update password", width=140, command=self.save_profile_password
-        ).pack(anchor="w", padx=20, pady=(10, 20))
-
-        return page
-
-    def toggle_details_edit(self):
-        """Shows/hides the "Edit details" form. The button doubles as
-        Edit/Cancel depending on whether the form is currently open."""
-        if self.details_form.winfo_ismapped():
-            self.details_form.pack_forget()
-            self.details_edit_btn.configure(text="Edit")
-        else:
-            self.details_form.pack(fill="x")
-            self.details_edit_btn.configure(text="Cancel")
-
-    def toggle_password_edit(self):
-        """Shows/hides the "Change password" form, same Edit/Cancel pattern
-        as toggle_details_edit()."""
-        if self.password_form.winfo_ismapped():
-            self.password_form.pack_forget()
-            self.password_edit_btn.configure(text="Edit")
-        else:
-            self.password_form.pack(fill="x")
-            self.password_edit_btn.configure(text="Cancel")
-
-    def save_profile_details(self):
-        """Handles the "Save changes" button on the details form."""
-        full_name = self.profile_fullname_entry.get().strip()
-
+    def load_avatar(self):
+        """This user's stored picture, or None (also None if the database
+        can't be reached - initials are shown instead)."""
         try:
-            self.user_controller.update_details(self.nurse.user_id, full_name)
-        except AppointMedError as e:
-            self.profile_details_status.configure(text_color=ERROR_TEXT, text=str(e))
-            return
+            return self.user_controller.get_avatar(self.nurse.user_id)
+        except AppointMedError:
+            return None
 
-        # Reflect the change immediately, everywhere the name shows up,
-        # without needing to log out and back in.
-        self.nurse.full_name = full_name
-        self.profile_page_name_label.configure(text=full_name)
-        self.profile_name_label.configure(text=full_name)
+    def on_profile_changed(self):
+        """Called by the profile page after any successful save. It has
+        already updated self.nurse in place, so just redraw whatever
+        shows the name, title or picture."""
+        self.avatar_bytes = self.profile_page.avatar_bytes
+        self.refresh_sidebar_profile()
         self.title(self.nurse.dashboard_title())
-        self.profile_details_status.configure(text_color=SUCCESS_TEXT, text="Saved.")
+        self.appointments_title.configure(text=self.nurse.dashboard_title())
 
-    def save_profile_password(self):
-        """Handles the "Update password" button on the password form."""
-        current = self.current_password_entry.get().strip()
-        new = self.new_password_entry.get().strip()
-        confirm = self.confirm_password_entry.get().strip()
-
-        try:
-            self.user_controller.change_password(self.nurse.user_id, current, new, confirm)
-        except AppointMedError as e:
-            self.profile_password_status.configure(text_color=ERROR_TEXT, text=str(e))
-            return
-
-        self.current_password_entry.delete(0, "end")
-        self.new_password_entry.delete(0, "end")
-        self.confirm_password_entry.delete(0, "end")
-        self.profile_password_status.configure(text_color=SUCCESS_TEXT, text="Password updated.")
+    def refresh_sidebar_profile(self):
+        """Redraw the avatar and name at the top of the sidebar."""
+        self.profile_name_label.configure(text=self.nurse.full_name)
+        self.profile_avatar.configure(
+            image=render_avatar(self.avatar_bytes, self.nurse.full_name, 40, bg=AVATAR_BG)
+        )
 
     # -------------------------------------------------------------------
     # SCREENS STILL TO BE BUILT

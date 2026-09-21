@@ -17,6 +17,8 @@ How it works, step by step:
   5. It then runs _migrate_appointments_table(), which patches up
      appointments tables that were created from an OLDER copy of
      schema.sql - see that function's docstring for why this is needed.
+     _migrate_users_table() does the same for the users table (profile
+     pictures).
 
 Call ensure_database_ready() once near the start of main.py, before the
 login window opens.
@@ -43,6 +45,13 @@ APPOINTMENTS_REQUIRED_COLUMNS = {
     # waiting queue by it (first in, first served). NULL for anything
     # checked in before this column existed.
     "checked_in_at": "ADD COLUMN checked_in_at DATETIME NULL",
+}
+
+# Columns users must have, per schema.sql. `avatar` (the profile picture)
+# was added after the table first shipped, so an older database needs it
+# ALTERed in - see _migrate_users_table().
+USERS_REQUIRED_COLUMNS = {
+    "avatar": "ADD COLUMN avatar MEDIUMBLOB NULL",
 }
 
 # The full list of values appointments.status must accept, per schema.sql.
@@ -98,6 +107,7 @@ def ensure_database_ready():
             # thrown away the moment this connection closes.
             db.commit()
         _migrate_appointments_table()
+        _migrate_users_table()
     except DatabaseConnectionError as e:
         raise DatabaseConnectionError(
             "Could not set up the database automatically. Make sure MySQL "
@@ -181,3 +191,21 @@ def _migrate_appointments_table():
                 "ALTER TABLE appointments MODIFY COLUMN status "
                 + APPOINTMENT_STATUS_ENUM + " NOT NULL DEFAULT 'Scheduled'"
             )
+
+
+def _migrate_users_table():
+    """Same idea as _migrate_appointments_table(), for the users table:
+    CREATE TABLE IF NOT EXISTS never touches a table that already exists,
+    so a database created before profile pictures existed has no `avatar`
+    column. Add it if it is missing, otherwise saving or loading a picture
+    would fail with "Unknown column 'avatar'"."""
+    with DBConnector() as db:
+        db.execute(
+            "SELECT COLUMN_NAME FROM information_schema.columns "
+            "WHERE table_schema = DATABASE() AND table_name = 'users'"
+        )
+        existing_columns = {row["COLUMN_NAME"] for row in db.fetchall()}
+
+        for column_name, add_clause in USERS_REQUIRED_COLUMNS.items():
+            if column_name not in existing_columns:
+                db.execute("ALTER TABLE users " + add_clause)
