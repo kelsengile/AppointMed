@@ -6,6 +6,8 @@
 --    nurse (the nurse assigned to a specific doctor).
 -- 2. The nurse either converts that notification into an appointment,
 --    or creates a walk-in appointment directly (no notification).
+--    A doctor can also book an appointment for themselves, in which
+--    case no nurse is involved (appointments.nurse_id stays NULL).
 -- 3. The assigned doctor sees the appointee. The doctor's examination
 --    creates/links a patient record, and the doctor decides to either
 --    (a) schedule a follow-up appointment, or (b) close the encounter
@@ -84,9 +86,9 @@ CREATE TABLE IF NOT EXISTS patients (
 
 -- ============================================================
 -- APPOINTMENTS: created by a nurse either from a notification
--- or as a walk-in. patient_id starts NULL for a first-time
--- visitor and gets filled in once the doctor's examination
--- links/creates the patient record.
+-- or as a walk-in, or by a doctor for themselves. patient_id
+-- starts NULL for a first-time visitor and gets filled in once
+-- the doctor's examination links/creates the patient record.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS appointments (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -94,13 +96,14 @@ CREATE TABLE IF NOT EXISTS appointments (
     patient_id INT NULL,                -- filled in once linked to a patient
     full_name VARCHAR(100) NOT NULL,    -- appointee's name (pre-patient)
     doctor_id INT NOT NULL,
-    nurse_id INT NOT NULL,              -- nurse who booked/manages it
+    nurse_id INT NULL,                  -- nurse who booked it, NULL if the doctor booked it
     room_id INT NULL,
     source ENUM('Notification', 'Walk-in') NOT NULL DEFAULT 'Walk-in',
     scheduled_time DATETIME NOT NULL,
     reason VARCHAR(255),
-    status ENUM('Scheduled', 'Checked-in', 'Examined', 'Completed', 'Cancelled')
+    status ENUM('Scheduled', 'Checked-in', 'Consulting', 'Examined', 'Completed', 'Cancelled')
         NOT NULL DEFAULT 'Scheduled',
+    checked_in_at DATETIME NULL,        -- when the patient checked in (orders the waiting queue)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (notification_id) REFERENCES notifications(id),
     FOREIGN KEY (patient_id) REFERENCES patients(id),

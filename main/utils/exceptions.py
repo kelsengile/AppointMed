@@ -47,3 +47,9 @@ class PasswordMismatchError(AppointMedError):
 class DatabaseConnectionError(AppointMedError):
     """Raised when the app cannot reach the database server."""
     pass
+
+
+class ConsultationInProgressError(AppointMedError):
+    """Raised when a doctor tries to start a second consultation while
+    another patient is still being consulted."""
+    pass

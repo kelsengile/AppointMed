@@ -34,25 +34,41 @@ SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
 APPOINTMENTS_REQUIRED_COLUMNS = {
     "notification_id": "ADD COLUMN notification_id INT NULL",
     "full_name": "ADD COLUMN full_name VARCHAR(100) NOT NULL DEFAULT ''",
-    # NOT NULL with no safe default to backfill from, unlike full_name -
-    # nullable here is a deliberate compromise so this migration doesn't
-    # fail (or delete data) on a table that already has rows.
+    # Nullable on purpose: a doctor can book an appointment for
+    # themselves, in which case no nurse is involved.
     "nurse_id": "ADD COLUMN nurse_id INT NULL",
     "room_id": "ADD COLUMN room_id INT NULL",
     "source": "ADD COLUMN source ENUM('Notification', 'Walk-in') NOT NULL DEFAULT 'Walk-in'",
+    # Stamped when a patient is checked in. The dashboards order their
+    # waiting queue by it (first in, first served). NULL for anything
+    # checked in before this column existed.
+    "checked_in_at": "ADD COLUMN checked_in_at DATETIME NULL",
 }
 
+# The full list of values appointments.status must accept, per schema.sql.
+# 'Consulting' was added after the table first shipped, and CREATE TABLE IF
+# NOT EXISTS never revisits a table that already exists - so an older
+# database would reject the Consulting button with "Data truncated for
+# column 'status'" unless the ENUM itself is widened. See
+# _migrate_appointments_table().
+APPOINTMENT_STATUS_ENUM = (
+    "ENUM('Scheduled', 'Checked-in', 'Consulting', 'Examined', 'Completed', 'Cancelled')"
+)
+
 # Columns that exist on older tables but were created with a stricter
-# constraint than schema.sql now uses. patient_id in particular used to
-# be NOT NULL, back when every appointment needed a patient record up
-# front. Now a walk-in/new appointee is booked with patient_id=NULL and
-# only gets linked to a patient once a doctor examines them - so a table
-# still carrying the old NOT NULL constraint makes every new appointment
-# fail with "Column 'patient_id' cannot be null" even though the app
-# code is correct. This patches the constraint itself, not just
-# whether the column exists.
+# constraint than schema.sql now uses. This patches the constraint itself,
+# not just whether the column exists.
+#   * patient_id used to be NOT NULL, back when every appointment needed a
+#     patient record up front. Now a walk-in/new appointee is booked with
+#     patient_id=NULL and only gets linked to a patient once a doctor
+#     examines them - so the old NOT NULL made every new appointment fail
+#     with "Column 'patient_id' cannot be null".
+#   * nurse_id used to be NOT NULL, back when only nurses could book. A
+#     doctor can now book an appointment for themselves (nurse_id=NULL),
+#     which the old constraint would reject the same way.
 APPOINTMENTS_COLUMNS_TO_RELAX = {
     "patient_id": "MODIFY COLUMN patient_id INT NULL",
+    "nurse_id": "MODIFY COLUMN nurse_id INT NULL",
 }
 
 
@@ -102,7 +118,9 @@ def _split_statements(schema_sql):
 
     This is a deliberately simple splitter - it assumes no ";" or "--"
     ever appears inside a quoted string in schema.sql, which holds for
-    this project's schema."""
+    this project's schema. (Full-line comments are dropped, so the
+    "-- ..." text inside the CREATE TABLE lines is only ever trailing
+    text and is passed through to MySQL, which understands it.)"""
     kept_lines = []
     for line in schema_sql.splitlines():
         stripped = line.strip()
@@ -128,15 +146,19 @@ def _migrate_appointments_table():
     it looks at what columns the live table actually has and ALTERs in
     whichever of APPOINTMENTS_REQUIRED_COLUMNS are missing, so booking an
     appointment doesn't fail with "Unknown column ... in 'field list'".
+
+    It also loosens columns that used to be NOT NULL (see
+    APPOINTMENTS_COLUMNS_TO_RELAX) and widens the status ENUM.
     """
     with DBConnector() as db:
         db.execute(
-            "SELECT COLUMN_NAME, IS_NULLABLE FROM information_schema.columns "
+            "SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_TYPE FROM information_schema.columns "
             "WHERE table_schema = DATABASE() AND table_name = 'appointments'"
         )
         column_rows = db.fetchall()
         existing_columns = {row["COLUMN_NAME"] for row in column_rows}
         nullability = {row["COLUMN_NAME"]: row["IS_NULLABLE"] for row in column_rows}
+        column_types = {row["COLUMN_NAME"]: row["COLUMN_TYPE"] for row in column_rows}
 
         for column_name, add_clause in APPOINTMENTS_REQUIRED_COLUMNS.items():
             if column_name not in existing_columns:
@@ -149,3 +171,13 @@ def _migrate_appointments_table():
             if column_name in existing_columns and nullability.get(column_name) == "NO":
                 db.execute("ALTER TABLE appointments " + modify_clause)
 
+        # Widen the status ENUM if it doesn't know 'Consulting' yet. Some
+        # connector versions hand COLUMN_TYPE back as bytes, so decode first.
+        status_type = column_types.get("status")
+        if isinstance(status_type, (bytes, bytearray)):
+            status_type = status_type.decode()
+        if status_type is not None and "'Consulting'" not in status_type:
+            db.execute(
+                "ALTER TABLE appointments MODIFY COLUMN status "
+                + APPOINTMENT_STATUS_ENUM + " NOT NULL DEFAULT 'Scheduled'"
+            )

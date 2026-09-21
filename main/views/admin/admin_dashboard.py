@@ -84,6 +84,7 @@ ROLE_COLORS = {
 STATUS_COLORS = {
     "Scheduled": ("#EEF1F4", "#4A5568"),
     "Checked-in": ("#FFF6DC", "#B7791F"),
+    "Consulting": ("#E6FFFA", "#2C7A7B"),
     "Examined": ("#E3F0FF", "#2B6CB0"),
     "Completed": ("#E3F6E8", "#2F855A"),
     "Cancelled": ("#FBE7E7", "#C53030"),
