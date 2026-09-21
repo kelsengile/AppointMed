@@ -74,6 +74,12 @@ DELETE_BG = "#C53030"
 DELETE_HOVER = "#9B2C2C"
 REFRESH_BG = "gray60"
 
+# --- add-user modal colours -------------------------------------------
+FORM_HEADER_BG = "#1A1F2B"
+FORM_HEADER_SUBTEXT = "#A9B4C4"
+FORM_FIELD_BG = "#F4F6F8"
+FORM_HINT_TEXT = "gray55"
+
 # Role badge colours: (background, text). Used by the user list.
 ROLE_COLORS = {
     "doctor": ("#E3F0FF", "#2B6CB0"),
@@ -646,16 +652,26 @@ class AdminDashboard(ctk.CTk):
             command=lambda u=user: self.delete_user(u)
         ).pack(side="right", padx=(8, 0))
 
-    @staticmethod
-    def user_subtitle(user):
+    def user_subtitle(self, user):
         """Second line of a row: "@jdoe · Pediatrics" or
-        "@jdoe · assigned to doctor #3"."""
+        "@jdoe · assigned to Dr. Juan Diaz"."""
         subtitle = "@" + user["username"]
         if user["role"] == "doctor" and user.get("specialization"):
             subtitle = subtitle + " · " + user["specialization"]
         if user["role"] == "nurse" and user.get("assigned_doctor_id"):
-            subtitle = subtitle + " · assigned to doctor #" + str(user["assigned_doctor_id"])
+            subtitle = subtitle + " · assigned to " + self._doctor_display_name(
+                user["assigned_doctor_id"]
+            )
         return subtitle
+
+    def _doctor_display_name(self, doctor_id):
+        """"Dr. Juan Diaz" for a given doctor id, falling back to the bare
+        id if the account can no longer be found (e.g. it was deleted)."""
+        try:
+            doctor = self.user_controller.get_user_by_id(doctor_id)
+            return "Dr. " + doctor["full_name"]
+        except AppointMedError:
+            return "doctor #" + str(doctor_id)
 
     def delete_user(self, user):
         confirmed = messagebox.askyesno("Confirm", "Delete account for " + user["full_name"] + "?")
@@ -724,31 +740,125 @@ class AdminDashboard(ctk.CTk):
 
     # ------------------------------------------------------------------
     # ADD-USER FORM (a small pop-up window)
+    #
+    # Redesigned to feel like a proper form instead of a bare stack of
+    # labels: a dark header banner, placeholder text INSIDE each entry
+    # instead of a separate caption above it, a segmented control for the
+    # role (clearer than a dropdown for just 3 choices), and only ONE
+    # role-specific field visible at a time - it swaps in place the
+    # instant the role changes.
+    #
+    # Nurses are now assigned to a doctor by typing that doctor's
+    # USERNAME (e.g. "jdiaz") rather than an internal numeric id, which
+    # nobody creating the account would otherwise know off-hand.
     # ------------------------------------------------------------------
     def open_add_form(self):
         form = ctk.CTkToplevel(self)
         form.title("Add User")
-        form.geometry("380x560")
+        form.geometry("440x640")
+        form.minsize(440, 640)
         form.grab_set()  # modal: blocks clicks on the dashboard behind it
 
+        # --- header banner ------------------------------------------------
+        header = ctk.CTkFrame(form, fg_color=FORM_HEADER_BG, corner_radius=0, height=92)
+        header.pack(fill="x")
+        header.pack_propagate(False)
         ctk.CTkLabel(
-            form, text="New User Account", font=ctk.CTkFont(size=16, weight="bold")
-        ).pack(pady=(20, 16))
+            header, text="➕  Add New User",
+            font=ctk.CTkFont(size=19, weight="bold"), text_color="white"
+        ).pack(anchor="w", padx=28, pady=(22, 2))
+        ctk.CTkLabel(
+            header, text="Create a doctor, nurse, or admin account",
+            font=ctk.CTkFont(size=12), text_color=FORM_HEADER_SUBTEXT
+        ).pack(anchor="w", padx=28)
 
-        username_entry = self.labeled_entry(form, "Username")
-        password_entry = self.labeled_entry(form, "Password", show="*")
-        full_name_entry = self.labeled_entry(form, "Full name")
+        # --- scrollable body, in case the window gets resized smaller -----
+        body = ctk.CTkScrollableFrame(form, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=26, pady=(20, 0))
 
-        ctk.CTkLabel(form, text="Role", anchor="w").pack(fill="x", padx=30, pady=(10, 2))
+        def section_label(text):
+            ctk.CTkLabel(
+                body, text=text, font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=MUTED_TEXT, anchor="w"
+            ).pack(fill="x", pady=(14, 6))
+
+        section_label("Username")
+        username_entry = ctk.CTkEntry(
+            body, placeholder_text="e.g. jdoe", height=40,
+            fg_color=FORM_FIELD_BG, border_width=0, corner_radius=8
+        )
+        username_entry.pack(fill="x")
+
+        section_label("Password")
+        password_entry = ctk.CTkEntry(
+            body, placeholder_text="Temporary password", show="*", height=40,
+            fg_color=FORM_FIELD_BG, border_width=0, corner_radius=8
+        )
+        password_entry.pack(fill="x")
+
+        section_label("Full name")
+        full_name_entry = ctk.CTkEntry(
+            body, placeholder_text="e.g. Juan Dela Cruz", height=40,
+            fg_color=FORM_FIELD_BG, border_width=0, corner_radius=8
+        )
+        full_name_entry.pack(fill="x")
+
+        section_label("Role")
         role_var = ctk.StringVar(value="doctor")
-        role_menu = ctk.CTkOptionMenu(form, values=["doctor", "nurse", "admin"], variable=role_var)
-        role_menu.pack(padx=30, fill="x")
+        role_selector = ctk.CTkSegmentedButton(
+            body, values=["doctor", "nurse", "admin"], variable=role_var,
+            height=38, selected_color=SIDEBAR_ACTIVE, selected_hover_color=SIDEBAR_ACTIVE,
+            command=lambda _choice: update_role_fields()
+        )
+        role_selector.pack(fill="x")
 
-        specialization_entry = self.labeled_entry(form, "Specialization (doctors only)")
-        doctor_id_entry = self.labeled_entry(form, "Assigned doctor ID (nurses only)")
+        # --- role-specific field: only one of these two is ever shown ----
+        specialization_wrap = ctk.CTkFrame(body, fg_color="transparent")
+        ctk.CTkLabel(
+            specialization_wrap, text="Specialization",
+            font=ctk.CTkFont(size=12, weight="bold"), text_color=MUTED_TEXT, anchor="w"
+        ).pack(fill="x", pady=(14, 6))
+        specialization_entry = ctk.CTkEntry(
+            specialization_wrap, placeholder_text="e.g. Pediatrics", height=40,
+            fg_color=FORM_FIELD_BG, border_width=0, corner_radius=8
+        )
+        specialization_entry.pack(fill="x")
 
-        status_label = ctk.CTkLabel(form, text="", text_color=ERROR_TEXT)
-        status_label.pack(pady=(4, 0))
+        doctor_username_wrap = ctk.CTkFrame(body, fg_color="transparent")
+        ctk.CTkLabel(
+            doctor_username_wrap, text="Assigned doctor's username",
+            font=ctk.CTkFont(size=12, weight="bold"), text_color=MUTED_TEXT, anchor="w"
+        ).pack(fill="x", pady=(14, 6))
+        doctor_username_entry = ctk.CTkEntry(
+            doctor_username_wrap, placeholder_text="e.g. jdiaz", height=40,
+            fg_color=FORM_FIELD_BG, border_width=0, corner_radius=8
+        )
+        doctor_username_entry.pack(fill="x")
+        ctk.CTkLabel(
+            doctor_username_wrap,
+            text="The nurse will manage this doctor's schedule.",
+            font=ctk.CTkFont(size=11), text_color=FORM_HINT_TEXT, anchor="w"
+        ).pack(fill="x", pady=(4, 0))
+
+        def update_role_fields():
+            """Shows the field that matches the currently selected role,
+            and hides the other one - so a doctor's form never shows a
+            stray "assigned doctor" box and vice versa."""
+            specialization_wrap.pack_forget()
+            doctor_username_wrap.pack_forget()
+            role = role_var.get()
+            if role == "doctor":
+                specialization_wrap.pack(fill="x")
+            elif role == "nurse":
+                doctor_username_wrap.pack(fill="x")
+
+        update_role_fields()
+
+        status_label = ctk.CTkLabel(
+            body, text="", text_color=ERROR_TEXT, wraplength=360,
+            anchor="w", justify="left", font=ctk.CTkFont(size=12)
+        )
+        status_label.pack(fill="x", pady=(16, 4))
 
         # Defined inside open_add_form() so it can read the entry widgets
         # above directly, without storing them on self.
@@ -762,8 +872,22 @@ class AdminDashboard(ctk.CTk):
                     specialization = specialization_entry.get().strip() or None
 
                 assigned_doctor_id = None
-                if role == "nurse" and doctor_id_entry.get().strip():
-                    assigned_doctor_id = int(doctor_id_entry.get())
+                if role == "nurse":
+                    doctor_username = doctor_username_entry.get().strip()
+                    if doctor_username:
+                        try:
+                            doctor_row = self.user_controller.get_user_by_username(doctor_username)
+                        except AppointMedError:
+                            status_label.configure(
+                                text="No user found with the username \"" + doctor_username + "\"."
+                            )
+                            return
+                        if doctor_row["role"] != "doctor":
+                            status_label.configure(
+                                text="\"" + doctor_username + "\" is not a doctor account."
+                            )
+                            return
+                        assigned_doctor_id = doctor_row["id"]
 
                 self.user_controller.add_user(
                     username=username_entry.get().strip(),
@@ -778,16 +902,29 @@ class AdminDashboard(ctk.CTk):
             except AppointMedError as e:
                 # Business-rule problems (duplicate username, etc.)
                 status_label.configure(text=str(e))
-            except ValueError:
-                # int() failed on the doctor ID
-                status_label.configure(text="Assigned doctor ID must be a number.")
 
-        ctk.CTkButton(form, text="Create account", command=submit).pack(pady=24)
+        # --- footer buttons -------------------------------------------------
+        footer = ctk.CTkFrame(form, fg_color="transparent")
+        footer.pack(fill="x", padx=26, pady=(4, 22))
+
+        ctk.CTkButton(
+            footer, text="Cancel", width=110, height=40,
+            fg_color="transparent", border_width=1, border_color="gray70",
+            text_color="gray30", hover_color="gray90",
+            command=form.destroy
+        ).pack(side="right")
+        ctk.CTkButton(
+            footer, text="Create account", width=160, height=40,
+            fg_color=SIDEBAR_ACTIVE, hover_color="#2C5282",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=submit
+        ).pack(side="right", padx=(0, 10))
 
     @staticmethod
     def labeled_entry(parent, label_text, show=None):
-        """Label above an entry box — the pattern every form field uses.
-        Pass show="*" to mask the text for passwords."""
+        """Label above an entry box — kept for any other screen that still
+        wants the plain label+entry pattern. The Add User form above now
+        uses placeholder text inside each field instead."""
         ctk.CTkLabel(parent, text=label_text, anchor="w").pack(fill="x", padx=30, pady=(10, 2))
         if show:
             entry = ctk.CTkEntry(parent, width=300, show=show)

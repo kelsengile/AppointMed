@@ -941,9 +941,11 @@ class NurseDashboard(ctk.CTk):
         self.show_page(self.current_view)
 
     def build_appointments_page(self, parent):
+
         """The main screen: header row + the nurse's own board for the
         assigned doctor (Consulting Now, waiting queue, then the scheduled
         appointments by day)."""
+
         page = ctk.CTkFrame(parent, fg_color="transparent")
 
         header = ctk.CTkFrame(page, fg_color="transparent")
@@ -965,12 +967,13 @@ class NurseDashboard(ctk.CTk):
             command=self.load_appointments
         ).pack(side="right")
 
-        subtitle = ("Managing schedule for Doctor #" + str(self.nurse.assigned_doctor_id) +
-                    " — " + date.today().strftime("%A, %B %d"))
-        ctk.CTkLabel(
-            page, text=subtitle,
+        # Kept on self so it can be refreshed if the assigned doctor
+        # renames themselves while this window is open.
+        self.appointments_subtitle = ctk.CTkLabel(
+            page, text=self._appointments_subtitle_text(),
             font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
-        ).pack(anchor="w", padx=24, pady=(0, 12))
+        )
+        self.appointments_subtitle.pack(anchor="w", padx=24, pady=(0, 12))
 
         # load_appointments() asks this board to redraw; it must exist
         # before load_appointments() is called in __init__.
@@ -983,6 +986,23 @@ class NurseDashboard(ctk.CTk):
         self.board.pack(fill="both", expand=True, padx=24, pady=(0, 20))
 
         return page
+
+    def _appointments_subtitle_text(self):
+        """"Managing schedule for Dr. Juan Diaz — Monday, October 05"
+        instead of a bare doctor id, so the nurse sees a name they
+        recognize rather than a number."""
+        return ("Managing schedule for " + self._assigned_doctor_display_name() +
+                " — " + date.today().strftime("%A, %B %d"))
+
+    def _assigned_doctor_display_name(self):
+        """"Dr. Juan Diaz" for the assigned doctor, falling back to a
+        generic label if the account can't be looked up (e.g. the
+        database is briefly unreachable)."""
+        try:
+            doctor = self.user_controller.get_user_by_id(self.nurse.assigned_doctor_id)
+            return "Dr. " + doctor["full_name"]
+        except AppointMedError:
+            return "your assigned doctor"
 
     def build_profile_page(self, parent):
         """"My Account" - the shared profile screen (photo, name, username,

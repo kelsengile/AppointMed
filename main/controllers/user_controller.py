@@ -47,6 +47,28 @@ class UserController:
                 raise RecordNotFoundError("No user with id " + str(user_id) + ".")
             return row
 
+    def get_user_by_username(self, username):
+        """Looks up an account by its username instead of its numeric id.
+
+        Used by the Admin "Add User" form so a nurse can be assigned to a
+        doctor by typing the doctor's username (e.g. "jdiaz") instead of
+        having to know their internal id number, and by anything else
+        that wants to show a doctor's name rather than a bare id."""
+        username = (username or "").strip()
+        if not username:
+            raise EmptyFieldError("Username is required.")
+
+        with DBConnector() as db:
+            db.execute(
+                "SELECT id, username, full_name, role, specialization, assigned_doctor_id "
+                "FROM users WHERE username=%s",
+                (username,),
+            )
+            row = db.fetchone()
+            if not row:
+                raise RecordNotFoundError("No user found with username " + username + ".")
+            return row
+
     def add_user(self, username, password, full_name, role,
                  specialization=None, assigned_doctor_id=None):
         if not username or not password or not full_name:
