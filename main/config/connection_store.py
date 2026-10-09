@@ -12,33 +12,38 @@ import os
 
 STORE_PATH = os.path.join(os.path.dirname(__file__), "remembered_connection.json")
 
+#   Returns a dictionary like {"host": ..., "user": ...} if we saved a
+#   connection before. Returns None if nothing was saved yet or the file
+#   could not be read.
 
-def load_remembered():
-    """Returns a dictionary like {"host": ..., "user": ...} if we saved a
-    connection before. Returns None if nothing was saved yet or the file
-    could not be read."""
+def load_remembered() -> dict[str, str] | None:
+
     if not os.path.exists(STORE_PATH):
         return None
 
     try:
-        file = open(STORE_PATH, "r")
-        data = json.load(file)
-        file.close()
+        with open(STORE_PATH, "r", encoding="utf-8") as file:
+            data = json.load(file)
     except (json.JSONDecodeError, OSError):
         return None
 
-    if "host" in data and "user" in data:
-        return data
+    if not isinstance(data, dict):
+        return None
+
+    host = data.get("host")
+    user = data.get("user")
+    if isinstance(host, str) and isinstance(user, str) and host and user:
+        return {"host": host, "user": user}
     return None
 
 
+#   Saves the host and username to a file so next time the app opens,
+#   it can fill them in automatically. Never pass a password in here.
+
 def save_remembered(host, user):
-    """Saves the host and username to a file so next time the app opens,
-    it can fill them in automatically. Never pass a password in here."""
     try:
         file = open(STORE_PATH, "w")
         json.dump({"host": host, "user": user}, file)
         file.close()
     except OSError:
-        # Not a big deal if this fails - the user just types it again.
         pass

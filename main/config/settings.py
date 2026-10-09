@@ -6,7 +6,7 @@ but for this class project it keeps things simple.
 """
 
 DB_CONFIG = {
-    "host": "",       # put your MySQL server's IP address here
+    "host": "",
     "port": 3306,
     "user": "",
     "password": "",
