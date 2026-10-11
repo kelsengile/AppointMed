@@ -25,7 +25,7 @@ AppointMed is an all-in-one clinic management platform built to help healthcare 
 
 ## Developers:
 
-Ambrocio, Rhen Jemimah L.  
+Ambrocio, Rhen Jemimah L.  - mimay
 Altobar, Loraine R.    
 Conel, Kelsen Gile S.  
 Ortega, Xavier Kent C.  
