@@ -674,7 +674,11 @@ class AdminDashboard(ctk.CTk):
             return "doctor #" + str(doctor_id)
 
     def delete_user(self, user):
-        confirmed = messagebox.askyesno("Confirm", "Delete account for " + user["full_name"] + "?")
+        message = "Delete account for " + user["full_name"] + "?"
+        if user["role"] == "doctor":
+            message += ("\n\nThis also deletes all of this doctor's appointments, "
+                        "and their nurses will be left unassigned.")
+        confirmed = messagebox.askyesno("Confirm", message)
         if not confirmed:
             return
         try:
