@@ -10,20 +10,20 @@ the doctor dashboard, so both roles feel like the same app:
     | (nav)     |  one "page" per nav button     |
     +-----------+--------------------------------+
 
-Two pages have real content right now:
+Pages with real content right now:
   * "Appointments" - the NURSE'S OWN appointment board (see section 1B):
-    a read-only Consulting Now box, the waiting queue (no buttons - once
-    a patient is checked in only the doctor moves them on), then the
-    still-scheduled appointments grouped by day with Check in / Cancel
-    buttons, and a month filter on the right.
+    a read-only Consulting Now box, the waiting queue (once a patient is
+    checked in only the doctor moves them on), then the still-scheduled
+    appointments grouped by day with Check in / Room / Cancel buttons, and
+    a month filter on the right. The nurse books appointments here
+    ("+ Add appointment") and can SET OR CHANGE A PATIENT'S ROOM with the
+    "Room" button on a card.
+  * "Doctor"  - the assigned doctor's details and today's numbers.
+    VIEW ONLY: the nurse cannot edit anything about the doctor.
+  * "Room"    - live room status from the database.
   * "History" - every appointment that has been Completed or Cancelled.
-The board code now lives in THIS file (it is no longer shared with the
-doctor dashboard), so you can change the nurse's board freely without
-affecting the doctor's. Every other nav item already has its OWN
-build_*_page() method waiting in section 5 — build_doctor_page(),
-build_room_page(), build_notifications_page(), build_invoice_page(),
-build_settings_page(), build_help_page(). Each returns the shared
-placeholder for now.
+  * "Help"    - FAQ.
+Notifications, Invoice and Settings still return the shared placeholder.
 
 HOW THIS FILE IS ORGANISED (read the section banners as you scroll):
     1. SETTINGS           — colours, sizes, nav items. Tweak things here first.
@@ -54,6 +54,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from datetime import date, datetime, timedelta
 
+from controllers.room_controller import RoomController, attach_rooms
 from controllers.appointment_controller import AppointmentController
 from controllers.user_controller import UserController
 from utils.exceptions import AppointMedError
@@ -88,11 +89,19 @@ REFRESH_BG = "gray60"
 NURSE_BADGE_BG = "#F3E8FF"
 NURSE_BADGE_FG = "#6B46C1"
 
+# Used on the Doctor page (the nurse only VIEWS the doctor's details).
+DOCTOR_BADGE_BG = "#E3F0FF"
+DOCTOR_BADGE_FG = "#2B6CB0"
+
 # --- appointment board colours (nurse's board) ----------------------------
 DIVIDER_COLOR = "gray75"
 
 CHECKIN_BG = "#2B6CB0"
 CHECKIN_HOVER = "#2C5282"
+ROOM_BG = "#2C7A7B"
+ROOM_HOVER = "#285E61"
+COMPLETE_BG = "#2F855A"
+COMPLETE_HOVER = "#276749"
 CANCEL_BG = "#C53030"
 CANCEL_HOVER = "#9B2C2C"
 NAV_BTN_BG = "gray60"
@@ -114,6 +123,13 @@ QUEUE_EARLIEST_FIRST = True
 STATUS_COLORS = {
     "Completed": ("#E3F6E8", "#2F855A"),
     "Cancelled": ("#FBE7E7", "#C53030"),
+}
+
+# Room status badge colours: (background, text).
+ROOM_STATUS_COLORS = {
+    "Available":   ("#E3F6E8", "#2F855A"),
+    "Occupied":    ("#FFF1D6", "#B7791F"),
+    "Maintenance": ("#FBE7E7", "#C53030"),
 }
 
 # NAV_ITEMS drives the whole sidebar: every button, its icon, and where it
@@ -138,6 +154,46 @@ STACKED_POSITIONS = ("top", "middle")
 # The profile row at the top of the sidebar is not a nav button, but it
 # routes to a page just like one. This is that page's key.
 PROFILE_KEY = "profile"
+
+# ===========================================================================
+# For FAQ (Help Page)
+# ===========================================================================
+FAQ_HOVER = "gray85"
+
+# (section title, [(question, answer), ...]) — edit the text freely.
+FAQ_SECTIONS = [
+    ("APPOINTMENTS", [
+        ("How do I book an appointment?",
+         "On the Appointments page press '+ Add appointment', enter the "
+         "patient's name, pick a date and time, a room, and give a reason "
+         "for the visit."),
+        ("How do I set or change a patient's room?",
+         "Press 'Room' on a scheduled or waiting appointment and choose a "
+         "room. A room under maintenance, or one already booked at that "
+         "time, cannot be assigned."),
+        ("Why are there no buttons on the waiting queue?",
+         "Once a patient is checked in, only the doctor can move them to "
+         "Consulting and Complete the visit."),
+        ("What happens when I press Cancel?",
+         "The appointment leaves the Appointments page and is saved in "
+         "History, marked as Cancelled."),
+        ("The doctor finished a visit but the board still shows it.",
+         "Press the Refresh button at the top of the Appointments page."),
+    ]),
+    ("DOCTOR", [
+        ("Can I change the doctor's details?",
+         "No. The Doctor page is view-only for nurses. The doctor edits "
+         "their own profile, or the administrator can."),
+    ]),
+    ("ACCOUNT", [
+        ("How do I change my photo, name or password?",
+         "Click your name at the top of the sidebar to open My Account."),
+        ("I can't log in anymore.",
+         "Please contact the clinic administrator to have your password reset."),
+    ]),
+]
+
+SUPPORT_CONTACT = "Clinic Administrator  ·  admin@yourclinic.example  ·  Local 100"
 
 
 # ===========================================================================
@@ -225,6 +281,9 @@ def _rows_to_appointments(rows):
             "reason": record["reason"] or "No reason given",
             "status": record["status"],
             "checked_in_at": record.get("checked_in_at"),
+            # Which room is already set (None = no room yet). The "Room"
+            # button uses it to pre-select the current choice.
+            "room_id": record.get("room_id"),
         })
     return appointments
 
@@ -252,6 +311,41 @@ def _arrival_text(appt):
 
 
 # ===========================================================================
+# Class of FAQ
+# ===========================================================================
+class _FAQItem(ctk.CTkFrame):
+    """One collapsible question. Click the question to show/hide the answer."""
+
+    def __init__(self, parent, question, answer):
+        super().__init__(parent, corner_radius=10)
+        self.question = question
+        self._open = False
+
+        self.header = ctk.CTkButton(
+            self, text="▸   " + question, anchor="w", height=40,
+            fg_color="transparent", hover_color=FAQ_HOVER,
+            text_color=("gray10", "gray90"),
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self.toggle
+        )
+        self.header.pack(fill="x", padx=6, pady=2)
+
+        self.answer = ctk.CTkLabel(
+            self, text=answer, wraplength=620, justify="left", anchor="w",
+            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+        )
+
+    def toggle(self):
+        self._open = not self._open
+        arrow = "▾" if self._open else "▸"
+        self.header.configure(text=arrow + "   " + self.question)
+        if self._open:
+            self.answer.pack(fill="x", padx=24, pady=(0, 12))
+        else:
+            self.answer.pack_forget()
+
+
+# ===========================================================================
 # 1B. NURSE APPOINTMENT BOARD
 # The Appointments page body, top to bottom:
 #
@@ -262,15 +356,16 @@ def _arrival_text(appt):
 #    |  | Ana Cruz                                   |  |
 #    |  +--------------------------------------------+  |
 #    |  +--------------------------------------------+  |
-#    |  | WAITING QUEUE                              |  |  no buttons: only the
-#    |  | #1  Ben Lee   checked in 9:10              |  |  doctor moves them on
+#    |  | WAITING QUEUE                              |  |  only a [Room] button:
+#    |  | #1  Ben Lee   checked in 9:10      [Room]  |  |  the doctor moves them on
 #    |  +--------------------------------------------+  |
 #    |  TODAY - Monday, October 05                      |  still-scheduled
-#    |    card                    [Check in] [Cancel]   |  appointments by day
+#    |    card             [Check in] [Room] [Cancel]   |  appointments by day
 #    +--------------------------------------------------+
 #
-# The nurse's only actions live on the scheduled cards:
+# The nurse's actions:
 #   * Check in - the card leaves the list and joins the waiting queue.
+#   * Room     - set or change the room for that patient.
 #   * Cancel   - the appointment goes straight to History.
 # ===========================================================================
 class NurseAppointmentBoard(ctk.CTkFrame):
@@ -285,6 +380,7 @@ class NurseAppointmentBoard(ctk.CTkFrame):
         self.controller = controller
         self.doctor_id = doctor_id
         self.on_change = on_change
+        self.room_controller = RoomController()
 
         today = date.today()
         self.view_year, self.view_month = today.year, today.month
@@ -384,6 +480,7 @@ class NurseAppointmentBoard(ctk.CTkFrame):
         consulting = self.fetch_consulting()
         queue = self.fetch_queue()
         appointments = self.fetch_month()
+        attach_rooms(self.room_controller, consulting, queue, appointments)
 
         signature = (
             self.view_year, self.view_month, date.today(),
@@ -449,7 +546,7 @@ class NurseAppointmentBoard(ctk.CTkFrame):
                 font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
             ).pack(fill="x")
 
-    # ---- Waiting queue (no buttons) ------------------------------------
+    # ---- Waiting queue (Room button only) ------------------------------
     def _draw_queue(self, queue):
         box = ctk.CTkFrame(
             self.list, corner_radius=10, fg_color=QUEUE_BG,
@@ -475,8 +572,9 @@ class NurseAppointmentBoard(ctk.CTkFrame):
             self._draw_queue_row(box, position, appt, bottom_pad=12 if is_last else 4)
 
     def _draw_queue_row(self, box, position, appt, bottom_pad=4):
-        """One waiting patient. Deliberately has NO buttons: once someone
-        is checked in, only the doctor can move them to Consulting."""
+        """One waiting patient. Has no STATUS buttons: once someone is
+        checked in, only the doctor can move them to Consulting. The only
+        button is Room, so the nurse can still set where they go."""
         row = ctk.CTkFrame(box, corner_radius=8, fg_color="white")
         row.pack(fill="x", padx=10, pady=(4, bottom_pad))
 
@@ -494,6 +592,12 @@ class NurseAppointmentBoard(ctk.CTkFrame):
             info, text=appt["reason"] + "   ·   " + _arrival_text(appt),
             font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
         ).pack(fill="x")
+
+        ctk.CTkButton(
+            row, text="Room", width=70, height=28,
+            fg_color=ROOM_BG, hover_color=ROOM_HOVER,
+            command=lambda a=appt: self.set_room(a)
+        ).pack(side="right", padx=(8, 12))
 
     # ---- Scheduled list ------------------------------------------------
     def _draw_month(self, appointments):
@@ -518,9 +622,9 @@ class NurseAppointmentBoard(ctk.CTkFrame):
             self._draw_card(appt)
 
     def _draw_card(self, appt):
-        """One row: time | patient + reason | [Check in] [Cancel].
+        """One row: time | patient + reason (+ room) | [Check in] [Room] [Cancel].
         Only Scheduled appointments are ever in this list, so there is no
-        status badge - the two buttons are the only things to press."""
+        status badge - the buttons are the only things to press."""
         card = ctk.CTkFrame(self.list, corner_radius=10)
         card.pack(fill="x", pady=6)
 
@@ -540,12 +644,18 @@ class NurseAppointmentBoard(ctk.CTkFrame):
         ).pack(fill="x")
 
         # side="right" packs from the edge inward: Cancel first means it
-        # sits at the far right, with Check in just to its left.
+        # sits at the far right, then Room, then Check in.
         ctk.CTkButton(
             card, text="Cancel", width=80, height=28,
             fg_color=CANCEL_BG, hover_color=CANCEL_HOVER,
             command=lambda a=appt: self.change_status(a, "Cancelled")
         ).pack(side="right", padx=(8, 16))
+
+        ctk.CTkButton(
+            card, text="Room", width=70, height=28,
+            fg_color=ROOM_BG, hover_color=ROOM_HOVER,
+            command=lambda a=appt: self.set_room(a)
+        ).pack(side="right", padx=(8, 0))
 
         ctk.CTkButton(
             card, text="Check in", width=90, height=28,
@@ -567,6 +677,68 @@ class NurseAppointmentBoard(ctk.CTkFrame):
         self.refresh()
         if self.on_change is not None:
             self.on_change()
+
+    # ---- Setting a patient's room --------------------------------------
+    def set_room(self, appt):
+        """Small pop-up to set or change the room of ONE appointment. The
+        room controller does the checking (room under maintenance, or
+        already booked at that time) and its message is shown in the
+        pop-up, so nothing is half-saved."""
+        try:
+            rooms = self.room_controller.list_rooms()
+        except AppointMedError as e:
+            messagebox.showerror("Error", str(e))
+            return
+
+        choices = {}          # dropdown label -> room id
+        current_label = None
+        for room in rooms:
+            label = room["name"]
+            if room["status"] == "Occupied":
+                label += "  (occupied now)"
+            elif room["status"] == "Maintenance":
+                label += "  (maintenance)"
+            choices[label] = room["id"]
+            if room["id"] == appt["room_id"]:
+                current_label = label
+
+        if not choices:
+            messagebox.showerror("Error", "There are no rooms to choose from.")
+            return
+
+        form = ctk.CTkToplevel(self)
+        form.title("Set Room")
+        form.geometry("340x250")
+        form.grab_set()  # modal: blocks clicks on the dashboard behind it
+
+        ctk.CTkLabel(
+            form, text="Set room", font=ctk.CTkFont(size=16, weight="bold")
+        ).pack(pady=(20, 2))
+        ctk.CTkLabel(
+            form, text=appt["patient"] + "  ·  " + appt["time"],
+            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+        ).pack()
+
+        ctk.CTkLabel(form, text="Room", anchor="w").pack(fill="x", padx=30, pady=(14, 2))
+        room_combo = ctk.CTkComboBox(
+            form, values=list(choices.keys()), width=280, state="readonly"
+        )
+        room_combo.set(current_label or next(iter(choices)))
+        room_combo.pack(padx=30)
+
+        status_label = ctk.CTkLabel(form, text="", text_color=ERROR_TEXT, wraplength=280)
+        status_label.pack(pady=(6, 0))
+
+        def save():
+            try:
+                self.room_controller.assign_room(appt["id"], choices[room_combo.get()])
+            except AppointMedError as e:
+                status_label.configure(text=str(e))
+                return
+            form.destroy()
+            self.refresh()
+
+        ctk.CTkButton(form, text="Save room", command=save).pack(pady=16)
 
 
 # ===========================================================================
@@ -666,6 +838,7 @@ class NurseDashboard(ctk.CTk):
         super().__init__()
         self.nurse = nurse
         self.appointment_controller = AppointmentController()
+        self.room_controller = RoomController()
         self.user_controller = UserController()
 
         # --- state the sidebar reads and writes ---
@@ -1039,6 +1212,305 @@ class NurseDashboard(ctk.CTk):
             image=render_avatar(self.avatar_bytes, self.nurse.full_name, 40, bg=AVATAR_BG)
         )
 
+    # ---------------------------------------------------------------
+    # DOCTOR PAGE — the assigned doctor's details. VIEW ONLY.
+    # Same look as the doctor's own page, but there is no "Edit profile"
+    # button and nothing on it can change the doctor's account.
+    # ---------------------------------------------------------------
+    def _load_doctor_info(self):
+        """The assigned doctor's row from the database as a dict with
+        full_name / username / specialization, or a harmless stand-in if
+        it can't be read (database briefly unreachable)."""
+        try:
+            return dict(self.user_controller.get_user_by_id(self.nurse.assigned_doctor_id))
+        except AppointMedError:
+            return {"full_name": "your assigned doctor", "username": "",
+                    "specialization": None}
+
+    def build_doctor_page(self, parent):
+        page = ctk.CTkFrame(parent, fg_color="transparent")
+
+        ctk.CTkLabel(
+            page, text="Doctor", font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", padx=24, pady=(20, 4))
+        ctk.CTkLabel(
+            page, text="The doctor you assist (view only) and a snapshot of today's clinic activity",
+            font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        body = _ScrollList(page, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+
+        info_row = self._load_doctor_info()
+        doctor_name = "Dr. " + info_row["full_name"]
+
+        # --- profile card (no edit button) ---
+        card = ctk.CTkFrame(body, corner_radius=10)
+        card.pack(fill="x", pady=6)
+
+        try:
+            doctor_avatar_bytes = self.user_controller.get_avatar(self.nurse.assigned_doctor_id)
+        except AppointMedError:
+            doctor_avatar_bytes = None
+        self.doctor_avatar = ctk.CTkLabel(
+            card, text="", width=72, height=72, fg_color="transparent",
+            image=render_avatar(doctor_avatar_bytes, info_row["full_name"], 72, bg=AVATAR_BG)
+        )
+        self.doctor_avatar.pack(side="left", padx=20, pady=20)
+
+        info = ctk.CTkFrame(card, fg_color="transparent")
+        info.pack(side="left", fill="x", expand=True, pady=20)
+        self.doctor_name_label = ctk.CTkLabel(
+            info, text=doctor_name, anchor="w",
+            font=ctk.CTkFont(size=18, weight="bold")
+        )
+        self.doctor_name_label.pack(fill="x")
+        self.doctor_spec_badge = ctk.CTkLabel(
+            info, text=info_row.get("specialization") or "General Practice",
+            fg_color=DOCTOR_BADGE_BG, text_color=DOCTOR_BADGE_FG,
+            corner_radius=8, height=24, width=160,
+            font=ctk.CTkFont(size=11, weight="bold")
+        )
+        self.doctor_spec_badge.pack(anchor="w", pady=(4, 2))
+        self.doctor_username_label = ctk.CTkLabel(
+            info, text="@" + (info_row.get("username") or ""),
+            anchor="w", font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+        )
+        self.doctor_username_label.pack(fill="x")
+
+        # --- today at a glance ---
+        body.add_day_heading("TODAY AT A GLANCE")
+        stats_row = ctk.CTkFrame(body, fg_color="transparent")
+        stats_row.pack(fill="x")
+        self.doctor_stat_labels = {}
+        for key, caption in (
+            ("consulting", "Consulting now"),
+            ("waiting",    "In waiting queue"),
+            ("scheduled",  "Scheduled today"),
+            ("completed",  "Completed today"),
+        ):
+            tile = ctk.CTkFrame(stats_row, corner_radius=10)
+            tile.pack(side="left", fill="x", expand=True, padx=(0, 8), pady=4)
+            number = ctk.CTkLabel(tile, text="–", font=ctk.CTkFont(size=26, weight="bold"))
+            number.pack(pady=(14, 0))
+            ctk.CTkLabel(
+                tile, text=caption, font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+            ).pack(pady=(0, 14))
+            self.doctor_stat_labels[key] = number
+
+        # --- professional details (read-only) ---
+        body.add_day_heading("PROFESSIONAL DETAILS")
+        details = ctk.CTkFrame(body, corner_radius=10)
+        details.pack(fill="x", pady=4)
+        self.doctor_spec_value = self._detail_row(
+            details, "Specialization", info_row.get("specialization") or "General Practice")
+        # The room of the patient being consulted right now (from the
+        # database) - updated by load_doctor_stats().
+        self.doctor_room_value = self._detail_row(details, "Current room", "—")
+        self._detail_row(details, "Consultation hours", "Mon – Fri,  9:00 AM – 5:00 PM")
+        self._detail_row(details, "Doctor ID", str(self.nurse.assigned_doctor_id), last=True)
+
+        return page
+
+    @staticmethod
+    def _detail_row(parent, label, value, last=False):
+        """One "label   value" line. Returns the value label so a caller
+        can update it later."""
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=20, pady=(10, 14 if last else 0))
+        ctk.CTkLabel(
+            row, text=label, width=160, anchor="w",
+            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+        ).pack(side="left")
+        value_label = ctk.CTkLabel(
+            row, text=value, anchor="w", font=ctk.CTkFont(size=13, weight="bold")
+        )
+        value_label.pack(side="left")
+        return value_label
+
+    def load_doctor_stats(self):
+        """Fill the four tiles, the 'Current room' line and the doctor's
+        name/specialization (in case the doctor edited them meanwhile).
+        Reuses the controller methods the boards already call, so the
+        numbers always match what the Appointments page shows."""
+        uid = self.nurse.assigned_doctor_id
+        today = date.today()
+
+        info_row = self._load_doctor_info()
+        self.doctor_name_label.configure(text="Dr. " + info_row["full_name"])
+        self.doctor_username_label.configure(text="@" + (info_row.get("username") or ""))
+        spec = info_row.get("specialization") or "General Practice"
+        self.doctor_spec_badge.configure(text=spec)
+        self.doctor_spec_value.configure(text=spec)
+
+        try:
+            consulting = _rows_to_appointments(
+                self.appointment_controller.get_consulting_for_doctor(uid)
+            )
+            queue = self.appointment_controller.get_checkin_queue(uid)
+            month = self.appointment_controller.get_month_for_doctor(
+                uid, today.year, today.month
+            )
+            history = self.appointment_controller.get_history_for_doctor(uid)
+        except AppointMedError:
+            return
+
+        # "Scheduled today" = today's appointments that are still Scheduled
+        # (not yet checked in). Checked-in patients show under "In waiting
+        # queue" and the one inside under "Consulting now".
+        scheduled_today = sum(
+            1 for a in _rows_to_appointments(month) if a["date"] == today
+        )
+        completed_today = sum(
+            1 for a in _rows_to_appointments(history)
+            if a["status"] == "Completed" and a["date"] == today
+        )
+        self.doctor_stat_labels["consulting"].configure(text=str(len(consulting)))
+        self.doctor_stat_labels["waiting"].configure(text=str(len(list(queue))))
+        self.doctor_stat_labels["scheduled"].configure(text=str(scheduled_today))
+        self.doctor_stat_labels["completed"].configure(text=str(completed_today))
+
+        try:
+            names = self.room_controller.room_names_for([a["id"] for a in consulting])
+        except AppointMedError:
+            names = {}
+        room = next((names[a["id"]] for a in consulting if a["id"] in names), None)
+        self.doctor_room_value.configure(text=room or "—")
+
+    # ---------------------------------------------------------------
+    # ROOM PAGE — live room status from the database
+    # ---------------------------------------------------------------
+    def build_room_page(self, parent):
+        page = ctk.CTkFrame(parent, fg_color="transparent")
+
+        ctk.CTkLabel(
+            page, text="Room", font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", padx=24, pady=(20, 4))
+        ctk.CTkLabel(
+            page, text="Where the doctor's patient is now, and the status of every room in the clinic",
+            font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        # Everything below the title is (re)drawn by load_room_status().
+        self._room_drawn = None
+        self.room_body = _ScrollList(page, fg_color="transparent")
+        self.room_body.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+
+        return page
+
+    def load_room_status(self):
+        """Redraw the Room page from the database:
+          * DOCTOR'S CURRENT ROOM - the room of the patient being
+            consulted now
+          * ALL CLINIC ROOMS - Available / Occupied / Maintenance, with a
+            button to put a free room into (or out of) maintenance.
+        Skips the redraw if nothing changed."""
+        try:
+            rooms = self.room_controller.list_rooms()
+        except AppointMedError:
+            return
+        try:
+            consulting = _rows_to_appointments(
+                self.appointment_controller.get_consulting_for_doctor(
+                    self.nurse.assigned_doctor_id)
+            )
+            names = self.room_controller.room_names_for([a["id"] for a in consulting])
+        except AppointMedError:
+            consulting, names = [], {}
+
+        signature = (
+            tuple((r["id"], r["status"], r["patient"]) for r in rooms),
+            tuple((a["id"], names.get(a["id"])) for a in consulting),
+        )
+        if signature == self._room_drawn:
+            return
+        self._room_drawn = signature
+
+        body = self.room_body
+        scroll_at = body.scroll_position()
+        body.clear()
+
+        # --- the doctor's current room ---
+        body.add_day_heading("DOCTOR'S CURRENT ROOM")
+        box = ctk.CTkFrame(body, corner_radius=10)
+        box.pack(fill="x", pady=4)
+        if consulting:
+            appt = consulting[0]
+            title = names.get(appt["id"], "No room assigned")
+            text = "Now consulting: " + appt["patient"]
+        else:
+            title = "No patient inside"
+            text = "The doctor starts a consultation from their Appointments page."
+        ctk.CTkLabel(
+            box, text=title, anchor="w", font=ctk.CTkFont(size=18, weight="bold")
+        ).pack(fill="x", padx=20, pady=(16, 2))
+        ctk.CTkLabel(
+            box, text=text, anchor="w",
+            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+        ).pack(fill="x", padx=20, pady=(0, 16))
+
+        # --- all rooms ---
+        body.add_day_heading("ALL CLINIC ROOMS")
+        for room in rooms:
+            card = ctk.CTkFrame(body, corner_radius=10)
+            card.pack(fill="x", pady=6)
+
+            ctk.CTkLabel(
+                card, text="🚪", font=ctk.CTkFont(size=22), width=60
+            ).pack(side="left", padx=(12, 0), pady=14)
+
+            info = ctk.CTkFrame(card, fg_color="transparent")
+            info.pack(side="left", fill="x", expand=True, pady=14)
+            ctk.CTkLabel(
+                info, text=room["name"], anchor="w",
+                font=ctk.CTkFont(size=14, weight="bold")
+            ).pack(fill="x")
+            if room["status"] == "Occupied":
+                sub = "Consulting: " + room["patient"]
+            elif room["status"] == "Maintenance":
+                sub = "Closed - cannot be assigned to appointments"
+            else:
+                sub = "Free - can be assigned to appointments"
+            ctk.CTkLabel(
+                info, text=sub, anchor="w",
+                font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+            ).pack(fill="x")
+
+            # side="right": the badge is packed first so it sits at the far
+            # edge, with the maintenance button just to its left.
+            bg, fg = ROOM_STATUS_COLORS[room["status"]]
+            ctk.CTkLabel(
+                card, text=room["status"], fg_color=bg, text_color=fg,
+                corner_radius=8, width=100, height=26,
+                font=ctk.CTkFont(size=11, weight="bold")
+            ).pack(side="right", padx=16)
+
+            if room["status"] == "Maintenance":
+                button_text, color, hover = "Mark available", COMPLETE_BG, COMPLETE_HOVER
+            else:
+                button_text, color, hover = "Set maintenance", CANCEL_BG, CANCEL_HOVER
+            ctk.CTkButton(
+                card, text=button_text, width=120, height=28,
+                fg_color=color, hover_color=hover,
+                # A room with a patient in it can't be closed.
+                state="disabled" if room["status"] == "Occupied" else "normal",
+                command=lambda r=room: self.toggle_maintenance(r)
+            ).pack(side="right", padx=(8, 0))
+
+        body.restore_scroll(scroll_at)
+
+    def toggle_maintenance(self, room):
+        """Put a free room into maintenance, or bring it back. (Nurses
+        and doctors are both allowed to - see schema.sql.)"""
+        turning_on = room["status"] != "Maintenance"
+        try:
+            self.room_controller.set_maintenance(room["id"], turning_on, self.nurse.user_id)
+        except AppointMedError as e:
+            messagebox.showerror("Error", str(e))
+            return
+        self._room_drawn = None   # force a redraw
+        self.load_room_status()
+
     # -------------------------------------------------------------------
     # SCREENS STILL TO BE BUILT
     # Each one already has its own method, is already registered in
@@ -1050,9 +1522,9 @@ class NurseDashboard(ctk.CTk):
     # frame yourself. The pattern is the same as build_appointments_page()
     # above:
     #
-    #     def build_room_page(self, parent):
+    #     def build_invoice_page(self, parent):
     #         page = ctk.CTkFrame(parent, fg_color="transparent")
-    #         ctk.CTkLabel(page, text="Rooms").pack(padx=24, pady=20)
+    #         ctk.CTkLabel(page, text="Invoices").pack(padx=24, pady=20)
     #         ... add the rest of your widgets to `page` ...
     #         return page          # <- always return the frame
     #
@@ -1063,14 +1535,6 @@ class NurseDashboard(ctk.CTk):
     # (like load_appointments()) and call it after the window is built,
     # not inside the builder.
     # -------------------------------------------------------------------
-    def build_doctor_page(self, parent):
-        """Doctor tab — details of the assigned doctor. Not built yet."""
-        return self.build_placeholder_page(parent, "Doctor window")
-
-    def build_room_page(self, parent):
-        """Room tab — consultation room assignment/status. Not built yet."""
-        return self.build_placeholder_page(parent, "Room window")
-
     def build_notifications_page(self, parent):
         """Notifications tab — alerts and reminders. Not built yet."""
         return self.build_placeholder_page(parent, "Notifications window")
@@ -1104,9 +1568,36 @@ class NurseDashboard(ctk.CTk):
         """Settings tab — preferences for this account. Not built yet."""
         return self.build_placeholder_page(parent, "Settings window")
 
+    # ---------------------------------------------------------------
+    # HELP PAGE — FAQ (collapsible) + support contact
+    # ---------------------------------------------------------------
     def build_help_page(self, parent):
-        """Help tab — usage guide / support contact. Not built yet."""
-        return self.build_placeholder_page(parent, "Help window")
+        page = ctk.CTkFrame(parent, fg_color="transparent")
+
+        ctk.CTkLabel(
+            page, text="Help & FAQ", font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", padx=24, pady=(20, 4))
+        ctk.CTkLabel(
+            page, text="Click a question to see the answer",
+            font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        body = _ScrollList(page, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+
+        for section_title, items in FAQ_SECTIONS:
+            body.add_day_heading(section_title)
+            for question, answer in items:
+                _FAQItem(body, question, answer).pack(fill="x", pady=4)
+
+        body.add_day_heading("STILL NEED HELP?")
+        contact = ctk.CTkFrame(body, corner_radius=10)
+        contact.pack(fill="x", pady=4)
+        ctk.CTkLabel(
+            contact, text=SUPPORT_CONTACT, anchor="w", font=ctk.CTkFont(size=13)
+        ).pack(fill="x", padx=20, pady=16)
+
+        return page
 
     # ===================================================================
     # 6. PLACEHOLDER PAGE
@@ -1131,7 +1622,8 @@ class NurseDashboard(ctk.CTk):
     # ===================================================================
     def switch_view(self, key):
         """Wired to every nav button's command= and to the profile row.
-        Records the new page, shows it, and re-highlights the sidebar."""
+        Records the new page, shows it, and re-highlights the sidebar.
+        Pages that show database data are refreshed as they are opened."""
         self.current_view = key
         self.show_page(key)
         self.highlight_active_button()
@@ -1139,6 +1631,10 @@ class NurseDashboard(ctk.CTk):
             # The doctor completes appointments from another machine, so
             # re-read whenever this page is opened.
             self.load_history()
+        elif key == "doctor":
+            self.load_doctor_stats()
+        elif key == "room":
+            self.load_room_status()
 
     def show_page(self, key):
         """Bring one stacked page to the front.
@@ -1186,13 +1682,13 @@ class NurseDashboard(ctk.CTk):
         patient record yet - one only gets created once a doctor
         actually examines them.
 
-        Date and time are picked from dropdowns instead of typed as free
-        text - that removes the whole "did I type the format right?"
-        class of mistake, so the only way this form can fail is a real
-        business rule (blank name, double-booked slot, etc.)."""
+        The nurse also picks the ROOM here. Date, time and room are picked
+        from dropdowns, so the only way this form can fail is a real
+        business rule (blank name, double-booked slot, room under
+        maintenance, room already booked at that time)."""
         form = ctk.CTkToplevel(self)
         form.title("Add Appointment")
-        form.geometry("380x480")
+        form.geometry("380x560")
         form.grab_set()  # modal: blocks clicks on the dashboard behind it
 
         ctk.CTkLabel(
@@ -1229,6 +1725,15 @@ class NurseDashboard(ctk.CTk):
         minute_combo.set("00")
         minute_combo.pack(side="left", padx=(2, 0))
 
+        # --- room (from the database) ------------------------------------
+        ctk.CTkLabel(form, text="Room", anchor="w").pack(
+            fill="x", padx=30, pady=(10, 2)
+        )
+        room_choices = self._room_choices()
+        room_combo = ctk.CTkComboBox(form, values=list(room_choices.keys()), width=300)
+        room_combo.set(next(iter(room_choices)))
+        room_combo.pack(padx=30)
+
         reason_entry = self.labeled_entry(form, "Reason for visit")
 
         status_label = ctk.CTkLabel(form, text="", text_color=ERROR_TEXT, wraplength=300)
@@ -1241,13 +1746,17 @@ class NurseDashboard(ctk.CTk):
                 full_name = full_name_entry.get().strip()
                 reason = reason_entry.get().strip()
 
-                # The combo boxes can only ever hold values we put there,
-                # so this can't raise ValueError the way typed text could.
                 chosen_date = date_choices[date_combo.get()]
                 chosen_time = datetime.strptime(
                     f"{hour_combo.get()}:{minute_combo.get()}", "%H:%M"
                 ).time()
                 scheduled_time = datetime.combine(chosen_date, chosen_time)
+                room_id = room_choices.get(room_combo.get())
+
+                # Check the room BEFORE booking, so a refused room never
+                # leaves a half-saved appointment behind.
+                if room_id is not None:
+                    self.room_controller.validate_room(room_id, scheduled_time)
 
                 # No patient record yet at booking time - that only gets
                 # created once a doctor examines the appointee, so this
@@ -1259,7 +1768,9 @@ class NurseDashboard(ctk.CTk):
                     scheduled_time=scheduled_time,
                     reason=reason,
                     patient_id=None,
+                    room_id=room_id,
                 )
+
                 form.destroy()
                 self.load_appointments()
                 messagebox.showinfo(
@@ -1268,11 +1779,29 @@ class NurseDashboard(ctk.CTk):
                     format_datetime(scheduled_time) + "."
                 )
             except AppointMedError as e:
-                # Business-rule problems (slot taken, blank name, etc.) -
-                # the only kind of error this form can still hit.
+                # Business-rule problems (slot taken, blank name, room in
+                # maintenance, etc.)
                 status_label.configure(text=str(e))
 
         ctk.CTkButton(form, text="Add appointment", command=submit).pack(pady=24)
+
+    def _room_choices(self):
+        """{dropdown label: room id}. Every room is listed so the nurse
+        can see its state, but a room under maintenance is refused when
+        the form is submitted."""
+        choices = {"No room yet": None}
+        try:
+            rooms = self.room_controller.list_rooms()
+        except AppointMedError:
+            rooms = []
+        for room in rooms:
+            label = room["name"]
+            if room["status"] == "Occupied":
+                label += "  (occupied now)"
+            elif room["status"] == "Maintenance":
+                label += "  (maintenance)"
+            choices[label] = room["id"]
+        return choices
 
     @staticmethod
     def _upcoming_date_choices(days_ahead=30):

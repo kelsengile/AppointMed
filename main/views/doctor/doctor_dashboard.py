@@ -8,26 +8,36 @@ Same two-part layout as the other dashboards:
     | (nav)     |  one "page" per nav button     |
     +-----------+--------------------------------+
 
-Two pages have real content right now:
-  * "Appointments" - the DOCTOR'S OWN appointment board (see section 5A):
-    a Consulting Now box, the waiting queue, then the still-scheduled
-    appointments grouped by day, with a month filter on the right. The
-    list re-reads the database periodically so anything a nurse books or
-    checks in shows up on its own.
+Pages with real content right now:
+  * "Appointments" - the doctor's main page (section 1B-1D):
+        LEFT   a big month CALENDAR. Days that have appointments are
+               highlighted; clicking a day opens that day's appointments
+               in the panel on the right.
+        RIGHT  a panel with two views, switched at the top:
+                 - "Pending"       Consulting Now, the waiting queue and
+                                   the still-scheduled appointments
+                 - "Selected date" the appointments of the clicked day
+    The doctor can NOT add appointments any more - the assigned nurse
+    books them. They appear here by themselves (auto-refresh) or when
+    the Refresh button is pressed.
+  * "Doctor"  - profile, live "today at a glance" numbers, details.
+  * "Room"    - live room status from the database (section 5).
   * "History" - every appointment that has been Completed or Cancelled.
-The board code now lives in THIS file (it is no longer shared with the
-nurse dashboard), so you can change the doctor's board freely without
-affecting the nurse's. Every other nav item already has its OWN
-build_*_page() method waiting in section 5 — build_doctor_page(),
-build_room_page(), build_notifications_page(), build_invoice_page(),
-build_settings_page(), build_help_page(). Each returns the shared
-placeholder for now.
+  * "Help"    - FAQ.
+
+HOW THE PAGES STAY CONNECTED
+    Every change (check in, consult, complete, cancel, booking, room
+    maintenance) ends up in refresh_linked_pages() / refresh_all() in
+    section 8, which redraws the calendar, History, the Doctor page's
+    numbers and the Room page together. The same thing runs every
+    AUTO_REFRESH_MS, so a nurse's bookings show up on their own.
 
 HOW THIS FILE IS ORGANISED (read the section banners as you scroll):
     1. SETTINGS           — colours, sizes, nav items. Tweak things here first.
     1A. BOARD HELPERS     — small functions/classes the boards use
-    1B. APPOINTMENT BOARD — the doctor's Appointments page body
+    1B. APPOINTMENT BOARD — the "Pending" view (consulting / queue / scheduled)
     1C. HISTORY BOARD     — the doctor's History page body
+    1D. CALENDAR + PANEL  — the month calendar and the right-hand panel
     2. WINDOW SETUP       — __init__ / build_ui
     3. SIDEBAR            — building the nav panel
     4. SIDEBAR ANIMATION  — the collapse/expand slide
@@ -36,10 +46,6 @@ HOW THIS FILE IS ORGANISED (read the section banners as you scroll):
     7. PAGE ROUTING       — which page is visible
     8. APPOINTMENT DATA   — telling the boards when to refresh
 
-WANT TO FILL IN AN EXISTING SCREEN? Open its build_*_page() in section 5
-and replace the one placeholder line with your own widgets. Nothing else
-needs changing.
-
 WANT TO ADD A BRAND-NEW SCREEN? Three small steps:
     a) add a dict to NAV_ITEMS
     b) write a build_yourthing_page() in section 5
@@ -47,6 +53,7 @@ WANT TO ADD A BRAND-NEW SCREEN? Three small steps:
 Anything you skip step (b) and (c) for automatically gets a placeholder.
 """
 
+import calendar
 import time
 from datetime import date, datetime, timedelta
 
@@ -54,10 +61,11 @@ import customtkinter as ctk
 from tkinter import messagebox
 
 from controllers.appointment_controller import AppointmentController
+from controllers.room_controller import RoomController, attach_rooms
 from controllers.user_controller import UserController
 from utils.exceptions import AppointMedError
 from utils.avatar import render_avatar
-from utils.formatting import format_datetime, format_time
+from utils.formatting import format_time
 
 from views.shared.profile_page import ProfilePage
 
@@ -142,6 +150,68 @@ STACKED_POSITIONS = ("top", "middle")
 # routes to a page just like one. This is that page's key.
 PROFILE_KEY = "profile"
 
+# ===========================================================================
+# For Rooms Page
+# (the rooms themselves now come from the database - see
+#  controllers/room_controller.py)
+# ===========================================================================
+
+# Room status badge colours: (background, text) — same idea as STATUS_COLORS.
+ROOM_STATUS_COLORS = {
+    "Available":   ("#E3F6E8", "#2F855A"),
+    "Occupied":    ("#FFF1D6", "#B7791F"),
+    "Maintenance": ("#FBE7E7", "#C53030"),
+}
+
+# ===========================================================================
+# For the Calendar + right-hand panel (Appointments page)
+# ===========================================================================
+SIDE_PANEL_WIDTH = 460        # the right-hand panel (Pending / Selected date)
+CAL_HAS_BG = "#BEE3F8"        # a day that has appointments
+CAL_HAS_FG = "#2C5282"
+CAL_SELECTED_BG = "#2B6CB0"   # the day you clicked
+CAL_HOVER = "#E2E8F0"
+CAL_TODAY_BORDER = "#2B6CB0"
+
+# ===========================================================================
+# For FAQ (Help Page)
+# ===========================================================================
+
+FAQ_HOVER = "gray85"
+
+# (section title, [(question, answer), ...]) — edit the text freely.
+FAQ_SECTIONS = [
+    ("APPOINTMENTS", [
+        ("How does the waiting queue work?",
+         "When a scheduled patient is checked in, they move to the Waiting "
+         "Queue. Patients are served first-in, first-served, so the one who "
+         "checked in earliest is #1."),
+        ("Why is the 'Consulting' button greyed out?",
+         "Only one patient can be consulted at a time. Press 'Complete' on "
+         "the current patient and the button becomes available again."),
+        ("What happens when I press Complete or Cancel?",
+         "The appointment leaves the Appointments page and is saved in "
+         "History, marked as Completed or Cancelled."),
+        ("How do I see my appointments on a certain date?",
+         "On the Appointments page, days that have appointments are "
+         "highlighted on the calendar. Click a day and its appointments "
+         "open in the panel on the right. Switch back with 'Pending'."),
+        ("Who books my appointments?",
+         "Your assigned nurse/secretary books them. Doctors can't add "
+         "appointments themselves - ask your nurse to add a follow-up."),
+        ("A nurse booked a patient but I can't see it yet.",
+         "The page refreshes by itself every 20 seconds. You can also press "
+         "the Refresh button at the top of the Appointments page."),
+    ]),
+    ("ACCOUNT", [
+        ("How do I change my photo, name or password?",
+         "Click your name at the top of the sidebar to open My Account."),
+        ("I can't log in anymore.",
+         "Please contact the clinic administrator to have your password reset."),
+    ]),
+]
+
+SUPPORT_CONTACT = "Clinic Administrator  ·  admin@yourclinic.example  ·  Local 100"
 
 # ===========================================================================
 # 1A. BOARD HELPERS
@@ -253,24 +323,56 @@ def _arrival_text(appt):
         text = "checked in " + arrived.strftime("%b %d") + ", " + format_time(arrived)
     return text
 
+# ===========================================================================
+# Class of FAQ
+# ===========================================================================
+class _FAQItem(ctk.CTkFrame):
+    """One collapsible question. Click the question to show/hide the answer."""
+
+    def __init__(self, parent, question, answer):
+        super().__init__(parent, corner_radius=10)
+        self.question = question
+        self._open = False
+
+        self.header = ctk.CTkButton(
+            self, text="▸   " + question, anchor="w", height=40,
+            fg_color="transparent", hover_color=FAQ_HOVER,
+            text_color=("gray10", "gray90"),
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self.toggle
+        )
+        self.header.pack(fill="x", padx=6, pady=2)
+
+        self.answer = ctk.CTkLabel(
+            self, text=answer, wraplength=620, justify="left", anchor="w",
+            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+        )
+
+    def toggle(self):
+        self._open = not self._open
+        arrow = "▾" if self._open else "▸"
+        self.header.configure(text=arrow + "   " + self.question)
+        if self._open:
+            self.answer.pack(fill="x", padx=24, pady=(0, 12))
+        else:
+            self.answer.pack_forget()
 
 # ===========================================================================
-# 1B. DOCTOR APPOINTMENT BOARD
-# The Appointments page body, top to bottom:
+# 1B. DOCTOR APPOINTMENT BOARD  (the "Pending" view of the right-hand panel)
 #
-#    +--------------------------------------------------+
-#    |                              <  October 2026  >  |  month filter (right)
-#    |  +--------------------------------------------+  |
-#    |  | CONSULTING NOW                             |  |  one patient at a time
-#    |  | Ana Cruz                       [Complete]  |  |
-#    |  +--------------------------------------------+  |
-#    |  +--------------------------------------------+  |
-#    |  | WAITING QUEUE                              |  |  checked-in patients,
-#    |  | #1  Ben Lee   checked in 9:10 [Consulting] |  |  first in, first served
-#    |  +--------------------------------------------+  |
-#    |  TODAY - Monday, October 05                      |  still-scheduled
-#    |    card                    [Check in] [Cancel]   |  appointments by day
-#    +--------------------------------------------------+
+#    +------------------------------------+
+#    |              <  October 2026  >    |  month filter (right)
+#    |  +------------------------------+  |
+#    |  | CONSULTING NOW               |  |  one patient at a time
+#    |  | Ana Cruz         [Complete]  |  |
+#    |  +------------------------------+  |
+#    |  +------------------------------+  |
+#    |  | WAITING QUEUE                |  |  checked-in patients,
+#    |  | #1  Ben Lee   [Consulting]   |  |  first in, first served
+#    |  +------------------------------+  |
+#    |  TODAY - Monday, October 05        |  still-scheduled
+#    |    card         [Check in][Cancel] |  appointments by day
+#    +------------------------------------+
 #
 # Doctor-only powers on this board:
 #   * Consulting - moves the first waiting patient in (only if nobody is
@@ -283,10 +385,11 @@ class DoctorAppointmentBoard(ctk.CTkFrame):
         controller  - an AppointmentController
         doctor_id   - the logged-in doctor's own id
         on_change   - called after a status change succeeds, so the
-                      dashboard can refresh other pages (History)
+                      dashboard can refresh the other pages
         """
         super().__init__(parent, fg_color="transparent")
         self.controller = controller
+        self.room_controller = RoomController()
         self.doctor_id = doctor_id
         self.on_change = on_change
 
@@ -388,6 +491,8 @@ class DoctorAppointmentBoard(ctk.CTkFrame):
         consulting = self.fetch_consulting()
         queue = self.fetch_queue()
         appointments = self.fetch_month()
+        # Put each appointment's room name after its reason text.
+        attach_rooms(self.room_controller, consulting, queue, appointments)
 
         signature = (
             self.view_year, self.view_month, date.today(),
@@ -539,14 +644,16 @@ class DoctorAppointmentBoard(ctk.CTkFrame):
     def _draw_card(self, appt):
         """One row: time | patient + reason | [Check in] [Cancel].
         Only Scheduled appointments are ever in this list, so there is no
-        status badge - the two buttons are the only things to press."""
+        status badge - the two buttons are the only things to press.
+        (Widths are a little narrower than before because this board now
+        lives in the right-hand panel instead of the full page.)"""
         card = ctk.CTkFrame(self.list, corner_radius=10)
         card.pack(fill="x", pady=6)
 
         ctk.CTkLabel(
-            card, text=appt["time"], width=90,
+            card, text=appt["time"], width=72,
             font=ctk.CTkFont(size=13, weight="bold")
-        ).pack(side="left", padx=(16, 8), pady=14)
+        ).pack(side="left", padx=(12, 6), pady=14)
 
         info = ctk.CTkFrame(card, fg_color="transparent")
         info.pack(side="left", fill="x", expand=True, pady=14)
@@ -561,22 +668,22 @@ class DoctorAppointmentBoard(ctk.CTkFrame):
         # side="right" packs from the edge inward: Cancel first means it
         # sits at the far right, with Check in just to its left.
         ctk.CTkButton(
-            card, text="Cancel", width=80, height=28,
+            card, text="Cancel", width=70, height=28,
             fg_color=CANCEL_BG, hover_color=CANCEL_HOVER,
             command=lambda a=appt: self.change_status(a, "Cancelled")
-        ).pack(side="right", padx=(8, 16))
+        ).pack(side="right", padx=(6, 12))
 
         ctk.CTkButton(
-            card, text="Check in", width=90, height=28,
+            card, text="Check in", width=80, height=28,
             fg_color=CHECKIN_BG, hover_color=CHECKIN_HOVER,
             command=lambda a=appt: self.change_status(a, "Checked-in")
-        ).pack(side="right", padx=(8, 0))
+        ).pack(side="right", padx=(6, 0))
 
     def change_status(self, appt, new_status):
         """Moves an appointment to `new_status` (Checked-in, Consulting,
         Completed, Cancelled). Each one leaves its current section on the
         redraw and appears in the next one; Completed and Cancelled land
-        in History straight away (on_change refreshes that page)."""
+        in History straight away (on_change refreshes the other pages)."""
         try:
             self.controller.update_status(appt["id"], new_status)
         except AppointMedError as e:
@@ -665,9 +772,318 @@ class DoctorHistoryBoard(ctk.CTkFrame):
         ).pack(side="right", padx=(8, 16))
 
 
+# ===========================================================================
+# 1D. DOCTOR CALENDAR  +  RIGHT-HAND PANEL
+#
+#   +-------------------------------+  +-----------------------------+
+#   |  ◀      October 2026      ▶   |  | [ Pending | Selected date ] |
+#   |  Su  Mo  Tu  We  Th  Fr  Sa   |  |                             |
+#   |   .   .   1   2   3   4   5   |  |  Pending       = the board  |
+#   |   ...                         |  |  Selected date = the clicked|
+#   |  (the big main calendar)      |  |                  day's list |
+#   +-------------------------------+  +-----------------------------+
+#      highlighted day = has appointments
+#      blue day        = the one you clicked
+#      outlined day    = today
+#
+# The 42 day buttons are created ONCE and only re-coloured on refresh, so
+# the calendar never flickers. It marks every appointment this doctor has
+# (scheduled ones, plus anyone already checked in or being consulted), which
+# the assigned nurse books from their own dashboard.
+#
+# The calendar does not know about the panel. It just calls two optional
+# callbacks the dashboard fills in:
+#   on_select  - the doctor CLICKED a day  -> panel shows the day's list
+#   on_refresh - data was (re)loaded       -> panel redraws that list
+# ===========================================================================
+class DoctorCalendar(ctk.CTkFrame):
+    WEEKDAYS = ("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
+
+    def __init__(self, parent, controller, room_controller, doctor_id):
+        super().__init__(parent, corner_radius=10)
+        self.controller = controller
+        self.room_controller = room_controller
+        self.doctor_id = doctor_id
+
+        today = date.today()
+        self.view_year, self.view_month = today.year, today.month
+        self.selected = today
+        self.by_day = {}      # date -> [appointment dicts], filled by refresh()
+        self._drawn = None
+
+        self.on_select = None   # called with the clicked date
+        self.on_refresh = None  # called after every refresh()
+
+        self._build_month_bar()
+        self._build_grid()
+
+    # ---- building (once) -------------------------------------------------
+    def _build_month_bar(self):
+        bar = ctk.CTkFrame(self, fg_color="transparent")
+        bar.pack(fill="x", padx=14, pady=(14, 6))
+
+        self.prev_btn = ctk.CTkButton(
+            bar, text="◀", width=36, height=30, fg_color=NAV_BTN_BG,
+            command=lambda: self.change_month(-1)
+        )
+        self.prev_btn.pack(side="left")
+        self.next_btn = ctk.CTkButton(
+            bar, text="▶", width=36, height=30, fg_color=NAV_BTN_BG,
+            command=lambda: self.change_month(1)
+        )
+        self.next_btn.pack(side="right")
+        self.month_label = ctk.CTkLabel(
+            bar, text="", font=ctk.CTkFont(size=18, weight="bold")
+        )
+        self.month_label.pack(side="left", expand=True)
+
+    def _build_grid(self):
+        grid = ctk.CTkFrame(self, fg_color="transparent")
+        grid.pack(fill="both", expand=True, padx=12, pady=(2, 2))
+
+        # Equal-weight columns/rows make the day buttons stretch to fill
+        # whatever space the calendar has.
+        for column in range(7):
+            grid.columnconfigure(column, weight=1, uniform="day")
+        for row in range(1, 7):
+            grid.rowconfigure(row, weight=1, uniform="week")
+
+        for column, name in enumerate(self.WEEKDAYS):
+            ctk.CTkLabel(
+                grid, text=name, height=24,
+                font=ctk.CTkFont(size=12, weight="bold"), text_color=MUTED_TEXT
+            ).grid(row=0, column=column, padx=2, sticky="ew")
+
+        self.cells = []
+        for index in range(42):  # 6 weeks x 7 days always covers a month
+            button = ctk.CTkButton(
+                grid, text="", width=40, height=40, corner_radius=8,
+                fg_color="transparent", hover_color=CAL_HOVER,
+                text_color=("gray10", "gray90"), font=ctk.CTkFont(size=14)
+            )
+            button.grid(row=1 + index // 7, column=index % 7, padx=2, pady=2,
+                        sticky="nsew")
+            self.cells.append(button)
+
+        ctk.CTkLabel(
+            self, text="Highlighted days have appointments — click a day to see them",
+            font=ctk.CTkFont(size=11), text_color=MUTED_TEXT
+        ).pack(pady=(2, 10))
+
+    # ---- month navigation --------------------------------------------------
+    def _clamp_view_month(self):
+        today = date.today()
+        if (self.view_year, self.view_month) < (today.year, today.month):
+            self.view_year, self.view_month = today.year, today.month
+
+    def change_month(self, delta):
+        target = add_months(self.view_year, self.view_month, delta)
+        today = date.today()
+        if target < (today.year, today.month):
+            return
+        self.view_year, self.view_month = target
+        # Land on today in the current month, otherwise on the 1st.
+        if target == (today.year, today.month):
+            self.selected = today
+        else:
+            self.selected = date(target[0], target[1], 1)
+        self.refresh()
+
+    def select(self, day):
+        """A day button was clicked: mark it and tell the panel."""
+        self.selected = day
+        self._paint()
+        if self.on_select is not None:
+            self.on_select(day)
+
+    # ---- loading -------------------------------------------------------------
+    def _fetch_all(self):
+        try:
+            month_rows = self.controller.get_month_for_doctor(
+                self.doctor_id, self.view_year, self.view_month
+            )
+            active_rows = (list(self.controller.get_consulting_for_doctor(self.doctor_id))
+                           + list(self.controller.get_checkin_queue(self.doctor_id)))
+        except AppointMedError:
+            return []
+
+        appointments = _rows_to_appointments(month_rows)
+        seen = {a["id"] for a in appointments}
+        # Checked-in / consulting patients have left the "scheduled" list,
+        # but their day should stay marked, so add them back for this month.
+        for appt in _rows_to_appointments(active_rows):
+            in_month = (appt["date"].year, appt["date"].month) == (self.view_year, self.view_month)
+            if appt["id"] not in seen and in_month:
+                appointments.append(appt)
+        appointments.sort(key=lambda a: a["scheduled"])
+        attach_rooms(self.room_controller, appointments)
+        return appointments
+
+    def refresh(self):
+        """Re-read and repaint - only if something actually changed. The
+        panel is always told afterwards, so its "Selected date" list stays
+        in step (it skips its own redraw if nothing changed)."""
+        self._clamp_view_month()
+        appointments = self._fetch_all()
+        signature = (self.view_year, self.view_month, self.selected,
+                     date.today(), _signature(appointments))
+        if signature != self._drawn:
+            self._drawn = signature
+
+            self.by_day = {}
+            for appt in appointments:
+                self.by_day.setdefault(appt["date"], []).append(appt)
+            self._paint()
+
+        if self.on_refresh is not None:
+            self.on_refresh()
+
+    # ---- drawing -------------------------------------------------------------
+    def _paint(self):
+        today = date.today()
+        self.month_label.configure(text=month_title(self.view_year, self.view_month))
+        self.prev_btn.configure(
+            state="disabled" if (self.view_year, self.view_month) <= (today.year, today.month)
+            else "normal"
+        )
+
+        cells = [d for week in calendar.Calendar(firstweekday=6)
+                 .monthdatescalendar(self.view_year, self.view_month) for d in week]
+        while len(cells) < 42:
+            cells.append(cells[-1] + timedelta(days=1))
+
+        for button, day in zip(self.cells, cells):
+            if day.month != self.view_month:
+                # A day from the neighbouring month - leave the cell blank.
+                button.configure(text="", state="disabled", fg_color="transparent",
+                                 border_width=0)
+                continue
+
+            has_appointments = bool(self.by_day.get(day))
+            if day == self.selected:
+                fg, text_color = CAL_SELECTED_BG, "white"
+            elif has_appointments:
+                fg, text_color = CAL_HAS_BG, CAL_HAS_FG
+            else:
+                fg, text_color = "transparent", ("gray10", "gray90")
+
+            button.configure(
+                text=str(day.day), state="normal", fg_color=fg, text_color=text_color,
+                border_width=2 if day == today else 0, border_color=CAL_TODAY_BORDER,
+                font=ctk.CTkFont(size=14, weight="bold" if has_appointments else "normal"),
+                command=lambda d=day: self.select(d)
+            )
+
+
+class DoctorSidePanel(ctk.CTkFrame):
+    """The right-hand panel. A two-button switch at the top picks the view:
+
+        Pending        - the doctor's board (Consulting Now, waiting queue,
+                         scheduled appointments). This is the default.
+        Selected date  - the appointments of the day clicked on the
+                         calendar. Clicking a day jumps to this view by
+                         itself, so the details "pop up" on the right.
+    """
+    PENDING = "Pending"
+    DATE = "Selected date"
+
+    def __init__(self, parent, calendar_panel, controller, doctor_id, on_change=None):
+        super().__init__(parent, width=SIDE_PANEL_WIDTH, corner_radius=10)
+        # Keep the panel exactly SIDE_PANEL_WIDTH wide whatever is inside.
+        self.pack_propagate(False)
+        self.calendar_panel = calendar_panel
+        self._drawn = None
+
+        self.switcher = ctk.CTkSegmentedButton(
+            self, values=[self.PENDING, self.DATE], command=self._show_view
+        )
+        self.switcher.pack(fill="x", padx=12, pady=(12, 6))
+        self.switcher.set(self.PENDING)
+
+        # --- view 1: the pending board -----------------------------------
+        self.pending_view = ctk.CTkFrame(self, fg_color="transparent")
+        self.board = DoctorAppointmentBoard(
+            self.pending_view, controller, doctor_id, on_change=on_change
+        )
+        self.board.pack(fill="both", expand=True)
+
+        # --- view 2: the clicked day's appointments ----------------------
+        self.date_view = ctk.CTkFrame(self, fg_color="transparent")
+        self.date_heading = ctk.CTkLabel(
+            self.date_view, text="", anchor="w",
+            font=ctk.CTkFont(size=12, weight="bold"), text_color=MUTED_TEXT
+        )
+        self.date_heading.pack(fill="x", padx=8, pady=(4, 2))
+        self.date_list = _ScrollList(self.date_view, fg_color="transparent")
+        self.date_list.pack(fill="both", expand=True)
+
+        self._show_view(self.PENDING)
+
+    # ---- switching -------------------------------------------------------
+    def _show_view(self, value):
+        self.pending_view.pack_forget()
+        self.date_view.pack_forget()
+        if value == self.DATE:
+            self.date_view.pack(fill="both", expand=True, padx=6, pady=(0, 8))
+        else:
+            self.pending_view.pack(fill="both", expand=True, padx=6, pady=(0, 8))
+
+    def show_date(self, day=None):
+        """Called by the calendar when a day is clicked."""
+        self.switcher.set(self.DATE)
+        self._show_view(self.DATE)
+        self.refresh_day()
+
+    # ---- drawing the selected day -------------------------------------------
+    def refresh_day(self):
+        """Redraw the clicked day's list from the calendar's data. Does
+        nothing if that day's data has not changed."""
+        day = self.calendar_panel.selected
+        items = self.calendar_panel.by_day.get(day, [])
+        signature = (day, _signature(items))
+        if signature == self._drawn:
+            return
+        self._drawn = signature
+
+        self.date_heading.configure(text=day_label(day))
+        scroll_at = self.date_list.scroll_position()
+        self.date_list.clear()
+
+        if not items:
+            ctk.CTkLabel(
+                self.date_list, text="No appointments on this day.",
+                font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+            ).pack(pady=30)
+            return
+
+        for appt in items:
+            row = ctk.CTkFrame(self.date_list, corner_radius=8)
+            row.pack(fill="x", pady=4)
+
+            ctk.CTkLabel(
+                row, text=appt["time"], width=72, font=ctk.CTkFont(size=12, weight="bold")
+            ).pack(side="left", padx=(10, 4), pady=10)
+
+            info = ctk.CTkFrame(row, fg_color="transparent")
+            info.pack(side="left", fill="x", expand=True, pady=8)
+            ctk.CTkLabel(
+                info, text=appt["patient"], anchor="w",
+                font=ctk.CTkFont(size=13, weight="bold")
+            ).pack(fill="x")
+            detail = appt["reason"]
+            if appt["status"] != "Scheduled":
+                detail += "   ·   " + appt["status"]
+            ctk.CTkLabel(
+                info, text=detail, anchor="w", justify="left", wraplength=290,
+                font=ctk.CTkFont(size=11), text_color=MUTED_TEXT
+            ).pack(fill="x")
+
+        self.date_list.restore_scroll(scroll_at)
+
+
 class DoctorDashboard(ctk.CTk):
     # --- sizes you may want to tweak -------------------------------------
-    WINDOW_SIZE = "1100x680"
+    WINDOW_SIZE = "1280x720"
     SIDEBAR_EXPANDED_WIDTH = 210
     SIDEBAR_COLLAPSED_WIDTH = 64
     # The animation runs for a fixed DURATION and recomputes the exact
@@ -691,6 +1107,7 @@ class DoctorDashboard(ctk.CTk):
         super().__init__()
         self.doctor = doctor
         self.appointment_controller = AppointmentController()
+        self.room_controller = RoomController()
         self.user_controller = UserController()
 
         # --- state the sidebar reads and writes ---
@@ -706,7 +1123,7 @@ class DoctorDashboard(ctk.CTk):
         self.title(doctor.dashboard_title())
         self.geometry(self.WINDOW_SIZE)
         self.build_ui()
-        self.load_appointments()
+        self.refresh_all()
         self.schedule_auto_refresh()
 
     def build_ui(self):
@@ -967,8 +1384,9 @@ class DoctorDashboard(ctk.CTk):
         self.show_page(self.current_view)
 
     def build_appointments_page(self, parent):
-        """The main screen: header row + the doctor's own board (Consulting
-        Now, waiting queue, then the scheduled appointments by day)."""
+        """The main screen: header row, then the big calendar on the left
+        and the right-hand panel (Pending / Selected date) beside it.
+        There is no "Add appointment" button: the assigned nurse books."""
         page = ctk.CTkFrame(parent, fg_color="transparent")
 
         header = ctk.CTkFrame(page, fg_color="transparent")
@@ -982,28 +1400,49 @@ class DoctorDashboard(ctk.CTk):
         self.appointments_title.pack(side="left")
 
         ctk.CTkButton(
-            header, text="+ Add appointment", width=150,
-            command=self.open_add_form
-        ).pack(side="right", padx=(8, 0))
-        ctk.CTkButton(
             header, text="Refresh", width=90, fg_color=REFRESH_BG,
-            command=self.load_appointments
+            command=self.refresh_all
         ).pack(side="right")
+        # Shows when the page last re-read the database, so a press of
+        # Refresh (or the 20-second timer) is visibly doing something.
+        self.last_updated_label = ctk.CTkLabel(
+            header, text="", font=ctk.CTkFont(size=11), text_color=MUTED_TEXT
+        )
+        self.last_updated_label.pack(side="right", padx=(0, 10))
 
         ctk.CTkLabel(
-            page, text="The whole month — newly booked visits appear automatically",
+            page,
+            text="Click a highlighted date to see its appointments — newly booked visits appear automatically",
             font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
         ).pack(anchor="w", padx=24, pady=(0, 12))
 
-        # load_appointments() asks this board to redraw; it must exist
-        # before load_appointments() is called in __init__.
-        self.board = DoctorAppointmentBoard(
-            page, self.appointment_controller, self.doctor.user_id,
-            # A finished appointment moves to History, so keep that page
-            # in step whenever a status changes.
-            on_change=self.load_history
+        content = ctk.CTkFrame(page, fg_color="transparent")
+        content.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+
+        self.calendar_panel = DoctorCalendar(
+            content, self.appointment_controller, self.room_controller,
+            self.doctor.user_id
         )
-        self.board.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+        self.side_panel = DoctorSidePanel(
+            content, self.calendar_panel, self.appointment_controller,
+            self.doctor.user_id,
+            # Any status change must update the calendar, History, the
+            # Doctor page's numbers and the Room page too.
+            on_change=self.on_board_change
+        )
+        # The fixed-width panel is packed FIRST so it keeps its width and
+        # the calendar takes whatever space is left.
+        self.side_panel.pack(side="right", fill="y", padx=(12, 0))
+        self.calendar_panel.pack(side="left", fill="both", expand=True)
+
+        # load_appointments() asks this board to redraw; it must exist
+        # before refresh_all() is called in __init__.
+        self.board = self.side_panel.board
+
+        # Wire the calendar to the panel: a click opens that day's list,
+        # and every data refresh keeps the list up to date.
+        self.calendar_panel.on_select = self.side_panel.show_date
+        self.calendar_panel.on_refresh = self.side_panel.refresh_day
 
         return page
 
@@ -1034,6 +1473,7 @@ class DoctorDashboard(ctk.CTk):
         self.refresh_sidebar_profile()
         self.title(self.doctor.dashboard_title())
         self.appointments_title.configure(text=self.doctor.dashboard_title())
+        self.refresh_doctor_page()
 
     def refresh_sidebar_profile(self):
         """Redraw the avatar and name at the top of the sidebar."""
@@ -1042,37 +1482,289 @@ class DoctorDashboard(ctk.CTk):
             image=render_avatar(self.avatar_bytes, self.doctor.full_name, 40, bg=AVATAR_BG)
         )
 
-    # -------------------------------------------------------------------
-    # SCREENS STILL TO BE BUILT
-    # Each one already has its own method, is already registered in
-    # page_builders, and is already wired to its sidebar button — it just
-    # returns the shared placeholder for now, so the app looks exactly as
-    # it does today.
-    #
-    # To start building one: delete the placeholder line and build the
-    # frame yourself. The pattern is the same as build_appointments_page()
-    # above:
-    #
-    #     def build_room_page(self, parent):
-    #         page = ctk.CTkFrame(parent, fg_color="transparent")
-    #         ctk.CTkLabel(page, text="Rooms").pack(padx=24, pady=20)
-    #         ... add the rest of your widgets to `page` ...
-    #         return page          # <- always return the frame
-    #
-    # Two rules to remember:
-    #   * `parent` must be the parent of every widget you create here.
-    #   * return the frame; build_content_area() places it for you.
-    # If a screen needs to load data, put the loading in its own method
-    # (like load_appointments()) and call it after the window is built,
-    # not inside the builder.
-    # -------------------------------------------------------------------
+    # ---------------------------------------------------------------
+    # DOCTOR PAGE — profile card, today's numbers, professional details
+    # ---------------------------------------------------------------
     def build_doctor_page(self, parent):
-        """Doctor tab — the doctor's own details/profile. Not built yet."""
-        return self.build_placeholder_page(parent, "Doctor window")
+        page = ctk.CTkFrame(parent, fg_color="transparent")
 
+        ctk.CTkLabel(
+            page, text="Doctor", font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", padx=24, pady=(20, 4))
+        ctk.CTkLabel(
+            page, text="Your profile and a snapshot of today's clinic activity",
+            font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        body = _ScrollList(page, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+
+        # --- profile card ---
+        card = ctk.CTkFrame(body, corner_radius=10)
+        card.pack(fill="x", pady=6)
+
+        self.doctor_avatar = ctk.CTkLabel(
+            card, text="", width=72, height=72, fg_color="transparent",
+            image=render_avatar(self.avatar_bytes, self.doctor.full_name, 72, bg=AVATAR_BG)
+        )
+        self.doctor_avatar.pack(side="left", padx=20, pady=20)
+
+        info = ctk.CTkFrame(card, fg_color="transparent")
+        info.pack(side="left", fill="x", expand=True, pady=20)
+        self.doctor_name_label = ctk.CTkLabel(
+            info, text=self.doctor.full_name, anchor="w",
+            font=ctk.CTkFont(size=18, weight="bold")
+        )
+        self.doctor_name_label.pack(fill="x")
+        self.doctor_spec_badge = ctk.CTkLabel(
+            info, text=getattr(self.doctor, "specialization", "General Practice"),
+            fg_color=DOCTOR_BADGE_BG, text_color=DOCTOR_BADGE_FG,
+            corner_radius=8, height=24, width=160,
+            font=ctk.CTkFont(size=11, weight="bold")
+        )
+        self.doctor_spec_badge.pack(anchor="w", pady=(4, 2))
+        self.doctor_username_label = ctk.CTkLabel(
+            info, text="@" + getattr(self.doctor, "username", ""),
+            anchor="w", font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+        )
+        self.doctor_username_label.pack(fill="x")
+
+        ctk.CTkButton(
+            card, text="Edit profile", width=110,
+            command=lambda: self.switch_view(PROFILE_KEY)
+        ).pack(side="right", padx=20)
+
+        # --- today at a glance ---
+        body.add_day_heading("TODAY AT A GLANCE")
+        stats_row = ctk.CTkFrame(body, fg_color="transparent")
+        stats_row.pack(fill="x")
+        self.doctor_stat_labels = {}
+        for key, caption in (
+            ("consulting", "Consulting now"),
+            ("waiting",    "In waiting queue"),
+            ("scheduled",  "Scheduled today"),
+            ("completed",  "Completed today"),
+        ):
+            tile = ctk.CTkFrame(stats_row, corner_radius=10)
+            tile.pack(side="left", fill="x", expand=True, padx=(0, 8), pady=4)
+            number = ctk.CTkLabel(tile, text="–", font=ctk.CTkFont(size=26, weight="bold"))
+            number.pack(pady=(14, 0))
+            ctk.CTkLabel(
+                tile, text=caption, font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+            ).pack(pady=(0, 14))
+            self.doctor_stat_labels[key] = number
+
+        # --- professional details ---
+        body.add_day_heading("PROFESSIONAL DETAILS")
+        details = ctk.CTkFrame(body, corner_radius=10)
+        details.pack(fill="x", pady=4)
+        self._detail_row(details, "Specialization",
+                         getattr(self.doctor, "specialization", "General Practice"))
+        # The room of the patient being consulted right now (from the
+        # database) - updated by load_doctor_stats().
+        self.doctor_room_value = self._detail_row(details, "Current room", "—")
+        self._detail_row(details, "Consultation hours", "Mon – Fri,  9:00 AM – 5:00 PM")
+        self._detail_row(details, "Doctor ID", str(self.doctor.user_id), last=True)
+
+        return page
+
+    @staticmethod
+    def _detail_row(parent, label, value, last=False):
+        """One "label   value" line. Returns the value label so a caller
+        can update it later."""
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=20, pady=(10, 14 if last else 0))
+        ctk.CTkLabel(
+            row, text=label, width=160, anchor="w",
+            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+        ).pack(side="left")
+        value_label = ctk.CTkLabel(
+            row, text=value, anchor="w", font=ctk.CTkFont(size=13, weight="bold")
+        )
+        value_label.pack(side="left")
+        return value_label
+
+    def load_doctor_stats(self):
+        """Fill the four tiles (and the 'Current room' line). Reuses the
+        controller methods the boards already call, so the numbers always
+        match what the Appointments page shows."""
+        uid = self.doctor.user_id
+        today = date.today()
+        try:
+            consulting = _rows_to_appointments(
+                self.appointment_controller.get_consulting_for_doctor(uid)
+            )
+            queue = self.appointment_controller.get_checkin_queue(uid)
+            month = self.appointment_controller.get_month_for_doctor(
+                uid, today.year, today.month
+            )
+            history = self.appointment_controller.get_history_for_doctor(uid)
+        except AppointMedError:
+            return
+
+        # "Scheduled today" = today's appointments that are still Scheduled
+        # (not yet checked in). Checked-in patients show under "In waiting
+        # queue" and the one inside under "Consulting now".
+        scheduled_today = sum(
+            1 for a in _rows_to_appointments(month) if a["date"] == today
+        )
+        completed_today = sum(
+            1 for a in _rows_to_appointments(history)
+            if a["status"] == "Completed" and a["date"] == today
+        )
+        self.doctor_stat_labels["consulting"].configure(text=str(len(consulting)))
+        self.doctor_stat_labels["waiting"].configure(text=str(len(list(queue))))
+        self.doctor_stat_labels["scheduled"].configure(text=str(scheduled_today))
+        self.doctor_stat_labels["completed"].configure(text=str(completed_today))
+
+        try:
+            names = self.room_controller.room_names_for([a["id"] for a in consulting])
+        except AppointMedError:
+            names = {}
+        room = next((names[a["id"]] for a in consulting if a["id"] in names), None)
+        self.doctor_room_value.configure(text=room or "—")
+
+    def refresh_doctor_page(self):
+        """Called after a profile save so this page shows the new details."""
+        self.doctor_name_label.configure(text=self.doctor.full_name)
+        self.doctor_username_label.configure(text="@" + getattr(self.doctor, "username", ""))
+        self.doctor_spec_badge.configure(
+            text=getattr(self.doctor, "specialization", "General Practice")
+        )
+        self.doctor_avatar.configure(
+            image=render_avatar(self.avatar_bytes, self.doctor.full_name, 72, bg=AVATAR_BG)
+        )
+
+    # ---------------------------------------------------------------
+    # ROOM PAGE — live room status from the database
+    # ---------------------------------------------------------------
     def build_room_page(self, parent):
-        """Room tab — consultation room assignment/status. Not built yet."""
-        return self.build_placeholder_page(parent, "Room window")
+        page = ctk.CTkFrame(parent, fg_color="transparent")
+
+        ctk.CTkLabel(
+            page, text="Room", font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", padx=24, pady=(20, 4))
+        ctk.CTkLabel(
+            page, text="Where your patient is now, and the status of every room in the clinic",
+            font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        # Everything below the title is (re)drawn by load_room_status().
+        self._room_drawn = None
+        self.room_body = _ScrollList(page, fg_color="transparent")
+        self.room_body.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+
+        return page
+
+    def load_room_status(self):
+        """Redraw the Room page from the database:
+          * MY CURRENT ROOM - the room of the patient being consulted now
+          * ALL CLINIC ROOMS - Available / Occupied / Maintenance, with a
+            button to put a free room into (or out of) maintenance.
+        Skips the redraw if nothing changed."""
+        try:
+            rooms = self.room_controller.list_rooms()
+        except AppointMedError:
+            return
+        try:
+            consulting = _rows_to_appointments(
+                self.appointment_controller.get_consulting_for_doctor(self.doctor.user_id)
+            )
+            names = self.room_controller.room_names_for([a["id"] for a in consulting])
+        except AppointMedError:
+            consulting, names = [], {}
+
+        signature = (
+            tuple((r["id"], r["status"], r["patient"]) for r in rooms),
+            tuple((a["id"], names.get(a["id"])) for a in consulting),
+        )
+        if signature == self._room_drawn:
+            return
+        self._room_drawn = signature
+
+        body = self.room_body
+        scroll_at = body.scroll_position()
+        body.clear()
+
+        # --- my current room ---
+        body.add_day_heading("MY CURRENT ROOM")
+        box = ctk.CTkFrame(body, corner_radius=10)
+        box.pack(fill="x", pady=4)
+        if consulting:
+            appt = consulting[0]
+            title = names.get(appt["id"], "No room assigned")
+            text = "Now consulting: " + appt["patient"]
+        else:
+            title = "No patient inside"
+            text = "Start a consultation from the Appointments page."
+        ctk.CTkLabel(
+            box, text=title, anchor="w", font=ctk.CTkFont(size=18, weight="bold")
+        ).pack(fill="x", padx=20, pady=(16, 2))
+        ctk.CTkLabel(
+            box, text=text, anchor="w",
+            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+        ).pack(fill="x", padx=20, pady=(0, 16))
+
+        # --- all rooms ---
+        body.add_day_heading("ALL CLINIC ROOMS")
+        for room in rooms:
+            card = ctk.CTkFrame(body, corner_radius=10)
+            card.pack(fill="x", pady=6)
+
+            ctk.CTkLabel(
+                card, text="🚪", font=ctk.CTkFont(size=22), width=60
+            ).pack(side="left", padx=(12, 0), pady=14)
+
+            info = ctk.CTkFrame(card, fg_color="transparent")
+            info.pack(side="left", fill="x", expand=True, pady=14)
+            ctk.CTkLabel(
+                info, text=room["name"], anchor="w",
+                font=ctk.CTkFont(size=14, weight="bold")
+            ).pack(fill="x")
+            if room["status"] == "Occupied":
+                sub = "Consulting: " + room["patient"]
+            elif room["status"] == "Maintenance":
+                sub = "Closed - cannot be assigned to appointments"
+            else:
+                sub = "Free - can be assigned to appointments"
+            ctk.CTkLabel(
+                info, text=sub, anchor="w",
+                font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+            ).pack(fill="x")
+
+            # side="right": the badge is packed first so it sits at the far
+            # edge, with the maintenance button just to its left.
+            bg, fg = ROOM_STATUS_COLORS[room["status"]]
+            ctk.CTkLabel(
+                card, text=room["status"], fg_color=bg, text_color=fg,
+                corner_radius=8, width=100, height=26,
+                font=ctk.CTkFont(size=11, weight="bold")
+            ).pack(side="right", padx=16)
+
+            if room["status"] == "Maintenance":
+                button_text, color, hover = "Mark available", COMPLETE_BG, COMPLETE_HOVER
+            else:
+                button_text, color, hover = "Set maintenance", CANCEL_BG, CANCEL_HOVER
+            ctk.CTkButton(
+                card, text=button_text, width=120, height=28,
+                fg_color=color, hover_color=hover,
+                # A room with a patient in it can't be closed.
+                state="disabled" if room["status"] == "Occupied" else "normal",
+                command=lambda r=room: self.toggle_maintenance(r)
+            ).pack(side="right", padx=(8, 0))
+
+        body.restore_scroll(scroll_at)
+
+    def toggle_maintenance(self, room):
+        """Put a free room into maintenance, or bring it back."""
+        turning_on = room["status"] != "Maintenance"
+        try:
+            self.room_controller.set_maintenance(room["id"], turning_on, self.doctor.user_id)
+        except AppointMedError as e:
+            messagebox.showerror("Error", str(e))
+            return
+        self._room_drawn = None   # force a redraw
+        self.load_room_status()
 
     def build_notifications_page(self, parent):
         """Notifications tab — alerts and reminders. Not built yet."""
@@ -1107,9 +1799,36 @@ class DoctorDashboard(ctk.CTk):
         """Settings tab — preferences for this account. Not built yet."""
         return self.build_placeholder_page(parent, "Settings window")
 
+    # ---------------------------------------------------------------
+    # HELP PAGE — FAQ (collapsible) + support contact
+    # ---------------------------------------------------------------
     def build_help_page(self, parent):
-        """Help tab — usage guide / support contact. Not built yet."""
-        return self.build_placeholder_page(parent, "Help window")
+        page = ctk.CTkFrame(parent, fg_color="transparent")
+
+        ctk.CTkLabel(
+            page, text="Help & FAQ", font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", padx=24, pady=(20, 4))
+        ctk.CTkLabel(
+            page, text="Click a question to see the answer",
+            font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        body = _ScrollList(page, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+
+        for section_title, items in FAQ_SECTIONS:
+            body.add_day_heading(section_title)
+            for question, answer in items:
+                _FAQItem(body, question, answer).pack(fill="x", pady=4)
+
+        body.add_day_heading("STILL NEED HELP?")
+        contact = ctk.CTkFrame(body, corner_radius=10)
+        contact.pack(fill="x", pady=4)
+        ctk.CTkLabel(
+            contact, text=SUPPORT_CONTACT, anchor="w", font=ctk.CTkFont(size=13)
+        ).pack(fill="x", padx=20, pady=16)
+
+        return page
 
     # ===================================================================
     # 6. PLACEHOLDER PAGE
@@ -1134,7 +1853,8 @@ class DoctorDashboard(ctk.CTk):
     # ===================================================================
     def switch_view(self, key):
         """Wired to every nav button's command= and to the profile row.
-        Records the new page, shows it, and re-highlights the sidebar."""
+        Records the new page, shows it, and re-highlights the sidebar.
+        Pages that show database data are refreshed as they are opened."""
         self.current_view = key
         self.show_page(key)
         self.highlight_active_button()
@@ -1142,6 +1862,10 @@ class DoctorDashboard(ctk.CTk):
             # Someone else (or another window) may have completed
             # appointments since it was last drawn.
             self.load_history()
+        elif key == "doctor":
+            self.load_doctor_stats()
+        elif key == "room":
+            self.load_room_status()
 
     def show_page(self, key):
         """Bring one stacked page to the front.
@@ -1166,151 +1890,58 @@ class DoctorDashboard(ctk.CTk):
 
     # ===================================================================
     # 8. APPOINTMENT DATA
-    # The drawing and the database calls live in DoctorAppointmentBoard /
-    # DoctorHistoryBoard (sections 1B and 1C above); this section just
-    # tells them when to refresh.
+    # The drawing and the database calls live in the board/calendar classes
+    # (sections 1B-1D above); this section just tells them when to refresh.
+    #
+    #   load_appointments()     board + calendar (+ the panel's date list)
+    #   refresh_linked_pages()  History + Doctor numbers + Room page
+    #   refresh_all()           both of the above (Refresh button, start-up,
+    #                           the 20-second timer)
+    #   on_board_change()       after a Check in / Consulting / Complete /
+    #                           Cancel press on the board
     # ===================================================================
     def load_appointments(self):
-        """Redraw the appointment board. Called on start-up, every
-        AUTO_REFRESH_MS, and after Refresh."""
+        """Redraw the pending board and the calendar. (The calendar also
+        refreshes the panel's "Selected date" list.)"""
         self.board.refresh()
+        self.calendar_panel.refresh()
 
     def load_history(self):
         """Redraw the History page."""
         self.history_board.refresh()
+
+    def refresh_linked_pages(self):
+        """Everything that depends on appointment/room data but isn't the
+        board itself. This is what keeps the Doctor page's numbers and the
+        Room page in step with the Appointments page."""
+        self.load_history()
+        self.load_doctor_stats()
+        self.load_room_status()
+
+    def refresh_all(self):
+        self.load_appointments()
+        self.refresh_linked_pages()
+        self.last_updated_label.configure(
+            text="Updated " + format_time(datetime.now())
+        )
+
+    def on_board_change(self):
+        """The board has already redrawn itself; update the rest."""
+        self.calendar_panel.refresh()
+        self.refresh_linked_pages()
 
     def schedule_auto_refresh(self):
         """Queue the next automatic reload."""
         self.after(self.AUTO_REFRESH_MS, self.auto_refresh)
 
     def auto_refresh(self):
-        """Reload the schedule, then queue the next reload. The
+        """Reload everything, then queue the next reload. The
         winfo_exists() check stops the loop from firing into a window
         that's already been closed."""
         if not self.winfo_exists():
             return
-        self.load_appointments()
+        self.refresh_all()
         self.schedule_auto_refresh()
-
-    # ------------------------------------------------------------------
-    # ADD-APPOINTMENT FORM (a small pop-up window)
-    # ------------------------------------------------------------------
-    def open_add_form(self):
-        """Lets the doctor book an appointment for themselves (e.g. a
-        follow-up they agreed with a patient face to face). It works
-        exactly like the nurse's form, except there is no nurse involved:
-        the appointment is booked under this doctor with nurse_id=None.
-
-        Date and time are picked from dropdowns instead of typed as free
-        text, so the only way this form can fail is a real business rule
-        (blank name, double-booked slot, etc.)."""
-        form = ctk.CTkToplevel(self)
-        form.title("Add Appointment")
-        form.geometry("380x480")
-        form.grab_set()  # modal: blocks clicks on the dashboard behind it
-
-        ctk.CTkLabel(
-            form, text="New Appointment", font=ctk.CTkFont(size=16, weight="bold")
-        ).pack(pady=(20, 16))
-
-        full_name_entry = self.labeled_entry(form, "Patient / appointee name")
-
-        # --- date & time, as dropdowns instead of a typed field ---------
-        ctk.CTkLabel(form, text="Date & time", anchor="w").pack(
-            fill="x", padx=30, pady=(10, 2)
-        )
-        date_time_row = ctk.CTkFrame(form, fg_color="transparent")
-        date_time_row.pack(padx=30, fill="x")
-
-        date_choices = self._upcoming_date_choices()
-        date_combo = ctk.CTkComboBox(
-            date_time_row, values=list(date_choices.keys()), width=190
-        )
-        date_combo.set(next(iter(date_choices)))
-        date_combo.pack(side="left")
-
-        hour_combo = ctk.CTkComboBox(
-            date_time_row, values=[f"{h:02d}" for h in range(24)], width=52
-        )
-        hour_combo.set("09")
-        hour_combo.pack(side="left", padx=(6, 2))
-
-        ctk.CTkLabel(date_time_row, text=":").pack(side="left")
-
-        minute_combo = ctk.CTkComboBox(
-            date_time_row, values=["00", "15", "30", "45"], width=52
-        )
-        minute_combo.set("00")
-        minute_combo.pack(side="left", padx=(2, 0))
-
-        reason_entry = self.labeled_entry(form, "Reason for visit")
-
-        status_label = ctk.CTkLabel(form, text="", text_color=ERROR_TEXT, wraplength=300)
-        status_label.pack(pady=(4, 0))
-
-        # Defined inside open_add_form() so it can read the widgets above
-        # directly, without storing them all on self.
-        def submit():
-            try:
-                full_name = full_name_entry.get().strip()
-                reason = reason_entry.get().strip()
-
-                # The combo boxes can only ever hold values we put there,
-                # so this can't raise ValueError the way typed text could.
-                chosen_date = date_choices[date_combo.get()]
-                chosen_time = datetime.strptime(
-                    f"{hour_combo.get()}:{minute_combo.get()}", "%H:%M"
-                ).time()
-                scheduled_time = datetime.combine(chosen_date, chosen_time)
-
-                # No patient record yet at booking time (one is only
-                # created once the appointee is examined), and no nurse
-                # booked this one, so both are None.
-                self.appointment_controller.add_appointment(
-                    full_name=full_name,
-                    doctor_id=self.doctor.user_id,
-                    scheduled_time=scheduled_time,
-                    reason=reason,
-                    nurse_id=None,
-                    patient_id=None,
-                )
-                form.destroy()
-                self.load_appointments()
-                messagebox.showinfo(
-                    "Appointment booked",
-                    full_name + " is scheduled for " +
-                    format_datetime(scheduled_time) + "."
-                )
-            except AppointMedError as e:
-                # Business-rule problems (slot taken, blank name, etc.) -
-                # the only kind of error this form can still hit.
-                status_label.configure(text=str(e))
-
-        ctk.CTkButton(form, text="Add appointment", command=submit).pack(pady=24)
-
-    @staticmethod
-    def _upcoming_date_choices(days_ahead=30):
-        """Today plus the next `days_ahead` days, as a dict mapping a
-        friendly label (what shows up in the dropdown) to the actual
-        date object it stands for."""
-        choices = {}
-        for offset in range(days_ahead + 1):
-            day = date.today() + timedelta(days=offset)
-            label = day.strftime("%a, %b %d %Y")
-            if offset == 0:
-                label += " (today)"
-            choices[label] = day
-        return choices
-
-    @staticmethod
-    def labeled_entry(parent, label_text):
-        """Label above an entry box — the pattern every form field uses."""
-        ctk.CTkLabel(parent, text=label_text, anchor="w").pack(
-            fill="x", padx=30, pady=(10, 2)
-        )
-        entry = ctk.CTkEntry(parent, width=300)
-        entry.pack(padx=30)
-        return entry
 
 
 # Lets you run this file on its own (python -m views.doctor.doctor_dashboard)
