@@ -4,7 +4,13 @@ AppointMed is an all-in-one clinic management platform built to help healthcare 
 
 ## Features:
 
-- 
+**Role-Based Access:** Secure login (`bcrypt`) with separate dashboards for Doctors, Nurses/Secretaries, and Admins
+**Appointment Management:** Schedule, edit, reschedule, and cancel appointments with a built-in date picker (`tkcalendar`)
+**Search & Filter:** Find appointments by patient, doctor, date, or status
+**Patient & User Records:** Nurses manage patient records; Admins manage user accounts
+**Live Shared Data:** Centralized MySQL backend so every device sees the same up-to-date information
+**Input Validation & Error Handling:** Custom exceptions with clear, user-friendly messages
+**Standalone Executable:** Packaged with `PyInstaller` for easy deployment
 
 ---
 
