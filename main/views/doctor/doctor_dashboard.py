@@ -47,6 +47,7 @@ WANT TO ADD A BRAND-NEW SCREEN? Three small steps:
 Anything you skip step (b) and (c) for automatically gets a placeholder.
 """
 
+import calendar
 import time
 from datetime import date, datetime, timedelta
 
@@ -989,6 +990,12 @@ class DoctorDashboard(ctk.CTk):
             header, text="Refresh", width=90, fg_color=REFRESH_BG,
             command=self.load_appointments
         ).pack(side="right")
+        # Shows when the page last re-read the database, so a press of
+        # Refresh (or the 20-second timer) is visibly doing something.
+        self.last_updated_label = ctk.CTkLabel(
+            header, text="", font=ctk.CTkFont(size=11), text_color=MUTED_TEXT
+        )
+        self.last_updated_label.pack(side="right", padx=(0, 10))
 
         ctk.CTkLabel(
             page, text="The whole month — newly booked visits appear automatically",
@@ -1312,6 +1319,10 @@ class DoctorDashboard(ctk.CTk):
         entry.pack(padx=30)
         return entry
 
+    def on_board_change(self):
+        """The board has already redrawn itself; update the rest."""
+        self.calendar_panel.refresh()
+        self.refresh_linked_pages()
 
 # Lets you run this file on its own (python -m views.doctor.doctor_dashboard)
 # with a fake doctor, instead of logging in every time you tweak the layout.

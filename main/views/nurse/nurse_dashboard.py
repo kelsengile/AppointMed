@@ -54,6 +54,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from datetime import date, datetime, timedelta
 
+from controllers.room_controller import RoomController, attach_rooms
 from controllers.appointment_controller import AppointmentController
 from controllers.user_controller import UserController
 from utils.exceptions import AppointMedError
@@ -1260,6 +1261,7 @@ class NurseDashboard(ctk.CTk):
                     reason=reason,
                     patient_id=None,
                 )
+
                 form.destroy()
                 self.load_appointments()
                 messagebox.showinfo(
