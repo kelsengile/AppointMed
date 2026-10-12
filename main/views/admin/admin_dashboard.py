@@ -31,6 +31,8 @@ WANT TO FILL IN AN EXISTING SCREEN? Open its build_*_page() in section 5
 and replace the one placeholder line with your own widgets. Nothing else
 needs changing.
 
+testing edit file in commit
+
 WANT TO ADD A BRAND-NEW SCREEN? Three small steps:
     a) add a dict to NAV_ITEMS
     b) write a build_yourthing_page() in section 5
