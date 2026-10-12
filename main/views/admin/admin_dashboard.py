@@ -116,6 +116,79 @@ NAV_ITEMS = [
 # routes to a page just like one. This is that page's key.
 PROFILE_KEY = "profile"
 
+# ===========================================================================
+# For FAQ (Help Page)
+# ===========================================================================
+FAQ_HOVER = "gray85"
+
+# (section title, [(question, answer), ...]) — edit the text freely.
+FAQ_SECTIONS = [
+    ("USERS", [
+        ("How do I add a new user?",
+         "On the Users page press '+ Add user', fill in the username, a "
+         "temporary password and the full name, then choose a role: "
+         "doctor, nurse or admin."),
+        ("How do I assign a nurse to a doctor?",
+         "When creating a nurse, type the doctor's username (for example "
+         "'jdiaz') in the 'Assigned doctor's username' box. The nurse will "
+         "then manage that doctor's schedule."),
+        ("What happens when I delete a doctor?",
+         "All of that doctor's appointments are deleted too, and their "
+         "nurses are left unassigned until you create or assign them again."),
+        ("The user list looks out of date.",
+         "Press the Refresh button at the top of the Users page."),
+    ]),
+    ("APPOINTMENTS", [
+        ("Can I book or change appointments as an admin?",
+         "No. The Appointments page is a read-only view of every appointment "
+         "in the clinic. Booking and status changes are done by the nurse "
+         "and the doctor."),
+    ]),
+    ("ACCOUNT", [
+        ("How do I change my photo, name or password?",
+         "Click your name at the top of the sidebar to open My Account."),
+        ("A user can't log in anymore.",
+         "Delete and re-create their account with a new temporary password, "
+         "then ask them to change it from My Account."),
+    ]),
+]
+
+SUPPORT_CONTACT = "Clinic Administrator  ·  admin@yourclinic.example  ·  Local 100"
+
+
+# ===========================================================================
+# Class of FAQ
+# ===========================================================================
+class _FAQItem(ctk.CTkFrame):
+    """One collapsible question. Click the question to show/hide the answer."""
+
+    def __init__(self, parent, question, answer):
+        super().__init__(parent, corner_radius=10)
+        self.question = question
+        self._open = False
+
+        self.header = ctk.CTkButton(
+            self, text="▸   " + question, anchor="w", height=40,
+            fg_color="transparent", hover_color=FAQ_HOVER,
+            text_color=("gray10", "gray90"),
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self.toggle
+        )
+        self.header.pack(fill="x", padx=6, pady=2)
+
+        self.answer = ctk.CTkLabel(
+            self, text=answer, wraplength=620, justify="left", anchor="w",
+            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT
+        )
+
+    def toggle(self):
+        self._open = not self._open
+        arrow = "▾" if self._open else "▸"
+        self.header.configure(text=arrow + "   " + self.question)
+        if self._open:
+            self.answer.pack(fill="x", padx=24, pady=(0, 12))
+        else:
+            self.answer.pack_forget()
 
 class AdminDashboard(ctk.CTk):
     # --- sizes you may want to tweak -------------------------------------
@@ -543,8 +616,39 @@ class AdminDashboard(ctk.CTk):
         return self.build_placeholder_page(parent, "Settings window")
 
     def build_help_page(self, parent):
-        """Help tab — usage guide / support contact. Not built yet."""
-        return self.build_placeholder_page(parent, "Help window")
+        """Help tab — FAQ (collapsible) + support contact."""
+        page = ctk.CTkFrame(parent, fg_color="transparent")
+
+        ctk.CTkLabel(
+            page, text="Help & FAQ", font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", padx=24, pady=(20, 4))
+        ctk.CTkLabel(
+            page, text="Click a question to see the answer",
+            font=ctk.CTkFont(size=13), text_color=MUTED_TEXT
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        body = ctk.CTkScrollableFrame(page, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+
+        def heading(text):
+            ctk.CTkLabel(
+                body, text=text, font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=MUTED_TEXT, anchor="w"
+            ).pack(fill="x", pady=(10, 2), padx=4)
+
+        for section_title, items in FAQ_SECTIONS:
+            heading(section_title)
+            for question, answer in items:
+                _FAQItem(body, question, answer).pack(fill="x", pady=4)
+
+        heading("STILL NEED HELP?")
+        contact = ctk.CTkFrame(body, corner_radius=10)
+        contact.pack(fill="x", pady=4)
+        ctk.CTkLabel(
+            contact, text=SUPPORT_CONTACT, anchor="w", font=ctk.CTkFont(size=13)
+        ).pack(fill="x", padx=20, pady=16)
+
+        return page
 
     # ===================================================================
     # 6. PLACEHOLDER PAGE
