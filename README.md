@@ -2,7 +2,7 @@
 
 AppointMed is an all-in-one clinic management platform built to help healthcare practices of any size run smoother, front desk to back office. It centralizes the day-to-day operations clinics need to stay organized and responsive to patients.
 
-## Features:
+**Features:**
 
 - **Appointment Management:** Schedule, edit, reschedule, and cancel appointments with a built-in date picker (`tkcalendar`)
 - **Role-Based Access:** Secure login (`bcrypt`) with separate dashboards for Doctors, Nurses/Secretaries, and Admins
@@ -11,9 +11,7 @@ AppointMed is an all-in-one clinic management platform built to help healthcare 
 - **Live Shared Data:** Centralized MySQL backend so every device sees the same up-to-date information
 - **Standalone Executable:** Packaged with `PyInstaller` for easy deployment
 
----
-
-## Tech Stack:
+**Tech Stack:**
 
 - **Frontend:**  CustomTkinter  
 - **Backend:**  Python 3  
@@ -21,15 +19,12 @@ AppointMed is an all-in-one clinic management platform built to help healthcare 
 - **Version Control:** Git & GitHub  
 - **Other Tools & Libraries:**  `mysql-connector-python`, `bcrypt`, `tkcalendar`, `PyInstaller`  
 
----
-
-## Developers:
+**Developers:**
 
 Ambrocio, Rhen Jemimah L.  
 Altobar, Loraine R.    
 Conel, Kelsen Gile S.  
 Ortega, Xavier Kent C.  
-
 
 ---
 
