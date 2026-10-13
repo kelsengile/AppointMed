@@ -42,6 +42,8 @@ from tkinter import messagebox
 
 from controllers.user_controller import UserController
 from controllers.appointment_controller import AppointmentController
+from views.shared.invoice_page import InvoicePage
+from views.shared.server_page import ServerPage
 from utils.exceptions import AppointMedError
 from utils.formatting import format_time
 
@@ -97,6 +99,7 @@ STATUS_COLORS = {
 NAV_ITEMS = [
     {"key": "users",         "icon": "👤", "label": "Users",         "position": "top"},
     {"key": "appointments",  "icon": "📅", "label": "Appointments",  "position": "top"},
+    {"key": "invoices",      "icon": "💳", "label": "Invoices",      "position": "top"},
     {"key": "server",        "icon": "🖥", "label": "Server",        "position": "top"},
     {"key": "settings",      "icon": "⚙",  "label": "Settings",      "position": "bottom"},
     {"key": "help",          "icon": "❓", "label": "Help",          "position": "bottom"},
@@ -370,6 +373,7 @@ class AdminDashboard(ctk.CTk):
         page_builders = {
             "users":         self.build_users_page,
             "appointments":  self.build_appointments_page,
+            "invoices":      self.build_invoice_page,
             "server":        self.build_server_page,
             "settings":      self.build_settings_page,
             "help":          self.build_help_page,
@@ -459,7 +463,7 @@ class AdminDashboard(ctk.CTk):
         self.appointments_list_frame.pack(fill="both", expand=True, padx=24, pady=(0, 20))
 
         return page
-
+    
     def build_profile_page(self, parent):
         """"My Account" — shown in the same spot as the other pages when
         the admin clicks their avatar/name in the sidebar. Has a summary
@@ -671,9 +675,11 @@ class AdminDashboard(ctk.CTk):
     # (like load_users()) and call it after the window is built, not
     # inside the builder.
     # -------------------------------------------------------------------
+    def build_invoice_page(self, parent):
+         return InvoicePage(parent, self.admin)
+
     def build_server_page(self, parent):
-        """Server tab — database host/connection status. Not built yet."""
-        return self.build_placeholder_page(parent, "Server window")
+         return ServerPage(parent, self.admin)
 
     def build_settings_page(self, parent):
         """Settings tab — app-wide preferences. Not built yet."""

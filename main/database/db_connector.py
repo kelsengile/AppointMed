@@ -57,14 +57,15 @@ def _first_keyword(query):
 
 
 class DBConnector:
-    def __init__(self, include_database=True):
+    def __init__(self, include_database=True, config=None):
         self.include_database = include_database
+        self.config = config
         self.connection: Any = None
         self.cursor: Any = None
 
     def connect(self):
         try:
-            config = dict(DB_CONFIG)
+            config = dict(self.config if self.config is not None else DB_CONFIG)
             if self.include_database is False:
                 config.pop("database", None)
             self.connection = mysql.connector.connect(**config)
