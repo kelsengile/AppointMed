@@ -7,6 +7,8 @@ import re
 
 import bcrypt
 from database.db_connector import DBConnector
+from models.user_settings import (APPEARANCE_MODES, REMINDER_HOURS, TIME_FORMATS,
+                                  UserSettings)
 from utils.exceptions import (
     RecordNotFoundError,
     EmptyFieldError,
@@ -14,6 +16,7 @@ from utils.exceptions import (
     PasswordMismatchError,
     UsernameTakenError,
     InvalidInputError,
+    ValidationError,
 )
 
 # Usernames: at least 3 characters, only letters, numbers, dots, underscores.
@@ -24,7 +27,66 @@ PASSWORD_MIN_LENGTH = 6
 
 
 class UserController:
+    """Business logic for user accounts and per-user settings."""
 
+    # ------------------------------------------------------------------
+    # SETTINGS SCREEN
+    # Per-user preferences (appearance, time format, reminders).
+    # ------------------------------------------------------------------
+
+    def get_settings(self, user_id):
+        """Return the user's saved settings, or defaults if none are saved yet.
+
+        Parameters: user_id (int, the users.id of the signed-in user).
+        Returns: UserSettings.
+        """
+        with DBConnector() as db:
+            db.execute(
+                "SELECT appearance_mode, time_format, email_reminders, reminder_hours "
+                "FROM user_settings WHERE user_id=%s", (user_id,))
+            row = db.fetchone()
+        return UserSettings.from_row(row) if row else UserSettings()
+
+    def save_settings(self, user_id, settings):
+        """Validate and save the user's settings (insert or update).
+
+        Parameters: user_id (int), settings (UserSettings).
+        Returns: the saved UserSettings.
+        Raises: ValidationError if any value is not allowed.
+        """
+        self._validate_settings(settings)
+        with DBConnector() as db:
+            db.execute(
+                "INSERT INTO user_settings "
+                "(user_id, appearance_mode, time_format, email_reminders, reminder_hours) "
+                "VALUES (%s, %s, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE appearance_mode=VALUES(appearance_mode), "
+                "time_format=VALUES(time_format), "
+                "email_reminders=VALUES(email_reminders), "
+                "reminder_hours=VALUES(reminder_hours)",
+                (user_id, settings.appearance_mode, settings.time_format,
+                 int(settings.email_reminders), settings.reminder_hours))
+        return settings
+
+    def reset_settings(self, user_id):
+        """Delete the user's saved settings so defaults apply again.
+
+        Parameters: user_id (int).
+        Returns: default UserSettings.
+        """
+        with DBConnector() as db:
+            db.execute("DELETE FROM user_settings WHERE user_id=%s", (user_id,))
+        return UserSettings()
+
+    def _validate_settings(self, settings):
+        """Raise ValidationError if any setting is outside its allowed values."""
+        if settings.appearance_mode not in APPEARANCE_MODES:
+            raise ValidationError("Appearance must be one of: " + ", ".join(APPEARANCE_MODES) + ".")
+        if settings.time_format not in TIME_FORMATS:
+            raise ValidationError("Time format must be one of: " + ", ".join(TIME_FORMATS) + ".")
+        if settings.reminder_hours not in REMINDER_HOURS:
+            raise ValidationError("Choose a reminder time from the list.")
+        
     def get_all_users(self):
         with DBConnector() as db:
             db.execute(
@@ -261,3 +323,4 @@ class UserController:
     def remove_avatar(self, user_id):
         with DBConnector() as db:
             db.execute("UPDATE users SET avatar=NULL WHERE id=%s", (user_id,))
+

@@ -11,9 +11,11 @@ from utils.exceptions import (
     RecordNotFoundError,
     EmptyFieldError,
     ConsultationInProgressError,
+    ValidationError,
 )
 from datetime import date, datetime
 import calendar
+import math
 
 
 class AppointmentController:
@@ -24,6 +26,12 @@ class AppointmentController:
     # "Consulting" is the patient being with the doctor right now: it is
     # what the queue's Consulting button switches a Checked-in patient to.
     STATUS_FLOW = ["Scheduled", "Checked-in", "Consulting", "Examined", "Completed"]
+
+    # Statuses that count as "finished" and therefore belong on the History
+    # page, plus limits used when validating History page requests.
+    HISTORY_STATUSES = ["Completed", "Cancelled"]
+    MAX_HISTORY_PER_PAGE = 50
+    MAX_SEARCH_LENGTH = 100
 
     def add_appointment(self, full_name, doctor_id, scheduled_time, reason,
                          nurse_id=None, patient_id=None, room_id=None, source="Walk-in",
@@ -236,3 +244,97 @@ class AppointmentController:
             db.execute("DELETE FROM appointments WHERE id=%s", (appointment_id,))
             if db.rowcount == 0:
                 raise RecordNotFoundError("No appointment with id " + str(appointment_id) + ".")
+
+    # ------------------------------------------------------------------
+    # History screen (shared by every role): searchable, paged history
+    # ------------------------------------------------------------------
+
+    def get_history(self, doctor_id=None, status=None, search="", page=1, per_page=15):
+        """One page of finished appointments (Completed / Cancelled),
+        newest first, with the doctor's name joined in as `doctor_name`.
+
+        Parameters: doctor_id (limit to one doctor, or None for everyone),
+        status ('Completed' or 'Cancelled', or None for both), search
+        (text matched against patient name, doctor name and reason),
+        page (1-based), per_page (1 to MAX_HISTORY_PER_PAGE).
+        Returns: tuple (list of row dicts, total number of pages).
+        Raises: ValidationError if the status, page or search is invalid."""
+        self._validate_history_request(status, search, page, per_page)
+        where, params = self._build_history_filter(doctor_id, status, search.strip())
+
+        with DBConnector() as db:
+            db.execute(
+                "SELECT COUNT(*) AS total FROM appointments a "
+                "JOIN users d ON a.doctor_id = d.id WHERE " + where,
+                params,
+            )
+            total = db.fetchone()["total"]
+
+            db.execute(
+                "SELECT a.*, d.full_name AS doctor_name "
+                "FROM appointments a JOIN users d ON a.doctor_id = d.id "
+                "WHERE " + where + " "
+                "ORDER BY a.scheduled_time DESC, a.id DESC LIMIT %s OFFSET %s",
+                (*params, per_page, (page - 1) * per_page),
+            )
+            rows = db.fetchall()
+
+        return rows, max(math.ceil(total / per_page), 1)
+
+    def delete_history_record(self, appointment_id):
+        """Delete one FINISHED appointment from the History page. Unlike
+        delete_appointment(), this refuses anything still in progress, so
+        an active appointment can't be wiped from the History screen.
+        Raises RecordNotFoundError if there is no finished appointment
+        with that id."""
+        with DBConnector() as db:
+            db.execute(
+                "DELETE FROM appointments WHERE id=%s AND status IN (%s, %s)",
+                (appointment_id, *self.HISTORY_STATUSES),
+            )
+            if db.rowcount == 0:
+                raise RecordNotFoundError(
+                    "No finished appointment with id " + str(appointment_id) + "."
+                )
+
+    def clear_history(self):
+        """Delete every finished (Completed / Cancelled) appointment.
+        Returns the number of appointments deleted."""
+        with DBConnector() as db:
+            db.execute(
+                "DELETE FROM appointments WHERE status IN (%s, %s)",
+                tuple(self.HISTORY_STATUSES),
+            )
+            return db.rowcount
+
+    def _validate_history_request(self, status, search, page, per_page):
+        """Checks the History page's filter and paging inputs; raises
+        ValidationError if any of them is not allowed."""
+        if status is not None and status not in self.HISTORY_STATUSES:
+            raise ValidationError(
+                "Status must be one of: " + ", ".join(self.HISTORY_STATUSES) + "."
+            )
+        if not isinstance(page, int) or page < 1:
+            raise ValidationError("Page must be a whole number of 1 or more.")
+        if not isinstance(per_page, int) or not 1 <= per_page <= self.MAX_HISTORY_PER_PAGE:
+            raise ValidationError(
+                "Rows per page must be between 1 and " + str(self.MAX_HISTORY_PER_PAGE) + "."
+            )
+        if len(search) > self.MAX_SEARCH_LENGTH:
+            raise ValidationError(
+                "Search text is limited to " + str(self.MAX_SEARCH_LENGTH) + " characters."
+            )
+
+    def _build_history_filter(self, doctor_id, status, search):
+        """Builds the WHERE clause (and its parameters) for the History
+        queries. Returns a tuple (where_sql, params_tuple)."""
+        statuses = [status] if status else self.HISTORY_STATUSES
+        clauses = ["a.status IN (" + ",".join(["%s"] * len(statuses)) + ")"]
+        params = list(statuses)
+        if doctor_id is not None:
+            clauses.append("a.doctor_id = %s")
+            params.append(doctor_id)
+        if search:
+            clauses.append("(a.full_name LIKE %s OR d.full_name LIKE %s OR a.reason LIKE %s)")
+            params.extend(["%" + search + "%"] * 3)
+        return " AND ".join(clauses), tuple(params)

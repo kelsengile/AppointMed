@@ -70,3 +70,7 @@ class InvalidInputError(AppointMedError):
 class InvalidImageError(AppointMedError):
     """Raised when a chosen profile picture cannot be read or is too big."""
     pass
+
+class ValidationError(AppointMedError):
+    """Raised when a filter, page number or setting value is not allowed."""
+    pass
