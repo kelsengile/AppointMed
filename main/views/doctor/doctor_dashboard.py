@@ -1091,7 +1091,7 @@ class DoctorDashboard(ctk.CTk):
         """Invoice tab — billing for completed visits. Not built yet."""
         return self.build_placeholder_page(parent, "Invoice window")
 
-   def build_history_page(self, parent):
+    def build_history_page(self, parent):
         """History tab: shared searchable, paged history table."""
         self.history_board = HistoryView(parent, self.doctor)
         return self.history_board
