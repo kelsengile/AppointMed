@@ -135,8 +135,18 @@ class HistoryView(ctk.CTkFrame):
         return None if choice == ALL_STATUSES else choice
 
     def _doctor_filter(self):
-        """Return the doctor id to filter by (own id for Doctors), else None."""
-        return self._user.user_id if self._user.role == "doctor" else None
+            """Doctor id to filter by: a doctor's own id, a nurse's assigned
+            doctor, or None (admin sees everyone)."""
+            if self._user.role == "doctor":
+                return self._user.user_id
+            if self._user.role == "nurse":
+                return self._user.assigned_doctor_id
+            return None
+    
+    def reload_settings(self):
+        """Re-read the saved time format, then redraw (called after Settings saves)."""
+        self._time_format = self._load_time_format()
+        self.refresh()
 
     def _is_admin(self):
         """Return True if the signed-in user is an Admin."""

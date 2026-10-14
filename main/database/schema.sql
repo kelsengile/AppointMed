@@ -39,6 +39,18 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- ============================================================
+-- USER_SETTINGS: one row of personal preferences per user
+-- ============================================================
+CREATE TABLE IF NOT EXISTS user_settings (
+    user_id INT PRIMARY KEY,
+    appearance_mode VARCHAR(10) NOT NULL DEFAULT 'Light',
+    time_format VARCHAR(3) NOT NULL DEFAULT '12h',
+    email_reminders TINYINT(1) NOT NULL DEFAULT 1,
+    reminder_hours INT NOT NULL DEFAULT 24,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- ============================================================
 -- ROOMS: simple availability board, editable by nurse or doctor
 -- ============================================================
 CREATE TABLE IF NOT EXISTS rooms (

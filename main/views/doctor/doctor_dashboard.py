@@ -1,3 +1,5 @@
+from views.shared.history import HistoryView
+from views.shared.settings_view import SettingsView
 """
 Doctor's dashboard — built with CustomTkinter.
 
@@ -1089,11 +1091,10 @@ class DoctorDashboard(ctk.CTk):
         """Invoice tab — billing for completed visits. Not built yet."""
         return self.build_placeholder_page(parent, "Invoice window")
 
-    def build_history_page(self, parent):
-        """History tab — every appointment that has been Completed or
-        Cancelled. An appointment leaves the Appointments page and lands
-        here the moment it is finished."""
-        page = ctk.CTkFrame(parent, fg_color="transparent")
+   def build_history_page(self, parent):
+        """History tab: shared searchable, paged history table."""
+        self.history_board = HistoryView(parent, self.doctor)
+        return self.history_board
 
         ctk.CTkLabel(
             page, text="History", font=ctk.CTkFont(size=20, weight="bold")
@@ -1110,9 +1111,12 @@ class DoctorDashboard(ctk.CTk):
 
         return page
 
-    def build_settings_page(self, parent):
-        """Settings tab — preferences for this account. Not built yet."""
-        return self.build_placeholder_page(parent, "Settings window")
+    # def build_settings_page(self, parent):
+    #         """Settings tab: shared preferences form."""
+    #         return SettingsView(
+    #             parent, self.doctor,
+    #             on_saved=lambda: self.history_board.reload_settings()
+    #         )         ERROR HUHUHHUHU
 
     def build_help_page(self, parent):
         """Help tab — usage guide / support contact. Not built yet."""

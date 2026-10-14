@@ -6,6 +6,7 @@ which is a simple example of inheritance and polymorphism.
 
 
 class User:
+    role = None 
     """Base class for every person who can log into AppointMed."""
 
     def __init__(self, user_id, username, full_name, password_hash):
@@ -30,6 +31,7 @@ class User:
 
 
 class Doctor(User):
+    role = "doctor"
     def __init__(self, user_id, username, full_name, password_hash, specialization):
         super().__init__(user_id, username, full_name, password_hash)
         self.specialization = specialization
@@ -42,6 +44,7 @@ class Doctor(User):
 
 
 class Nurse(User):
+    role = "nurse"
     """A Nurse/Secretary is always tied to exactly one Doctor."""
 
     def __init__(self, user_id, username, full_name, password_hash, assigned_doctor_id):
@@ -56,8 +59,12 @@ class Nurse(User):
 
 
 class Admin(User):
+    role = "admin"
     def dashboard_title(self):
         return self.full_name + " — Administrator"
 
     def permissions(self):
         return ["manage_users", "view_all_records", "system_settings"]
+
+
+
