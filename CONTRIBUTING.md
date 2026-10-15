@@ -3,118 +3,6 @@
 AppointMed is a Python + CustomTkinter desktop application for managing clinic appointments, built around a shared MySQL backend so that Doctor, Nurse/Secretary, and Admin users on different machines can view and update the same live data in real time. This project was developed as the final requirement for CMSC 203 – Object-Oriented Programming, and follows an MVC-inspired architecture that separates data models, GUI views, and business-logic controllers to keep the codebase modular, maintainable, and easy to extend. These guidelines outline how to set up the project locally, understand its folder structure, and contribute changes in a way that keeps the system consistent across all client devices.
 
 ---
-## Initialization:
-
-Python + CustomTkinter clinic appointment system with a shared MySQL backend,
-so Doctor, Nurse/Secretary, and Admin accounts on different devices all
-see the same live data.
-
-**Setup**
-
-1. Install Git, Make a GitHub Acc, and Install MySQL Server and Workbench
-2. run in terminal `py -m pip install -r main/requirements.txt`
-3. Start/point to a MySQL server reachable by all client devices.
-4. Run `database/schema.sql` against it once to create the tables.
-5. Update `config/settings.py` with that server's host/credentials.
-6. Run `python main/main.py` on each device 
-
-**Architecture**
-
-MVC-ish split:
-- **models/** — plain Python classes, no Tkinter or SQL
-- **views/** — Tkinter windows only, one subfolder per role
-- **controllers/** — validation + database calls, raises custom exceptions
-  from `utils/exceptions.py` which the views catch and display
-
-**Folder structure**
-
-```
-AppointMed/
-├── 📁 main
-│   ├── 📁 assets                      # Static files used by the app (images, icons)
-│   │   └── 📁 icons
-│   │   └── 📁 images                     
-│   ├── 📁 config                      # App-wide settings (DB credentials, constants)
-│   │   └── 🐍 settings.py            
-│   ├── 📁 controllers                 # Business logic — validation + DB calls (the "C" in MVC)
-│   │   ├── 🐍 appointment_controller.py   
-│   │   ├── 🐍 auth_controller.py          
-│   │   └── 🐍 user_controller.py          
-│   ├── 📁 database                    # Everything related to connecting to and setting up MySQL
-│   │   ├── 🐍 db_connector.py         
-│   │   ├── 📄 schema.sql              
-│   │   └── 📄 seed.sql                
-│   ├── 📁 docs                        # Required documentation deliverables
-│   │   ├── 📁 flowcharts              
-│   │   ├── 📁 screenshots             
-│   │   └── 📁 uml                     
-│   ├── 📁 models                      # Plain data classes — no Tkinter, no SQL (the "M" in MVC)
-│   │   ├── 🐍 appointment.py          
-│   │   └── 🐍 user.py                 
-│   ├── 📁 utils                       # Shared helper code used across the app
-│   │   └── 🐍 exceptions.py           
-│   ├── 📁 views                       # Tkinter/CustomTkinter windows only (the "V" in MVC)
-│   │   ├── 📁 admin                   # Admin-only screens  
-│   │   │   └── 🐍 admin_dashboard.py  
-│   │   ├── 📁 doctor                  # Doctor-only screens
-│   │   │   └── 🐍 doctor_dashboard.py 
-│   │   ├── 📁 nurse                   # Nurse/Secretary-only screens
-│   │   │   └── 🐍 nurse_dashboard.py  
-│   │   ├── 📁 shared                  # Screens used by every role
-│   │   │   └── 🐍 login_view.py       
-│   ├── 🐍 main.py                     # Entry point — run this on every client device
-│   └── 📄 requirements.txt            # Python dependencies to install
-├── 📝 CONTRIBUTING.md                 
-├── 📝 DOCUMENTATION.md                 
-└── 📝 README.md                       
-```
-
----
-
-## Contributing
-
-To keep the codebase consistent and easy to follow across all members, please follow these guidelines when contributing.
-
-### Before You Start
-
-1. Pull the latest changes from the main branch before starting new work, to avoid conflicts with your teammates.
-2. Create a new branch for the feature, fix, or module you're working on (e.g. `feature/appointment-controller`, `fix/login-validation`).
-3. If your change affects the database (`database/schema.sql` or `database/seed.sql`), let the team know beforehand, since everyone shares the same live MySQL server.
-
-### Commit Guidelines
-
-- **Commit often, in small, logical chunks.** Treat each commit as a single save point rather than bundling an entire feature into one commit. As a rule of thumb, commit once a function, method, or class is working, rather than waiting until an entire file or module is done.
-- Each commit message should briefly describe what changed and why, for example:
-  - `Add validate_email() to auth_controller`
-  - `Fix null check in Appointment constructor`
-  - `Add InvalidAppointmentTimeError custom exception`
-- Avoid vague messages like `update`, `fix stuff`, or `final version`.
-- Don't mix unrelated changes (e.g. a GUI tweak and a database fix) in the same commit.
-
-### Code Style
-
-- Add comments explaining what a function, class, or non-obvious block of code does, not just what each line does. Every method should have at least a short comment or docstring describing its purpose, parameters, and return value.
-- Follow the existing MVC-inspired structure:
-  - **models/** stay free of Tkinter and SQL code.
-  - **views/** only handle GUI layout and user interaction, and should call controllers rather than talking to the database directly.
-  - **controllers/** hold validation and database logic, and raise custom exceptions from `utils/exceptions.py` instead of letting raw errors bubble up to the views.
-- Use clear, descriptive names for variables, functions, and classes (e.g. `get_appointments_by_doctor()` instead of `get_data()`).
-- Keep functions short and focused on a single responsibility; break large functions into smaller, reusable ones.
-
-### Testing Your Changes
-
-- Test your changes locally against the shared MySQL server before pushing.
-- Make sure your changes don't break existing features for other roles (Doctor, Nurse/Secretary, Admin).
-- If you add a new exception, confirm it's caught and displayed properly in the relevant view.
-
-### Submitting Changes
-
-1. Push your branch and open a pull request (or notify the team directly if working without GitHub PRs).
-2. Briefly describe what your change does and which files/modules it touches.
-3. Have at least one teammate review the change before merging, when possible.
-4. Resolve any merge conflicts carefully, especially in shared files like `config/settings.py` and `database/schema.sql`.
-
----
 
 *Final Project Instructions:*
 
@@ -268,3 +156,8 @@ Submit the following:
 | Documentation | 10 pts |
 | Presentation and Demonstration | 10 pts |
 | **Total** | **100 pts** |
+
+
+---
+
+*Last Updated: October 2026*
