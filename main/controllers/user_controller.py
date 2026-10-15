@@ -84,55 +84,8 @@ class UserController:
             )
             return db.lastrowid
 
-    # Statements run (in order) before a user row is deleted, so that no
-    # foreign key still points at it. Every "%s" is the id of the user
-    # being deleted.
-    #   * Nullable references are simply set to NULL (the records stay).
-    #   * Records that can't exist without the user (a doctor's own
-    #     appointments, notifications addressed to them, invoices a
-    #     nurse issued) are removed, children before parents.
-    _DOCTOR_APPOINTMENTS = "SELECT id FROM appointments WHERE doctor_id=%s"
-    _USER_EXAMINATIONS = (
-        "SELECT id FROM examinations WHERE doctor_id=%s "
-        "OR appointment_id IN (" + _DOCTOR_APPOINTMENTS + ")"
-    )
-    _CLEANUP_BEFORE_DELETE = (
-        # nullable references -> keep the rows, just detach them
-        "UPDATE users SET assigned_doctor_id=NULL WHERE assigned_doctor_id=%s",
-        "UPDATE rooms SET updated_by=NULL WHERE updated_by=%s",
-        "UPDATE patients SET doctor_id=NULL WHERE doctor_id=%s",
-        "UPDATE appointments SET nurse_id=NULL WHERE nurse_id=%s",
-        # notifications addressed to this doctor/nurse
-        "UPDATE appointments SET notification_id=NULL WHERE notification_id IN "
-        "(SELECT id FROM notifications WHERE doctor_id=%s OR nurse_id=%s)",
-        "DELETE FROM notifications WHERE doctor_id=%s OR nurse_id=%s",
-        # invoices this user issued, or that belong to a doctor's appointments
-        "DELETE FROM invoices WHERE issued_by=%s",
-        "DELETE FROM invoices WHERE appointment_id IN (" + _DOCTOR_APPOINTMENTS + ")",
-        # a doctor's clinical records, children first
-        "DELETE FROM prescription_items WHERE prescription_id IN "
-        "(SELECT id FROM prescriptions WHERE doctor_id=%s "
-        " OR examination_id IN (" + _USER_EXAMINATIONS + "))",
-        "DELETE FROM prescriptions WHERE doctor_id=%s "
-        "OR examination_id IN (" + _USER_EXAMINATIONS + ")",
-        "UPDATE examinations SET follow_up_appointment_id=NULL WHERE "
-        "follow_up_appointment_id IN (" + _DOCTOR_APPOINTMENTS + ")",
-        "DELETE FROM examinations WHERE doctor_id=%s "
-        "OR appointment_id IN (" + _DOCTOR_APPOINTMENTS + ")",
-        # finally the doctor's appointments themselves
-        "DELETE FROM appointments WHERE doctor_id=%s",
-    )
-
     def delete_user(self, user_id):
         with DBConnector() as db:
-            db.execute("SELECT id FROM users WHERE id=%s", (user_id,))
-            if db.fetchone() is None:
-                raise RecordNotFoundError("No user with id " + str(user_id) + ".")
-
-            # Same id for every placeholder in the statement.
-            for sql in self._CLEANUP_BEFORE_DELETE:
-                db.execute(sql, (user_id,) * sql.count("%s"))
-
             db.execute("DELETE FROM users WHERE id=%s", (user_id,))
             if db.rowcount == 0:
                 raise RecordNotFoundError("No user with id " + str(user_id) + ".")
