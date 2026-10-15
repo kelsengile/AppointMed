@@ -4,6 +4,31 @@ AppointMed is a Python + CustomTkinter desktop application for managing clinic a
 
 ---
 
+## Initialization
+
+**Folder Structure**
+
+```
+├── main
+│   ├── backend/
+│   ├── database/
+│   ├── desktop/
+│   ├── documentation/
+│   ├── scripts/
+│   ├── website/
+│   ├── main.py
+│   └── requirements.txt
+├── .gitignore
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── README.md
+└── SECURITY.md
+```
+
+## Contributing
+
+---
+
 *Final Project Instructions:*
 
 ## CMSC 203 – Object-Oriented Programming
