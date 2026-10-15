@@ -1,122 +1,296 @@
 # CONTRIBUTING GUIDELINES
 
-AppointMed is a Python + CustomTkinter desktop application for managing clinic appointments, built around a shared MySQL backend so that Doctor, Nurse/Secretary, and Admin users on different machines can view and update the same live data in real time. This project was developed as the final requirement for CMSC 203 – Object-Oriented Programming, and follows an MVC-inspired architecture that separates data models, GUI views, and business-logic controllers to keep the codebase modular, maintainable, and easy to extend. These guidelines outline how to set up the project locally, understand its folder structure, and contribute changes in a way that keeps the system consistent across all client devices.
+AppointMed is a clinic appointment and management system built with a Python (FastAPI) backend, an Electron + React + TypeScript desktop application, and a public one-page booking website. All clients connect to a shared MySQL database so that Doctor, Nurse/Secretary, and Admin users on different machines can view and update the same live data. This project was developed as the final requirement for CMSC 203 – Object-Oriented Programming, and follows an MVC-inspired architecture that separates data models, user interface views, and business-logic controllers to keep the codebase modular, maintainable, and easy to extend. These guidelines outline how to set up the project locally, understand its folder structure, and contribute changes in a way that keeps the system consistent across all client devices.
 
 ---
-## Initialization:
 
-Python + CustomTkinter clinic appointment system with a shared MySQL backend,
-so Doctor, Nurse/Secretary, and Admin accounts on different devices all
-see the same live data.
+## Table of Contents
 
-**Setup**
+1. [Project Structure](#project-structure)
+2. [Initialization (Local Setup)](#initialization-local-setup)
+3. [Contributing](#contributing)
+4. [Final Project Instructions](#final-project-instructions)
 
-1. Install Git, Make a GitHub Acc, and Install MySQL Server and Workbench
-2. run in terminal `py -m pip install -r main/requirements.txt`
-3. Start/point to a MySQL server reachable by all client devices.
-4. Run `database/schema.sql` against it once to create the tables.
-5. Update `config/settings.py` with that server's host/credentials.
-6. Run `python main/main.py` on each device 
+---
 
-**Architecture**
-
-MVC-ish split:
-- **models/** — plain Python classes, no Tkinter or SQL
-- **views/** — Tkinter windows only, one subfolder per role
-- **controllers/** — validation + database calls, raises custom exceptions
-  from `utils/exceptions.py` which the views catch and display
-
-**Folder structure**
+## Project Structure
 
 ```
-AppointMed/
 ├── 📁 main
-│   ├── 📁 assets                      # Static files used by the app (images, icons)
-│   │   └── 📁 icons
-│   │   └── 📁 images                     
-│   ├── 📁 config                      # App-wide settings (DB credentials, constants)
-│   │   └── 🐍 settings.py            
-│   ├── 📁 controllers                 # Business logic — validation + DB calls (the "C" in MVC)
-│   │   ├── 🐍 appointment_controller.py   
-│   │   ├── 🐍 auth_controller.py          
-│   │   └── 🐍 user_controller.py          
-│   ├── 📁 database                    # Everything related to connecting to and setting up MySQL
-│   │   ├── 🐍 db_connector.py         
-│   │   ├── 📄 schema.sql              
-│   │   └── 📄 seed.sql                
-│   ├── 📁 docs                        # Required documentation deliverables
-│   │   ├── 📁 flowcharts              
-│   │   ├── 📁 screenshots             
-│   │   └── 📁 uml                     
-│   ├── 📁 models                      # Plain data classes — no Tkinter, no SQL (the "M" in MVC)
-│   │   ├── 🐍 appointment.py          
-│   │   └── 🐍 user.py                 
-│   ├── 📁 utils                       # Shared helper code used across the app
-│   │   └── 🐍 exceptions.py           
-│   ├── 📁 views                       # Tkinter/CustomTkinter windows only (the "V" in MVC)
-│   │   ├── 📁 admin                   # Admin-only screens  
-│   │   │   └── 🐍 admin_dashboard.py  
-│   │   ├── 📁 doctor                  # Doctor-only screens
-│   │   │   └── 🐍 doctor_dashboard.py 
-│   │   ├── 📁 nurse                   # Nurse/Secretary-only screens
-│   │   │   └── 🐍 nurse_dashboard.py  
-│   │   ├── 📁 shared                  # Screens used by every role
-│   │   │   └── 🐍 login_view.py       
-│   ├── 🐍 main.py                     # Entry point — run this on every client device
-│   └── 📄 requirements.txt            # Python dependencies to install
-├── 📝 CONTRIBUTING.md                 
-├── 📝 DOCUMENTATION.md                 
-└── 📝 README.md                       
+│   ├── 📁 backend        # FastAPI app: models, schemas, repositories, services, routes, core, exceptions, utils, tests
+│   ├── 📁 database       # schema.sql, seed.sql
+│   ├── 📁 desktop        # Electron + React + TypeScript + Tailwind staff application
+│   ├── 📁 documentation  # UML, flowchart, screenshots, testing results, presentation
+│   ├── 📁 scripts        # Build and setup scripts
+│   ├── 📁 website        # Public one-page booking site (React + TypeScript + Tailwind)
+│   ├── 🐍 .env           # Local configuration (never committed)
+│   ├── 🐍 main.py        # Entry point that starts the backend
+│   └── 📄 requirements.txt
+├── ⚙️ .gitignore
+├── 📝 CONTRIBUTING.md
+├── 📝 DOCUMENTATION.md
+└── 📝 README.md
 ```
+
+**How the MVC-inspired layers map to the code:**
+
+| Layer | Location | Responsibility |
+|---|---|---|
+| Model | `backend/models`, `backend/schemas` | Domain classes (OOP entities) and Pydantic validation |
+| Controller | `backend/routes`, `backend/services` | API endpoints and business logic, such as conflict checking |
+| View | `desktop/src`, `website/src` | React pages and components |
+| Data access | `backend/repositories`, `backend/core/connection.py` | All SQL and the MySQL connection |
+
+Keep these layers separate: routes call services, services call repositories, and only repositories talk to MySQL.
+
+---
+
+## Initialization (Local Setup)
+
+### Prerequisites
+
+Install the following before you begin:
+
+| Tool | Version | Purpose |
+|---|---|---|
+| Git | Latest | Version control |
+| Python | 3.11 or newer | Backend |
+| Node.js (with npm) | 20 LTS or newer | Desktop app and website |
+| MySQL Server | 8.0 or newer | Shared database |
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/<organization-or-username>/AppointMed.git
+cd AppointMed
+```
+
+### 2. Set up the database
+
+Log in to MySQL and create the database and a dedicated application user (do not use `root` in `.env`):
+
+```sql
+CREATE DATABASE appointmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'appointmed_user'@'%' IDENTIFIED BY 'choose-a-strong-password';
+GRANT SELECT, INSERT, UPDATE, DELETE ON appointmed.* TO 'appointmed_user'@'%';
+FLUSH PRIVILEGES;
+```
+
+Then load the tables and the starting data:
+
+```bash
+mysql -u root -p appointmed < main/database/schema.sql
+mysql -u root -p appointmed < main/database/seed.sql
+```
+
+> **Shared database:** The team uses one MySQL server so everyone sees the same live data. Run `seed.sql` **only on your own local database**, never on the shared server, because it would overwrite or duplicate records. To use the shared server, ask a maintainer for the host, port, and your own credentials.
+
+### 3. Configure environment variables
+
+Create `main/.env` and fill in your values:
+
+```env
+# Database
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=appointmed_user
+DB_PASSWORD=your-password-here
+DB_NAME=appointmed
+
+# Backend
+API_HOST=127.0.0.1
+API_PORT=8000
+SECRET_KEY=generate-a-long-random-string
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+```
+
+> **Never commit `.env`.** It is listed in `.gitignore`. Each machine has its own copy. Generate a secret key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+
+### 4. Run the backend
+
+```bash
+cd main
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+# macOS / Linux
+source .venv/bin/activate
+
+pip install -r requirements.txt
+python main.py
+```
+
+The API runs at `http://127.0.0.1:8000`, and interactive API docs (Swagger) are available at `http://127.0.0.1:8000/docs`.
+
+### 5. Run the desktop application
+
+In a new terminal, with the backend running:
+
+```bash
+cd main/desktop
+npm install
+npm run dev
+```
+
+### 6. Run the booking website
+
+In another terminal:
+
+```bash
+cd main/website
+npm install
+npm run dev
+```
+
+The website opens at the local URL printed by Vite (usually `http://localhost:5173`).
+
+### 7. Verify your setup
+
+- `http://127.0.0.1:8000/docs` loads.
+- You can log in to the desktop app with the default admin account from `seed.sql`. **Change that password immediately.**
+- Run the backend tests:
+
+```bash
+cd main
+pytest backend/tests
+```
+
+### Building executables
+
+Use the scripts in `main/scripts` to build the deliverables:
+
+```bash
+main\scripts\build-backend.bat    # PyInstaller: bundles the FastAPI backend
+main\scripts\build-desktop.bat    # Electron Builder: packages the desktop app
+```
+
+### Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| `Can't connect to MySQL server` | MySQL is running, and `DB_HOST`, `DB_PORT`, and credentials in `.env` are correct. For a shared server, check your network and firewall. |
+| `ModuleNotFoundError` | The virtual environment is activated and `pip install -r requirements.txt` was run. |
+| Desktop app can't reach the API | The backend is running and `API_PORT` matches the port the desktop app calls. |
+| `Access denied for user` | The MySQL user exists and was granted privileges on the `appointmed` database. |
 
 ---
 
 ## Contributing
 
-To keep the codebase consistent and easy to follow across all members, please follow these guidelines when contributing.
+### Workflow
 
-### Before You Start
+1. **Pick or create an issue** so the team knows who is working on what.
+2. **Sync with `main`:**
+   ```bash
+   git checkout main
+   git pull origin main
+   ```
+3. **Create a branch** for your work. Never commit directly to `main`.
+   ```bash
+   git checkout -b feat/appointment-conflict-check
+   ```
+4. **Make your changes** in small, focused commits.
+5. **Test** your changes locally, with the backend, desktop app, and (if affected) website all running.
+6. **Push** your branch and **open a pull request** into `main`.
+7. **Get at least one teammate's review** before merging. Respond to feedback and push fixes to the same branch.
+8. **Merge** once approved, then delete the branch.
 
-1. Pull the latest changes from the main branch before starting new work, to avoid conflicts with your teammates.
-2. Create a new branch for the feature, fix, or module you're working on (e.g. `feature/appointment-controller`, `fix/login-validation`).
-3. If your change affects the database (`database/schema.sql` or `database/seed.sql`), let the team know beforehand, since everyone shares the same live MySQL server.
+### Branch naming
 
-### Commit Guidelines
+| Prefix | Use for | Example |
+|---|---|---|
+| `feat/` | New features | `feat/patient-search` |
+| `fix/` | Bug fixes | `fix/double-booking` |
+| `docs/` | Documentation only | `docs/uml-diagram` |
+| `refactor/` | Code changes with no behavior change | `refactor/repository-base-class` |
+| `test/` | Adding or fixing tests | `test/auth-permissions` |
+| `chore/` | Tooling, dependencies, config | `chore/update-requirements` |
 
-- **Commit often, in small, logical chunks.** Treat each commit as a single save point rather than bundling an entire feature into one commit. As a rule of thumb, commit once a function, method, or class is working, rather than waiting until an entire file or module is done.
-- Each commit message should briefly describe what changed and why, for example:
-  - `Add validate_email() to auth_controller`
-  - `Fix null check in Appointment constructor`
-  - `Add InvalidAppointmentTimeError custom exception`
-- Avoid vague messages like `update`, `fix stuff`, or `final version`.
-- Don't mix unrelated changes (e.g. a GUI tweak and a database fix) in the same commit.
+### Commit messages
 
-### Code Style
+Use the format `type: short summary in present tense`.
 
-- Add comments explaining what a function, class, or non-obvious block of code does, not just what each line does. Every method should have at least a short comment or docstring describing its purpose, parameters, and return value.
-- Follow the existing MVC-inspired structure:
-  - **models/** stay free of Tkinter and SQL code.
-  - **views/** only handle GUI layout and user interaction, and should call controllers rather than talking to the database directly.
-  - **controllers/** hold validation and database logic, and raise custom exceptions from `utils/exceptions.py` instead of letting raw errors bubble up to the views.
-- Use clear, descriptive names for variables, functions, and classes (e.g. `get_appointments_by_doctor()` instead of `get_data()`).
-- Keep functions short and focused on a single responsibility; break large functions into smaller, reusable ones.
+```
+feat: add doctor availability check
+fix: prevent overlapping appointments for the same doctor
+docs: add flowchart to documentation folder
+```
 
-### Testing Your Changes
+Keep the summary under about 72 characters, and add a body if the reason for the change isn't obvious.
 
-- Test your changes locally against the shared MySQL server before pushing.
-- Make sure your changes don't break existing features for other roles (Doctor, Nurse/Secretary, Admin).
-- If you add a new exception, confirm it's caught and displayed properly in the relevant view.
+### Pull request checklist
 
-### Submitting Changes
+Before requesting a review, confirm that:
 
-1. Push your branch and open a pull request (or notify the team directly if working without GitHub PRs).
-2. Briefly describe what your change does and which files/modules it touches.
-3. Have at least one teammate review the change before merging, when possible.
-4. Resolve any merge conflicts carefully, especially in shared files like `config/settings.py` and `database/schema.sql`.
+- [ ] The branch is up to date with `main` and has no merge conflicts.
+- [ ] The app runs, and the feature works with each affected role (Admin, Doctor, Nurse/Secretary).
+- [ ] Tests were added or updated, and `pytest backend/tests` passes.
+- [ ] Invalid input and errors are handled with clear messages, using the custom exceptions where appropriate.
+- [ ] No secrets, `.env` files, real personal data, or build output are committed.
+- [ ] Changes to the database are reflected in `main/database/schema.sql` (and `seed.sql` if needed) and announced to the team.
+- [ ] Documentation is updated if behavior, endpoints, or setup changed.
+- [ ] You can explain every part of your code. The course requires it.
+
+### Coding standards
+
+**Python (backend)**
+
+- Follow [PEP 8](https://peps.python.org/pep-0008/): `snake_case` for functions and variables, `PascalCase` for classes, `UPPER_CASE` for constants.
+- Add type hints and short docstrings to classes and public methods.
+- Apply OOP principles deliberately, since they make up 30% of the grade:
+  - **Encapsulation:** use private attributes with properties in models.
+  - **Inheritance:** share common fields through base classes such as `Person`, `Patient`, and `Doctor`.
+  - **Polymorphism:** let each role in `roles.py` implement its own permissions.
+  - **Abstraction:** define abstract base classes such as `BaseEntity` and `BaseRepository`.
+- Raise custom exceptions from `backend/exceptions` rather than generic ones, and keep error mapping in `exception_handlers.py`.
+- Keep SQL in repositories only, and always use parameterized queries.
+- Validate all external input with Pydantic schemas.
+
+**TypeScript / React (desktop and website)**
+
+- Use TypeScript types for props, API responses, and state, and avoid `any`.
+- Name components and their files in `PascalCase` (`PatientsPage.tsx`) and hooks with a `use` prefix (`useAuth.ts`).
+- Keep API calls in `src/api`, reusable UI in `src/components`, and page-level screens in `src/pages`.
+- Style with Tailwind utility classes. Avoid inline styles.
+- Hiding UI by role is a convenience only. The backend must enforce permissions.
+
+**General**
+
+- Prefer small, reusable functions and clear names over clever code.
+- Comment the *why*, not the obvious *what*.
+- Don't leave dead code or debugging prints in merged work.
+
+### Database changes
+
+The database is shared, so schema changes affect everyone:
+
+1. Update `main/database/schema.sql` (and `seed.sql` if starting data changes).
+2. Mention the change in your pull request description, with the exact SQL needed to update an existing database.
+3. Tell the team once it is merged so everyone updates their local database.
+
+### Documentation and deliverables
+
+Keep `main/documentation` current as you work. The final submission needs the technical documentation (PDF), UML class diagram, flowchart, application screenshots, testing results, and the PowerPoint presentation. Update the diagrams when classes or flows change, and save test results and screenshots as you go instead of at the end. Use only fictional data in screenshots.
+
+### Reporting bugs and requesting features
+
+Open a GitHub issue with:
+
+- **Bugs:** what you expected, what happened, the steps to reproduce it, your role (Admin, Doctor, Nurse/Secretary), and any error message.
+- **Features:** the problem it solves and how you imagine it working.
+
+For security problems, do **not** open a public issue. See [SECURITY.md](SECURITY.md).
+
+### AI-assisted coding
+
+Per the course rules, AI tools may be used ethically for learning and productivity, but the work must be your own, and you must understand and be able to explain every part of your code. Don't submit code you cannot explain during the demonstration.
 
 ---
 
-*Final Project Instructions:*
+## Final Project Instructions
+
+*These are the official course requirements the project is graded against.*
 
 ## CMSC 203 – Object-Oriented Programming
 ### Final Project: Object-Oriented Application Development
@@ -268,3 +442,8 @@ Submit the following:
 | Documentation | 10 pts |
 | Presentation and Demonstration | 10 pts |
 | **Total** | **100 pts** |
+
+
+---
+
+*Last Updated: October 2026*
