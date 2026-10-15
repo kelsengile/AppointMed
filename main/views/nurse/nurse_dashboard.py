@@ -737,6 +737,9 @@ class NurseAppointmentBoard(ctk.CTkFrame):
                 return
             form.destroy()
             self.refresh()
+            self.refresh_all()
+            if self.on_change is not None:
+                self.on_change()
 
         ctk.CTkButton(form, text="Save room", command=save).pack(pady=16)
 
@@ -830,6 +833,7 @@ class NurseDashboard(ctk.CTk):
     # redraw: smaller = smoother.
     ANIMATION_DURATION_S = 0.32
     ANIMATION_FRAME_MS = 8
+    AUTO_REFRESH_MS = 5000
 
     # ===================================================================
     # 2. WINDOW SETUP
@@ -854,7 +858,8 @@ class NurseDashboard(ctk.CTk):
         self.title(nurse.dashboard_title())
         self.geometry(self.WINDOW_SIZE)
         self.build_ui()
-        self.load_appointments()
+        self.refresh_all()
+        self.schedule_auto_refresh()
 
     def build_ui(self):
         """`body` is a plain container holding the sidebar on the left and
@@ -1137,7 +1142,7 @@ class NurseDashboard(ctk.CTk):
         ).pack(side="right", padx=(8, 0))
         ctk.CTkButton(
             header, text="Refresh", width=90, fg_color=REFRESH_BG,
-            command=self.load_appointments
+            command=self.refresh_all
         ).pack(side="right")
 
         # Kept on self so it can be refreshed if the assigned doctor
@@ -1154,7 +1159,7 @@ class NurseDashboard(ctk.CTk):
             page, self.appointment_controller, self.nurse.assigned_doctor_id,
             # A finished (cancelled) appointment moves to History, so keep
             # that page in step whenever a status changes.
-            on_change=self.load_history
+            on_change=self.on_board_change
         )
         self.board.pack(fill="both", expand=True, padx=24, pady=(0, 20))
 
@@ -1330,46 +1335,57 @@ class NurseDashboard(ctk.CTk):
 
     def load_doctor_stats(self):
         """Fill the four tiles, the 'Current room' line and the doctor's
-        name/specialization (in case the doctor edited them meanwhile).
-        Reuses the controller methods the boards already call, so the
-        numbers always match what the Appointments page shows."""
+        name/specialization. Each tile loads on its own, so one failed query
+        no longer blanks them all (the error is printed to the console)."""
         uid = self.nurse.assigned_doctor_id
         today = date.today()
-
+        control = self.appointment_controller
+        labels = self.doctor_stat_labels
+ 
         info_row = self._load_doctor_info()
         self.doctor_name_label.configure(text="Dr. " + info_row["full_name"])
         self.doctor_username_label.configure(text="@" + (info_row.get("username") or ""))
         spec = info_row.get("specialization") or "General Practice"
         self.doctor_spec_badge.configure(text=spec)
         self.doctor_spec_value.configure(text=spec)
-
-        try:
-            consulting = _rows_to_appointments(
-                self.appointment_controller.get_consulting_for_doctor(uid)
+ 
+        def fetch(call, *args):
+            try:
+                return call(*args)
+            except AppointMedError as e:
+                print("[Doctor page] could not load: " + str(e))
+                return None
+ 
+        consulting_rows = fetch(control.get_consulting_for_doctor, uid)
+        queue_rows = fetch(control.get_checkin_queue, uid)
+        month_rows = fetch(control.get_month_for_doctor, uid, today.year, today.month)
+        history_rows = fetch(control.get_history_for_doctor, uid)
+ 
+        consulting = []
+        if consulting_rows is not None:
+            consulting = _rows_to_appointments(consulting_rows)
+            labels["consulting"].configure(text=str(len(consulting)))
+ 
+        if queue_rows is not None:
+            labels["waiting"].configure(text=str(len(list(queue_rows))))
+ 
+        if month_rows is not None:
+            scheduled_today = sum(
+                1 for a in _rows_to_appointments(month_rows) if a["date"] == today
             )
-            queue = self.appointment_controller.get_checkin_queue(uid)
-            month = self.appointment_controller.get_month_for_doctor(
-                uid, today.year, today.month
+            labels["scheduled"].configure(text=str(scheduled_today))
+ 
+        if history_rows is not None:
+            def visit_day(appt):
+                when = appt["checked_in_at"] or appt["scheduled"]
+                return when.date()
+ 
+            completed_today = sum(
+                1 for a in _rows_to_appointments(history_rows)
+                if a["status"] == "Completed" and visit_day(a) == today
             )
-            history = self.appointment_controller.get_history_for_doctor(uid)
-        except AppointMedError:
-            return
-
-        # "Scheduled today" = today's appointments that are still Scheduled
-        # (not yet checked in). Checked-in patients show under "In waiting
-        # queue" and the one inside under "Consulting now".
-        scheduled_today = sum(
-            1 for a in _rows_to_appointments(month) if a["date"] == today
-        )
-        completed_today = sum(
-            1 for a in _rows_to_appointments(history)
-            if a["status"] == "Completed" and a["date"] == today
-        )
-        self.doctor_stat_labels["consulting"].configure(text=str(len(consulting)))
-        self.doctor_stat_labels["waiting"].configure(text=str(len(list(queue))))
-        self.doctor_stat_labels["scheduled"].configure(text=str(scheduled_today))
-        self.doctor_stat_labels["completed"].configure(text=str(completed_today))
-
+            labels["completed"].configure(text=str(completed_today))
+ 
         try:
             names = self.room_controller.room_names_for([a["id"] for a in consulting])
         except AppointMedError:
@@ -1672,6 +1688,37 @@ class NurseDashboard(ctk.CTk):
         """Redraw the History page."""
         self.history_board.refresh()
 
+    def refresh_linked_pages(self):
+        """Everything that depends on appointment/room data but isn't the
+        board itself: History, the Doctor page numbers and the Room page."""
+        self.load_history()
+        self.load_doctor_stats()
+        self.load_room_status()
+ 
+    def refresh_all(self):
+        self.load_appointments()
+        self.refresh_linked_pages()
+ 
+    def on_board_change(self):
+        """The board has already redrawn itself; update the rest."""
+        self.refresh_linked_pages()
+ 
+    def schedule_auto_refresh(self):
+        """Queue the next automatic reload."""
+        self.after(self.AUTO_REFRESH_MS, self.auto_refresh)
+ 
+    def auto_refresh(self):
+        """Reload everything, then queue the next reload. A failure is
+        printed instead of stopping the timer, so one bad refresh can
+        never freeze the dashboard for good."""
+        if not self.winfo_exists():
+            return
+        try:
+            self.refresh_all()
+        except Exception as error:
+            print("[Nurse dashboard] auto-refresh failed: " + repr(error))
+        self.schedule_auto_refresh()
+
     # ------------------------------------------------------------------
     # ADD-APPOINTMENT FORM (a small pop-up window)
     # ------------------------------------------------------------------
@@ -1772,7 +1819,7 @@ class NurseDashboard(ctk.CTk):
                 )
 
                 form.destroy()
-                self.load_appointments()
+                self.refresh_all()
                 messagebox.showinfo(
                     "Appointment booked",
                     full_name + " is scheduled for " +

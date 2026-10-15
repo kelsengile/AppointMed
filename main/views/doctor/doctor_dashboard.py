@@ -545,7 +545,14 @@ class DoctorAppointmentBoard(ctk.CTkFrame):
             is_last = index == len(consulting) - 1
             row = ctk.CTkFrame(box, corner_radius=8, fg_color="white")
             row.pack(fill="x", padx=10, pady=(4, 12 if is_last else 4))
-
+ 
+            # Button FIRST so it is never squeezed out.
+            ctk.CTkButton(
+                row, text="Complete", width=100, height=28,
+                fg_color=COMPLETE_BG, hover_color=COMPLETE_HOVER,
+                command=lambda a=appt: self.change_status(a, "Completed")
+            ).pack(side="right", padx=(8, 12))
+ 
             info = ctk.CTkFrame(row, fg_color="transparent")
             info.pack(side="left", fill="x", expand=True, padx=(16, 0), pady=10)
             ctk.CTkLabel(
@@ -554,14 +561,9 @@ class DoctorAppointmentBoard(ctk.CTkFrame):
             ).pack(fill="x")
             ctk.CTkLabel(
                 info, text=appt["reason"] + "   ·   " + _arrival_text(appt),
-                font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
+                font=ctk.CTkFont(size=12), text_color=MUTED_TEXT,
+                anchor="w", justify="left", wraplength=240
             ).pack(fill="x")
-
-            ctk.CTkButton(
-                row, text="Complete", width=100, height=28,
-                fg_color=COMPLETE_BG, hover_color=COMPLETE_HOVER,
-                command=lambda a=appt: self.change_status(a, "Completed")
-            ).pack(side="right", padx=(8, 12))
 
     # ---- Waiting queue -------------------------------------------------
     def _draw_queue(self, queue, consulting_busy):
@@ -594,12 +596,22 @@ class DoctorAppointmentBoard(ctk.CTkFrame):
     def _draw_queue_row(self, box, position, appt, consulting_busy, bottom_pad=4):
         row = ctk.CTkFrame(box, corner_radius=8, fg_color="white")
         row.pack(fill="x", padx=10, pady=(4, bottom_pad))
-
+ 
+        # Button FIRST, so it always keeps its full width (see top of file).
+        # Only one consultation at a time, so it is greyed out while somebody
+        # is still in. (The controller enforces this too.)
+        ctk.CTkButton(
+            row, text="Consulting", width=100, height=28,
+            fg_color=CONSULT_BG, hover_color=CONSULT_HOVER,
+            state="disabled" if consulting_busy else "normal",
+            command=lambda a=appt: self.change_status(a, "Consulting")
+        ).pack(side="right", padx=(8, 12))
+ 
         ctk.CTkLabel(
             row, text="#" + str(position), width=44,
             font=ctk.CTkFont(size=14, weight="bold"), text_color=QUEUE_TEXT
         ).pack(side="left", padx=(10, 4), pady=10)
-
+ 
         info = ctk.CTkFrame(row, fg_color="transparent")
         info.pack(side="left", fill="x", expand=True, pady=10)
         ctk.CTkLabel(
@@ -607,17 +619,9 @@ class DoctorAppointmentBoard(ctk.CTkFrame):
         ).pack(fill="x")
         ctk.CTkLabel(
             info, text=appt["reason"] + "   ·   " + _arrival_text(appt),
-            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT, anchor="w"
+            font=ctk.CTkFont(size=12), text_color=MUTED_TEXT,
+            anchor="w", justify="left", wraplength=210
         ).pack(fill="x")
-
-        # Only one consultation at a time, so the button is greyed out
-        # while somebody is still in. (The controller enforces this too.)
-        ctk.CTkButton(
-            row, text="Consulting", width=100, height=28,
-            fg_color=CONSULT_BG, hover_color=CONSULT_HOVER,
-            state="disabled" if consulting_busy else "normal",
-            command=lambda a=appt: self.change_status(a, "Consulting")
-        ).pack(side="right", padx=(8, 12))
 
     # ---- Scheduled list ------------------------------------------------
     def _draw_month(self, appointments):
@@ -642,19 +646,29 @@ class DoctorAppointmentBoard(ctk.CTkFrame):
             self._draw_card(appt)
 
     def _draw_card(self, appt):
-        """One row: time | patient + reason | [Check in] [Cancel].
-        Only Scheduled appointments are ever in this list, so there is no
-        status badge - the two buttons are the only things to press.
-        (Widths are a little narrower than before because this board now
-        lives in the right-hand panel instead of the full page.)"""
+        """One row: time | patient + reason | [Check in] [Cancel]."""
         card = ctk.CTkFrame(self.list, corner_radius=10)
         card.pack(fill="x", pady=6)
-
+ 
+        # Buttons FIRST. side="right" packs from the edge inward: Cancel
+        # first means it sits at the far right, Check in just to its left.
+        ctk.CTkButton(
+            card, text="Cancel", width=70, height=28,
+            fg_color=CANCEL_BG, hover_color=CANCEL_HOVER,
+            command=lambda a=appt: self.change_status(a, "Cancelled")
+        ).pack(side="right", padx=(6, 12))
+ 
+        ctk.CTkButton(
+            card, text="Check in", width=80, height=28,
+            fg_color=CHECKIN_BG, hover_color=CHECKIN_HOVER,
+            command=lambda a=appt: self.change_status(a, "Checked-in")
+        ).pack(side="right", padx=(6, 0))
+ 
         ctk.CTkLabel(
             card, text=appt["time"], width=72,
             font=ctk.CTkFont(size=13, weight="bold")
         ).pack(side="left", padx=(12, 6), pady=14)
-
+ 
         info = ctk.CTkFrame(card, fg_color="transparent")
         info.pack(side="left", fill="x", expand=True, pady=14)
         ctk.CTkLabel(
@@ -662,22 +676,8 @@ class DoctorAppointmentBoard(ctk.CTkFrame):
         ).pack(fill="x")
         ctk.CTkLabel(
             info, text=appt["reason"], font=ctk.CTkFont(size=12),
-            text_color=MUTED_TEXT, anchor="w"
+            text_color=MUTED_TEXT, anchor="w", justify="left", wraplength=140
         ).pack(fill="x")
-
-        # side="right" packs from the edge inward: Cancel first means it
-        # sits at the far right, with Check in just to its left.
-        ctk.CTkButton(
-            card, text="Cancel", width=70, height=28,
-            fg_color=CANCEL_BG, hover_color=CANCEL_HOVER,
-            command=lambda a=appt: self.change_status(a, "Cancelled")
-        ).pack(side="right", padx=(6, 12))
-
-        ctk.CTkButton(
-            card, text="Check in", width=80, height=28,
-            fg_color=CHECKIN_BG, hover_color=CHECKIN_HOVER,
-            command=lambda a=appt: self.change_status(a, "Checked-in")
-        ).pack(side="right", padx=(6, 0))
 
     def change_status(self, appt, new_status):
         """Moves an appointment to `new_status` (Checked-in, Consulting,
@@ -1098,7 +1098,7 @@ class DoctorDashboard(ctk.CTk):
     # books appointments from a different machine, so without this the
     # doctor would only ever see what existed the moment they logged in
     # (or last pressed Refresh).
-    AUTO_REFRESH_MS = 20000
+    AUTO_REFRESH_MS = 5000
 
     # ===================================================================
     # 2. WINDOW SETUP
@@ -1585,38 +1585,60 @@ class DoctorDashboard(ctk.CTk):
         return value_label
 
     def load_doctor_stats(self):
-        """Fill the four tiles (and the 'Current room' line). Reuses the
-        controller methods the boards already call, so the numbers always
-        match what the Appointments page shows."""
+        """Fill the four tiles (and the 'Current room' line).
+ 
+        What was wrong before:
+          * ONE failed query made the method return early, leaving EVERY
+            tile on "–". Now each tile loads on its own, and a failure is
+            printed to the console instead of hiding silently.
+          * "Completed today" compared the appointment's BOOKED date with
+            today, so a visit booked for another day was never counted
+            even though it was finished today. It now uses the day the
+            patient actually checked in (falling back to the booked day).
+        """
         uid = self.doctor.user_id
         today = date.today()
-        try:
-            consulting = _rows_to_appointments(
-                self.appointment_controller.get_consulting_for_doctor(uid)
+        control = self.appointment_controller
+        labels = self.doctor_stat_labels
+ 
+        def fetch(call, *args):
+            try:
+                return call(*args)
+            except AppointMedError as e:
+                print("[Doctor page] could not load: " + str(e))
+                return None
+ 
+        consulting_rows = fetch(control.get_consulting_for_doctor, uid)
+        queue_rows = fetch(control.get_checkin_queue, uid)
+        month_rows = fetch(control.get_month_for_doctor, uid, today.year, today.month)
+        history_rows = fetch(control.get_history_for_doctor, uid)
+ 
+        consulting = []
+        if consulting_rows is not None:
+            consulting = _rows_to_appointments(consulting_rows)
+            labels["consulting"].configure(text=str(len(consulting)))
+ 
+        if queue_rows is not None:
+            labels["waiting"].configure(text=str(len(list(queue_rows))))
+ 
+        if month_rows is not None:
+            # Still Scheduled (not yet checked in) AND booked for today.
+            scheduled_today = sum(
+                1 for a in _rows_to_appointments(month_rows) if a["date"] == today
             )
-            queue = self.appointment_controller.get_checkin_queue(uid)
-            month = self.appointment_controller.get_month_for_doctor(
-                uid, today.year, today.month
+            labels["scheduled"].configure(text=str(scheduled_today))
+ 
+        if history_rows is not None:
+            def visit_day(appt):
+                when = appt["checked_in_at"] or appt["scheduled"]
+                return when.date()
+ 
+            completed_today = sum(
+                1 for a in _rows_to_appointments(history_rows)
+                if a["status"] == "Completed" and visit_day(a) == today
             )
-            history = self.appointment_controller.get_history_for_doctor(uid)
-        except AppointMedError:
-            return
-
-        # "Scheduled today" = today's appointments that are still Scheduled
-        # (not yet checked in). Checked-in patients show under "In waiting
-        # queue" and the one inside under "Consulting now".
-        scheduled_today = sum(
-            1 for a in _rows_to_appointments(month) if a["date"] == today
-        )
-        completed_today = sum(
-            1 for a in _rows_to_appointments(history)
-            if a["status"] == "Completed" and a["date"] == today
-        )
-        self.doctor_stat_labels["consulting"].configure(text=str(len(consulting)))
-        self.doctor_stat_labels["waiting"].configure(text=str(len(list(queue))))
-        self.doctor_stat_labels["scheduled"].configure(text=str(scheduled_today))
-        self.doctor_stat_labels["completed"].configure(text=str(completed_today))
-
+            labels["completed"].configure(text=str(completed_today))
+ 
         try:
             names = self.room_controller.room_names_for([a["id"] for a in consulting])
         except AppointMedError:
@@ -1935,12 +1957,15 @@ class DoctorDashboard(ctk.CTk):
         self.after(self.AUTO_REFRESH_MS, self.auto_refresh)
 
     def auto_refresh(self):
-        """Reload everything, then queue the next reload. The
-        winfo_exists() check stops the loop from firing into a window
-        that's already been closed."""
+        """Reload everything, then queue the next reload. A failure is
+        printed instead of stopping the timer, so one bad refresh can
+        never freeze the dashboard for good."""
         if not self.winfo_exists():
             return
-        self.refresh_all()
+        try:
+            self.refresh_all()
+        except Exception as error:
+            print("[Doctor dashboard] auto-refresh failed: " + repr(error))
         self.schedule_auto_refresh()
 
 
