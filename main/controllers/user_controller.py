@@ -6,6 +6,7 @@ Used by the Admin dashboard and by every role's "My Account" page.
 import re
 
 import bcrypt
+from mysql.connector import Error as MySQLError
 from database.db_connector import DBConnector
 from models.user_settings import (APPEARANCE_MODES, REMINDER_HOURS, TIME_FORMATS,
                                   UserSettings)
@@ -16,7 +17,11 @@ from utils.exceptions import (
     PasswordMismatchError,
     UsernameTakenError,
     InvalidInputError,
+<<<<<<< HEAD
     ValidationError,
+=======
+    DatabaseConnectionError,
+>>>>>>> c19b0c7478c75c6668c40ff8c2d24a4c5e578e5b
 )
 
 # Usernames: at least 3 characters, only letters, numbers, dots, underscores.
@@ -146,58 +151,99 @@ class UserController:
             )
             return db.lastrowid
 
-    # Statements run (in order) before a user row is deleted, so that no
-    # foreign key still points at it. Every "%s" is the id of the user
-    # being deleted.
-    #   * Nullable references are simply set to NULL (the records stay).
-    #   * Records that can't exist without the user (a doctor's own
-    #     appointments, notifications addressed to them, invoices a
-    #     nurse issued) are removed, children before parents.
-    _DOCTOR_APPOINTMENTS = "SELECT id FROM appointments WHERE doctor_id=%s"
-    _USER_EXAMINATIONS = (
-        "SELECT id FROM examinations WHERE doctor_id=%s "
-        "OR appointment_id IN (" + _DOCTOR_APPOINTMENTS + ")"
-    )
-    _CLEANUP_BEFORE_DELETE = (
-        # nullable references -> keep the rows, just detach them
-        "UPDATE users SET assigned_doctor_id=NULL WHERE assigned_doctor_id=%s",
-        "UPDATE rooms SET updated_by=NULL WHERE updated_by=%s",
-        "UPDATE patients SET doctor_id=NULL WHERE doctor_id=%s",
-        "UPDATE appointments SET nurse_id=NULL WHERE nurse_id=%s",
-        # notifications addressed to this doctor/nurse
-        "UPDATE appointments SET notification_id=NULL WHERE notification_id IN "
-        "(SELECT id FROM notifications WHERE doctor_id=%s OR nurse_id=%s)",
-        "DELETE FROM notifications WHERE doctor_id=%s OR nurse_id=%s",
-        # invoices this user issued, or that belong to a doctor's appointments
-        "DELETE FROM invoices WHERE issued_by=%s",
-        "DELETE FROM invoices WHERE appointment_id IN (" + _DOCTOR_APPOINTMENTS + ")",
-        # a doctor's clinical records, children first
-        "DELETE FROM prescription_items WHERE prescription_id IN "
-        "(SELECT id FROM prescriptions WHERE doctor_id=%s "
-        " OR examination_id IN (" + _USER_EXAMINATIONS + "))",
-        "DELETE FROM prescriptions WHERE doctor_id=%s "
-        "OR examination_id IN (" + _USER_EXAMINATIONS + ")",
-        "UPDATE examinations SET follow_up_appointment_id=NULL WHERE "
-        "follow_up_appointment_id IN (" + _DOCTOR_APPOINTMENTS + ")",
-        "DELETE FROM examinations WHERE doctor_id=%s "
-        "OR appointment_id IN (" + _DOCTOR_APPOINTMENTS + ")",
-        # finally the doctor's appointments themselves
-        "DELETE FROM appointments WHERE doctor_id=%s",
-    )
-
     def delete_user(self, user_id):
+        """Deletes an account, first tidying up every row in other tables
+        that still points at it. Without this MySQL refuses the delete
+        with a foreign key error, because a user's id is referenced by
+        appointments, notifications, patients, rooms, examinations,
+        prescriptions, invoices and by nurses assigned to a doctor.
+
+        What happens to those rows:
+          * appointments the user booked as a nurse   -> kept, nurse cleared
+          * appointments belonging to a deleted doctor -> deleted, together
+            with their examinations / prescriptions / invoices
+          * notifications addressed to the user        -> deleted
+          * nurses assigned to the deleted doctor      -> kept, left with no
+            assigned doctor
+          * patients' primary doctor, room "updated by" -> cleared
+
+        An account that has ISSUED invoices is refused instead, because an
+        invoice must always name who issued it.
+
+        Everything runs in ONE transaction: it is committed only at the
+        very end, so if any step fails nothing is changed."""
         with DBConnector() as db:
-            db.execute("SELECT id FROM users WHERE id=%s", (user_id,))
-            if db.fetchone() is None:
+            def run(sql, params=()):
+                # Straight to the cursor (not db.execute) so nothing is
+                # committed until the final db.commit() below.
+                try:
+                    db.cursor.execute(sql, params)
+                except MySQLError as e:
+                    raise DatabaseConnectionError("Could not delete user: " + str(e))
+
+            def ids(sql, params=()):
+                run(sql, params)
+                return [row["id"] for row in db.cursor.fetchall()]
+
+            def marks(values):
+                # "%s, %s, %s" for an IN (...) list; "NULL" when the list
+                # is empty, so the IN simply matches nothing.
+                return ", ".join(["%s"] * len(values)) or "NULL"
+
+            if not ids("SELECT id FROM users WHERE id=%s", (user_id,)):
                 raise RecordNotFoundError("No user with id " + str(user_id) + ".")
 
-            # Same id for every placeholder in the statement.
-            for sql in self._CLEANUP_BEFORE_DELETE:
-                db.execute(sql, (user_id,) * sql.count("%s"))
+            if ids("SELECT id FROM invoices WHERE issued_by=%s LIMIT 1", (user_id,)):
+                raise InvalidInputError(
+                    "This account has issued invoices and cannot be deleted."
+                )
 
-            db.execute("DELETE FROM users WHERE id=%s", (user_id,))
-            if db.rowcount == 0:
+            # ---- a doctor's own records ---------------------------------
+            appts = tuple(ids("SELECT id FROM appointments WHERE doctor_id=%s", (user_id,)))
+            exams = tuple(ids(
+                "SELECT id FROM examinations WHERE doctor_id=%s "
+                "OR appointment_id IN (" + marks(appts) + ")",
+                (user_id,) + appts
+            ))
+            prescs = tuple(ids(
+                "SELECT id FROM prescriptions WHERE doctor_id=%s "
+                "OR examination_id IN (" + marks(exams) + ")",
+                (user_id,) + exams
+            ))
+
+            run("DELETE FROM prescription_items WHERE prescription_id IN ("
+                + marks(prescs) + ")", prescs)
+            run("DELETE FROM prescriptions WHERE id IN (" + marks(prescs) + ")", prescs)
+            # Another examination may name one of these appointments as its
+            # follow-up; unlink it rather than delete that examination.
+            run("UPDATE examinations SET follow_up_appointment_id=NULL "
+                "WHERE follow_up_appointment_id IN (" + marks(appts) + ")", appts)
+            run("DELETE FROM examinations WHERE id IN (" + marks(exams) + ")", exams)
+            run("DELETE FROM invoices WHERE appointment_id IN (" + marks(appts) + ")", appts)
+            run("DELETE FROM appointments WHERE id IN (" + marks(appts) + ")", appts)
+
+            # ---- notifications addressed to this doctor or nurse ---------
+            run("UPDATE appointments SET notification_id=NULL WHERE notification_id IN "
+                "(SELECT id FROM notifications WHERE doctor_id=%s OR nurse_id=%s)",
+                (user_id, user_id))
+            run("DELETE FROM notifications WHERE doctor_id=%s OR nurse_id=%s",
+                (user_id, user_id))
+
+            # ---- everything else that merely mentions the user -----------
+            run("UPDATE appointments SET nurse_id=NULL WHERE nurse_id=%s", (user_id,))
+            run("UPDATE patients SET doctor_id=NULL WHERE doctor_id=%s", (user_id,))
+            # updated_at=updated_at stops MySQL stamping a new time on it.
+            run("UPDATE rooms SET updated_by=NULL, updated_at=updated_at "
+                "WHERE updated_by=%s", (user_id,))
+            run("UPDATE users SET assigned_doctor_id=NULL WHERE assigned_doctor_id=%s",
+                (user_id,))
+
+            # ---- finally the account itself -----------------------------
+            run("DELETE FROM users WHERE id=%s", (user_id,))
+            if db.cursor.rowcount == 0:
                 raise RecordNotFoundError("No user with id " + str(user_id) + ".")
+
+            db.commit()
 
     # ------------------------------------------------------------------
     # PROFILE PAGE SUPPORT
