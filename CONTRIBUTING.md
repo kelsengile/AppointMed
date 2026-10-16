@@ -229,6 +229,29 @@ copy main\.env.example main\.env
 cp main/.env.example main/.env
 ```
 
+For reference, `main/.env.example` contains:
+
+```dotenv
+# Copy this file to main/.env and fill in your values. Never commit .env.
+
+# Database
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=appointmed_user
+DB_PASSWORD=your-password-here
+DB_NAME=appointmed
+
+# Backend
+API_HOST=127.0.0.1
+API_PORT=8000
+API_RELOAD=true
+SECRET_KEY=generate-a-long-random-string
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+# Origins allowed to call the API (desktop dev server and website dev server)
+CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174
+```
+
 **5.2 Generate a secret key**
 
 ```bash
@@ -239,7 +262,7 @@ Copy the long string it prints.
 
 **5.3 Edit `main/.env`**
 
-Open the file and set at least `DB_PASSWORD` and `SECRET_KEY`:
+Open the file and replace the two placeholder values: `DB_PASSWORD=your-password-here` and `SECRET_KEY=generate-a-long-random-string`. Leave the rest as is unless noted below.
 
 | Variable | Meaning | What to set |
 |---|---|---|
@@ -253,13 +276,9 @@ Open the file and set at least `DB_PASSWORD` and `SECRET_KEY`:
 | `API_RELOAD` | Restart the backend automatically when code changes | `true` for development |
 | `SECRET_KEY` | Signs login tokens | **The string from step 5.2** |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | How long a login lasts | `60` |
-| `CORS_ORIGINS` | Websites allowed to call the API | Leave as is |
+| `CORS_ORIGINS` | Websites allowed to call the API (desktop dev server on port 5174, website dev server on port 5173) | Leave as is |
 
 > **Never commit `.env` or share it in chats or issues.** If you edit `.env` while the backend is running, **restart the backend** so it reads the new values.
-
-### Step 6: Run the backend
-
-The backend is a Python program, and it runs inside a **virtual environment** (`.venv`) so its packages stay separate from the rest of your computer.
 
 **6.1 Create the virtual environment** (once)
 
@@ -351,10 +370,10 @@ Open `http://127.0.0.1:5173` in your browser.
 
 Confirm all of the following before you start working on features:
 
-- [ ] `http://127.0.0.1:8000/docs` loads.
-- [ ] `http://127.0.0.1:8000/health/db` returns `{"status":"ok"}`.
-- [ ] The desktop window shows Backend API and MySQL database as **Connected**.
-- [ ] The website at `http://127.0.0.1:5173` shows Backend API as **Connected**.
+- [x] `http://127.0.0.1:8000/docs` loads.
+- [x] `http://127.0.0.1:8000/health/db` returns `{"status":"ok"}`.
+- [x] The desktop window shows Backend API and MySQL database as **Connected**.
+- [x] The website at `http://127.0.0.1:5173` shows Backend API as **Connected**.
 - [ ] If the database seed includes a default admin account, log in with it and **change the password immediately**.
 - [ ] Backend tests run (from `main`, with the virtual environment active):
 
