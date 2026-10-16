@@ -46,51 +46,12 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+    <main className="flex min-h-screen items-center justify-start bg-gray-50 p-4 sm:pl-16">
       <div className="w-full max-w-md space-y-6 rounded-lg bg-white p-8 shadow">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">AppointMed</h1>
-          <p className="text-sm text-gray-500">Staff sign in</p>
         </div>
 
-        {/* Step 1: server connection */}
-        <section className="space-y-3 rounded border border-gray-200 p-4">
-          <div className="flex items-center gap-2 text-sm">
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-green-500" : "bg-gray-400"}`}
-              aria-hidden="true"
-            />
-            <span className="text-gray-700">
-              {checking
-                ? "Checking server..."
-                : connected
-                  ? `Connected to ${status?.host}:${status?.port} as ${status?.user}`
-                  : "Not connected to a server"}
-            </span>
-          </div>
-          {serverError && <p className="text-sm text-red-600">{serverError}</p>}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              disabled={checking}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {connected ? "Change server" : "Connect to Server"}
-            </button>
-            {connected && (
-              <button
-                type="button"
-                onClick={() => void disconnect()}
-                className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                Disconnect
-              </button>
-            )}
-          </div>
-        </section>
-
-        {/* Step 2: staff credentials (locked until connected) */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <FormField
             id="username"
@@ -109,8 +70,47 @@ export default function LoginPage() {
             autoComplete="current-password"
             disabled={!connected || submitting}
           />
+
+          {/* Server connection: centered, no border box, below the credentials */}
+        <section className="flex flex-col items-center space-y-3 text-center">
+        <div className="flex items-center justify-center gap-2 text-sm">
+            <span
+            className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-green-500" : "bg-gray-400"}`}
+            aria-hidden="true"
+            />
+            <span className="text-gray-700">
+            {checking
+                ? "Checking server..."
+                : connected
+                ? `Connected to ${status?.database}`
+                : "Not connected to a server"}
+            </span>
+        </div>
+        {serverError && <p className="text-sm text-red-600">{serverError}</p>}
+        <div className="flex justify-center">
+            {connected ? (
+            <button
+                type="button"
+                onClick={() => void disconnect()}
+                className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            >
+                Disconnect
+            </button>
+            ) : (
+            <button
+                type="button"
+                onClick={() => setModalOpen(true)}
+                disabled={checking}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+                Connect to Server
+            </button>
+            )}
+        </div>
+        </section>
+
           {!connected && !checking && (
-            <p className="text-xs text-gray-500">Connect to the server first to sign in.</p>
+            <p className="text-center text-xs text-gray-500">Connect to the server first to sign in.</p>
           )}
           {error && (
             <p role="alert" className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">
