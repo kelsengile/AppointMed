@@ -235,14 +235,14 @@ The desktop app can also be packaged manually with `npm run package` inside `mai
 
 1. **Pick or create an issue** so the team knows who is working on what.
 2. **Sync with `main`:**
-   ```bash
+```bash
    git checkout main
    git pull origin main
-   ```
+```
 3. **Create a branch** for your work. Never commit directly to `main`.
-   ```bash
+```bash
    git checkout -b feat/appointment-conflict-check
-   ```
+```
 4. **Make your changes** in small, focused commits.
 5. **Test** your changes locally, with the backend, desktop app, and (if affected) website all running.
 6. **Push** your branch and **open a pull request** into `main`.
