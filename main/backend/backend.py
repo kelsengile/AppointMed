@@ -10,6 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 # main/.env (this file lives in main/backend)
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
+from backend.core.exception_handlers import register_exception_handlers  # noqa: E402
+from backend.routes.auth_routes import router as auth_router  # noqa: E402
+from backend.routes.server_routes import router as server_router  # noqa: E402
+
 DEFAULT_ORIGINS = (
     "http://127.0.0.1:5173,http://localhost:5173,"
     "http://127.0.0.1:5174,http://localhost:5174"
@@ -25,6 +29,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+register_exception_handlers(app)
+app.include_router(server_router)
+app.include_router(auth_router)
+
 
 @app.get("/health")
 def health() -> dict:
@@ -34,7 +42,7 @@ def health() -> dict:
 
 @app.get("/health/db")
 def health_db() -> dict:
-    """Confirms the API can reach MySQL."""
+    """Confirms the API can reach MySQL (uses the .env credentials)."""
     try:
         connection = mysql.connector.connect(
             host=os.getenv("DB_HOST", "localhost"),
