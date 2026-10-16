@@ -38,7 +38,7 @@ AppointMed is a clinic appointment and management system built with a Python (Fa
 |---|---|---|
 | Model | `backend/models`, `backend/schemas` | Domain classes (OOP entities) and Pydantic validation |
 | Controller | `backend/routes`, `backend/services` | API endpoints and business logic, such as conflict checking |
-| View | `desktop/src`, `website/src` | React pages and components |
+| View | `desktop/source`, `website/source` | React pages and components |
 | Data access | `backend/repositories`, `backend/core/connection.py` | All SQL and the MySQL connection |
 
 Keep these layers separate: routes call services, services call repositories, and only repositories talk to MySQL.
@@ -251,7 +251,7 @@ Before requesting a review, confirm that:
 
 - Use TypeScript types for props, API responses, and state, and avoid `any`.
 - Name components and their files in `PascalCase` (`PatientsPage.tsx`) and hooks with a `use` prefix (`useAuth.ts`).
-- Keep API calls in `src/api`, reusable UI in `src/components`, and page-level screens in `src/pages`.
+- Keep API calls in `source/api`, reusable UI in `source/components`, and page-level screens in `source/pages`.
 - Style with Tailwind utility classes. Avoid inline styles.
 - Hiding UI by role is a convenience only. The backend must enforce permissions.
 
