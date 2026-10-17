@@ -57,6 +57,7 @@ from datetime import date, datetime, timedelta
 from controllers.room_controller import RoomController, attach_rooms
 from controllers.appointment_controller import AppointmentController
 from controllers.user_controller import UserController
+from views.shared.invoice_page import InvoicePage
 from utils.exceptions import AppointMedError
 from utils.avatar import render_avatar
 from utils.formatting import format_datetime, format_time
@@ -1556,8 +1557,7 @@ class NurseDashboard(ctk.CTk):
         return self.build_placeholder_page(parent, "Notifications window")
 
     def build_invoice_page(self, parent):
-        """Invoice tab — billing for completed visits. Not built yet."""
-        return self.build_placeholder_page(parent, "Invoice window")
+        return InvoicePage(parent, self.nurse)  
 
     def build_history_page(self, parent):
         """History tab — every appointment of the assigned doctor that has

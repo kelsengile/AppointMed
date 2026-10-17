@@ -13,6 +13,11 @@ class AppointMedError(Exception):
     class and still handle every case."""
     pass
 
+class InvalidInputError(AppointMedError):
+    """Raised when a value is filled in but isn't acceptable (for example
+    an invoice amount that isn't a positive number)."""
+    pass
+
 
 class InvalidCredentialsError(AppointMedError):
     """Raised when the username or password typed on login is wrong."""
