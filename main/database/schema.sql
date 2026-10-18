@@ -1,191 +1,274 @@
--- AppointMed central database schema
--- Run this once on the server that will host the shared MySQL instance.
+-- ============================================================
+-- AppointMed database schema
+-- Location in repo: main/database/schema.sql
+--
+-- Load as root, from the project root, AFTER creating the
+-- `appointmed` database (see CONTRIBUTING.md, Step 4):
+--     mysql -u root -p appointmed < main/database/schema.sql
+--
+-- This file contains structure only. Sample data lives in seed.sql.
 --
 -- WORKFLOW THIS SCHEMA SUPPORTS
--- 1. A notification for an appointment arrives, addressed to a specific
---    nurse (the nurse assigned to a specific doctor).
--- 2. The nurse either converts that notification into an appointment,
---    or creates a walk-in appointment directly (no notification).
---    A doctor can also book an appointment for themselves, in which
---    case no nurse is involved (appointments.nurse_id stays NULL).
--- 3. The assigned doctor sees the appointee. The doctor's examination
---    creates/links a patient record, and the doctor decides to either
---    (a) schedule a follow-up appointment, or (b) close the encounter
---    to history. The doctor may also write a prescription, which is
---    handed directly to the patient to buy elsewhere (no pharmacist
---    role or in-house billing for it).
--- 4. The nurse bills the patient for the session.
--- 5. Rooms are a simple availability table that a nurse or doctor can
---    update (enforced by application logic, since role checks on FK
---    targets aren't expressible in plain SQL).
+-- 1. A patient requests an appointment on the public website (or by
+--    phone). The request is stored in `notifications`, addressed to
+--    the doctor they chose and to a nurse assigned to that doctor.
+-- 2. The nurse converts the notification into an appointment, or
+--    dismisses it. The nurse can also create a walk-in appointment
+--    directly. A doctor can book for themselves (nurse_id stays NULL).
+-- 3. The patient checks in (checked_in_at orders the waiting queue),
+--    is assigned a room, and the doctor examines them. The examination
+--    creates/links a `patients` record and the doctor either schedules
+--    a follow-up or sends the encounter to history. The doctor may
+--    write a prescription, handed to the patient to buy elsewhere.
+-- 4. The nurse bills the session (`invoices`).
+-- 5. The admin (desktop app) manages users, clinic settings, and can
+--    review the audit log. Admins do not take part in appointments.
+--
+-- Role rules (doctor/nurse/admin checks on foreign-key targets) cannot
+-- be expressed in plain SQL, so they are enforced in the backend.
+--
+-- The website and desktop app never talk to MySQL directly; both go
+-- through the FastAPI backend, which uses the limited `appointmed_user`.
+-- ============================================================
 
-CREATE DATABASE IF NOT EXISTS appointmed_db;
-USE appointmed_db;
+SET NAMES utf8mb4;
+USE appointmed;
 
 -- ============================================================
--- USERS: doctors, nurses, admins
+-- USERS: clinic staff only (doctors, nurses, admins).
+-- Patients booking on the website do not have accounts.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name VARCHAR(100) NOT NULL,
-    role ENUM('doctor', 'nurse', 'admin') NOT NULL,
-    specialization VARCHAR(100) NULL,          -- doctors only
-    assigned_doctor_id INT NULL,               -- nurses only: which doctor they support
-    avatar MEDIUMBLOB NULL,                    -- profile picture (small JPEG)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (assigned_doctor_id) REFERENCES users(id)
-);
+    id                 INT AUTO_INCREMENT PRIMARY KEY,
+    username           VARCHAR(50)  NOT NULL UNIQUE,
+    password_hash      VARCHAR(255) NOT NULL,              -- bcrypt hash, never plain text
+    full_name          VARCHAR(100) NOT NULL,
+    role               ENUM('doctor', 'nurse', 'admin') NOT NULL,
+    email              VARCHAR(100) NULL,
+    specialization     VARCHAR(100) NULL,                  -- doctors only
+    assigned_doctor_id INT NULL,                           -- nurses only: the doctor they support
+    avatar             MEDIUMBLOB NULL,                    -- profile picture (small JPEG)
+    is_active          BOOLEAN NOT NULL DEFAULT TRUE,      -- admin can deactivate instead of deleting
+    last_login_at      TIMESTAMP NULL,
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_users_assigned_doctor
+        FOREIGN KEY (assigned_doctor_id) REFERENCES users(id),
+    INDEX idx_users_role (role),
+    INDEX idx_users_assigned_doctor (assigned_doctor_id)
+) ENGINE=InnoDB;
 
 -- ============================================================
--- ROOMS: simple availability board, editable by nurse or doctor
+-- DOCTOR_SCHEDULES: weekly working hours per doctor. The website
+-- and the booking screen use this to compute available slots.
+-- A doctor with a lunch break gets two rows for the same weekday.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS doctor_schedules (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    doctor_id    INT NOT NULL,
+    weekday      TINYINT NOT NULL,                         -- 1 = Monday ... 7 = Sunday (ISO)
+    start_time   TIME NOT NULL,
+    end_time     TIME NOT NULL,
+    slot_minutes SMALLINT NOT NULL DEFAULT 30,
+    CONSTRAINT fk_schedules_doctor FOREIGN KEY (doctor_id) REFERENCES users(id),
+    CONSTRAINT chk_schedules_weekday CHECK (weekday BETWEEN 1 AND 7),
+    CONSTRAINT chk_schedules_times CHECK (end_time > start_time),
+    UNIQUE KEY uq_schedule_block (doctor_id, weekday, start_time)
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- ROOMS: simple availability board, editable by a nurse or doctor
 -- ============================================================
 CREATE TABLE IF NOT EXISTS rooms (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    room_name VARCHAR(50) UNIQUE NOT NULL,
-    status ENUM('Available', 'Occupied', 'Maintenance') NOT NULL DEFAULT 'Available',
-    updated_by INT NULL,       -- the nurse or doctor who last changed the status
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    room_name  VARCHAR(50) NOT NULL UNIQUE,
+    status     ENUM('Available', 'Occupied', 'Maintenance') NOT NULL DEFAULT 'Available',
+    updated_by INT NULL,                                   -- nurse or doctor who last changed it
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (updated_by) REFERENCES users(id)
-);
+    CONSTRAINT fk_rooms_updated_by FOREIGN KEY (updated_by) REFERENCES users(id)
+) ENGINE=InnoDB;
 
 -- ============================================================
--- NOTIFICATIONS: incoming appointment requests routed to a
--- nurse for a specific doctor. A nurse resolves these by either
--- converting them into an appointment or dismissing them.
+-- NOTIFICATIONS: incoming appointment requests (mostly from the
+-- public website) routed to a doctor and a nurse. A nurse resolves
+-- each one by converting it to an appointment or dismissing it.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS notifications (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    doctor_id INT NOT NULL,
-    nurse_id INT NOT NULL,
-    requester_name VARCHAR(100) NOT NULL,
-    contact_number VARCHAR(20),
-    reason VARCHAR(255),
-    status ENUM('Pending', 'Converted', 'Dismissed') NOT NULL DEFAULT 'Pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP NULL,
-    FOREIGN KEY (doctor_id) REFERENCES users(id),
-    FOREIGN KEY (nurse_id) REFERENCES users(id)
-);
+    id                 INT AUTO_INCREMENT PRIMARY KEY,
+    doctor_id          INT NOT NULL,                       -- doctor the requester chose
+    nurse_id           INT NULL,                           -- nurse it is routed to (backend picks one assigned to the doctor)
+    requester_name     VARCHAR(100) NOT NULL,
+    contact_number     VARCHAR(20),
+    email              VARCHAR(100),
+    preferred_datetime DATETIME NULL,                      -- slot the requester picked on the website
+    reason             VARCHAR(255),
+    origin             ENUM('Website', 'Phone', 'Other') NOT NULL DEFAULT 'Website',
+    status             ENUM('Pending', 'Converted', 'Dismissed') NOT NULL DEFAULT 'Pending',
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at        TIMESTAMP NULL,
+    CONSTRAINT fk_notifications_doctor FOREIGN KEY (doctor_id) REFERENCES users(id),
+    CONSTRAINT fk_notifications_nurse  FOREIGN KEY (nurse_id)  REFERENCES users(id),
+    INDEX idx_notifications_nurse_status (nurse_id, status),
+    INDEX idx_notifications_doctor_status (doctor_id, status)
+) ENGINE=InnoDB;
 
 -- ============================================================
--- PATIENTS: the person's clinical record. A row here is created
--- the first time a doctor formally examines an appointee.
+-- PATIENTS: the person's clinical record. A row is created the
+-- first time a doctor formally examines an appointee.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS patients (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    full_name VARCHAR(100) NOT NULL,
-    birthdate DATE,
-    contact_number VARCHAR(20),
-    address VARCHAR(255),
+    id                INT AUTO_INCREMENT PRIMARY KEY,
+    full_name         VARCHAR(100) NOT NULL,
+    birthdate         DATE,
+    sex               ENUM('Male', 'Female', 'Other') NULL,
+    contact_number    VARCHAR(20),
+    email             VARCHAR(100),
+    address           VARCHAR(255),
     condition_summary VARCHAR(255),
-    doctor_id INT NULL,                 -- current/primary doctor
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (doctor_id) REFERENCES users(id)
-);
+    doctor_id         INT NULL,                            -- current/primary doctor
+    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_patients_doctor FOREIGN KEY (doctor_id) REFERENCES users(id),
+    INDEX idx_patients_name (full_name)
+) ENGINE=InnoDB;
 
 -- ============================================================
--- APPOINTMENTS: created by a nurse either from a notification
--- or as a walk-in, or by a doctor for themselves. patient_id
--- starts NULL for a first-time visitor and gets filled in once
--- the doctor's examination links/creates the patient record.
+-- APPOINTMENTS: created by a nurse (from a notification or as a
+-- walk-in), by a doctor for themselves, or as a follow-up.
+-- patient_id starts NULL for a first-time visitor and is filled in
+-- once the doctor's examination links/creates the patient record.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS appointments (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    notification_id INT NULL,           -- NULL if this was a walk-in
-    patient_id INT NULL,                -- filled in once linked to a patient
-    full_name VARCHAR(100) NOT NULL,    -- appointee's name (pre-patient)
-    doctor_id INT NOT NULL,
-    nurse_id INT NULL,                  -- nurse who booked it, NULL if the doctor booked it
-    room_id INT NULL,
-    source ENUM('Notification', 'Walk-in') NOT NULL DEFAULT 'Walk-in',
-    scheduled_time DATETIME NOT NULL,
-    reason VARCHAR(255),
-    status ENUM('Scheduled', 'Checked-in', 'Consulting', 'Examined', 'Completed', 'Cancelled')
-        NOT NULL DEFAULT 'Scheduled',
-    checked_in_at DATETIME NULL,        -- when the patient checked in (orders the waiting queue)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (notification_id) REFERENCES notifications(id),
-    FOREIGN KEY (patient_id) REFERENCES patients(id),
-    FOREIGN KEY (doctor_id) REFERENCES users(id),
-    FOREIGN KEY (nurse_id) REFERENCES users(id),
-    FOREIGN KEY (room_id) REFERENCES rooms(id)
-);
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    notification_id INT NULL,                              -- NULL unless converted from a notification
+    patient_id      INT NULL,
+    full_name       VARCHAR(100) NOT NULL,                 -- appointee's name (before they are a patient)
+    doctor_id       INT NOT NULL,
+    nurse_id        INT NULL,                              -- NULL when the doctor booked it themselves
+    room_id         INT NULL,
+    source          ENUM('Notification', 'Walk-in', 'Follow-up') NOT NULL DEFAULT 'Walk-in',
+    scheduled_time  DATETIME NOT NULL,
+    reason          VARCHAR(255),
+    status          ENUM('Scheduled', 'Checked-in', 'Consulting', 'Examined', 'Completed', 'Cancelled')
+                    NOT NULL DEFAULT 'Scheduled',
+    checked_in_at   DATETIME NULL,                         -- orders the waiting queue
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Double-booking guard: a doctor cannot have two non-cancelled
+    -- appointments at the same time. Cancelled rows become NULL here,
+    -- and MySQL allows many NULLs in a unique index, so a cancelled
+    -- slot can be rebooked.
+    active_slot DATETIME GENERATED ALWAYS AS
+        (CASE WHEN status = 'Cancelled' THEN NULL ELSE scheduled_time END) VIRTUAL,
+
+    CONSTRAINT fk_appointments_notification FOREIGN KEY (notification_id) REFERENCES notifications(id),
+    CONSTRAINT fk_appointments_patient      FOREIGN KEY (patient_id)      REFERENCES patients(id),
+    CONSTRAINT fk_appointments_doctor       FOREIGN KEY (doctor_id)       REFERENCES users(id),
+    CONSTRAINT fk_appointments_nurse        FOREIGN KEY (nurse_id)        REFERENCES users(id),
+    CONSTRAINT fk_appointments_room         FOREIGN KEY (room_id)         REFERENCES rooms(id),
+    UNIQUE KEY uq_doctor_active_slot (doctor_id, active_slot),
+    INDEX idx_appointments_time (scheduled_time),
+    INDEX idx_appointments_doctor_status (doctor_id, status),
+    INDEX idx_appointments_patient (patient_id)
+) ENGINE=InnoDB;
 
 -- ============================================================
--- EXAMINATIONS: the doctor's record of seeing the appointee.
--- This is the step where an appointee becomes a patient, and
--- where the doctor decides "follow-up" vs "history".
+-- EXAMINATIONS: the doctor's record of seeing the appointee. This is
+-- where an appointee becomes a patient, and where the doctor decides
+-- "follow-up" vs "history".
 -- ============================================================
 CREATE TABLE IF NOT EXISTS examinations (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    appointment_id INT NOT NULL UNIQUE,   -- one examination per appointment
-    patient_id INT NOT NULL,
-    doctor_id INT NOT NULL,
-    diagnosis TEXT,
-    notes TEXT,
-    outcome ENUM('Follow-up Scheduled', 'Sent to History') NOT NULL,
-    follow_up_appointment_id INT NULL,    -- set when outcome = Follow-up Scheduled
-    examined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (appointment_id) REFERENCES appointments(id),
-    FOREIGN KEY (patient_id) REFERENCES patients(id),
-    FOREIGN KEY (doctor_id) REFERENCES users(id),
-    FOREIGN KEY (follow_up_appointment_id) REFERENCES appointments(id)
-);
+    id                       INT AUTO_INCREMENT PRIMARY KEY,
+    appointment_id           INT NOT NULL UNIQUE,          -- one examination per appointment
+    patient_id               INT NOT NULL,
+    doctor_id                INT NOT NULL,
+    diagnosis                TEXT,
+    notes                    TEXT,
+    outcome                  ENUM('Follow-up Scheduled', 'Sent to History') NOT NULL,
+    follow_up_appointment_id INT NULL,                     -- set when outcome = Follow-up Scheduled
+    examined_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_exam_appointment FOREIGN KEY (appointment_id)           REFERENCES appointments(id),
+    CONSTRAINT fk_exam_patient     FOREIGN KEY (patient_id)               REFERENCES patients(id),
+    CONSTRAINT fk_exam_doctor      FOREIGN KEY (doctor_id)                REFERENCES users(id),
+    CONSTRAINT fk_exam_followup    FOREIGN KEY (follow_up_appointment_id) REFERENCES appointments(id),
+    INDEX idx_exam_patient (patient_id)
+) ENGINE=InnoDB;
 
 -- ============================================================
--- PRESCRIPTIONS: written by the doctor during/after examination
--- and given directly to the patient to purchase elsewhere.
--- There is no pharmacist role and no in-house billing for these;
--- they exist purely as a record of what was prescribed.
+-- PRESCRIPTIONS: written by the doctor after an examination and given
+-- directly to the patient to buy elsewhere. Record-keeping only: no
+-- pharmacist role and no in-house billing.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS prescriptions (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id             INT AUTO_INCREMENT PRIMARY KEY,
     examination_id INT NOT NULL,
-    patient_id INT NOT NULL,
-    doctor_id INT NOT NULL,
-    notes VARCHAR(255),                 -- optional general instructions
-    issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (examination_id) REFERENCES examinations(id),
-    FOREIGN KEY (patient_id) REFERENCES patients(id),
-    FOREIGN KEY (doctor_id) REFERENCES users(id)
-);
+    patient_id     INT NOT NULL,
+    doctor_id      INT NOT NULL,
+    notes          VARCHAR(255),                           -- optional general instructions
+    issued_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_rx_exam    FOREIGN KEY (examination_id) REFERENCES examinations(id),
+    CONSTRAINT fk_rx_patient FOREIGN KEY (patient_id)     REFERENCES patients(id),
+    CONSTRAINT fk_rx_doctor  FOREIGN KEY (doctor_id)      REFERENCES users(id),
+    INDEX idx_rx_patient (patient_id)
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS prescription_items (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id              INT AUTO_INCREMENT PRIMARY KEY,
     prescription_id INT NOT NULL,
-    medicine_name VARCHAR(150) NOT NULL,
-    dosage VARCHAR(100),
-    quantity INT NOT NULL DEFAULT 1,
-    instructions VARCHAR(255),          -- e.g. "Take twice daily after meals"
-    FOREIGN KEY (prescription_id) REFERENCES prescriptions(id)
-);
+    medicine_name   VARCHAR(150) NOT NULL,
+    dosage          VARCHAR(100),
+    quantity        INT NOT NULL DEFAULT 1,
+    instructions    VARCHAR(255),                          -- e.g. "Take twice daily after meals"
+    CONSTRAINT fk_rx_items_rx FOREIGN KEY (prescription_id) REFERENCES prescriptions(id)
+        ON DELETE CASCADE,
+    CONSTRAINT chk_rx_items_qty CHECK (quantity > 0)
+) ENGINE=InnoDB;
 
 -- ============================================================
--- INVOICES: session billing only, issued by a nurse against
--- an appointment.
+-- INVOICES: session billing only, issued by a nurse against an
+-- appointment. One invoice per appointment.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS invoices (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    patient_id INT NOT NULL,
-    appointment_id INT NOT NULL,
-    issued_by INT NOT NULL,             -- nurse who issued the invoice
-    amount DECIMAL(10,2) NOT NULL,
-    status ENUM('Unpaid', 'Paid', 'Cancelled') NOT NULL DEFAULT 'Unpaid',
-    issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    paid_at TIMESTAMP NULL,
-    FOREIGN KEY (patient_id) REFERENCES patients(id),
-    FOREIGN KEY (appointment_id) REFERENCES appointments(id),
-    FOREIGN KEY (issued_by) REFERENCES users(id)
-);
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id     INT NOT NULL,
+    appointment_id INT NOT NULL UNIQUE,
+    issued_by      INT NOT NULL,                           -- nurse who issued it
+    amount         DECIMAL(10,2) NOT NULL,
+    status         ENUM('Unpaid', 'Paid', 'Cancelled') NOT NULL DEFAULT 'Unpaid',
+    issued_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    paid_at        TIMESTAMP NULL,
+    CONSTRAINT fk_invoices_patient     FOREIGN KEY (patient_id)     REFERENCES patients(id),
+    CONSTRAINT fk_invoices_appointment FOREIGN KEY (appointment_id) REFERENCES appointments(id),
+    CONSTRAINT fk_invoices_issued_by   FOREIGN KEY (issued_by)      REFERENCES users(id),
+    CONSTRAINT chk_invoices_amount CHECK (amount >= 0),
+    INDEX idx_invoices_status (status)
+) ENGINE=InnoDB;
 
 -- ============================================================
--- Default admin account so there's always a way to log in
--- username: admin   password: admin123
--- CHANGE THIS PASSWORD after first login in a real deployment.
+-- CLINIC_SETTINGS: key/value configuration managed by the admin
+-- (clinic name, default fee, whether online booking is open, ...).
 -- ============================================================
-INSERT INTO users (username, password_hash, full_name, role)
-SELECT 'admin', '$2b$12$h.pRIt4ry8kG15BxpNSEu.lNzk2xJMVok5nHAw.ycdUVI19SFBXx2',
-       'System Administrator', 'admin'
-WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
+CREATE TABLE IF NOT EXISTS clinic_settings (
+    setting_key   VARCHAR(50) PRIMARY KEY,
+    setting_value VARCHAR(255) NOT NULL,
+    description   VARCHAR(255),
+    updated_by    INT NULL,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_settings_updated_by FOREIGN KEY (updated_by) REFERENCES users(id)
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- AUDIT_LOGS: who did what, for the admin to review. The backend
+-- writes a row on logins, user changes, and status changes.
+-- Rows are append-only; do not store passwords or medical details here.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT NULL,                                   -- NULL for system or unauthenticated actions
+    action     VARCHAR(50) NOT NULL,                       -- e.g. LOGIN, CREATE_USER, CANCEL_APPOINTMENT
+    entity     VARCHAR(50) NULL,                           -- table or concept affected
+    entity_id  INT NULL,
+    details    VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id),
+    INDEX idx_audit_created (created_at),
+    INDEX idx_audit_user (user_id)
+) ENGINE=InnoDB;

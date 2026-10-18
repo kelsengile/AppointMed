@@ -1,38 +1,22 @@
-"""
-AppointMed — entry point.
-Run this file on every device. Every device connects to the same
-central database (see config/settings.py) so all users stay in sync.
+"""Entry point that starts the AppointMed backend.
 
-The app still opens even if there is no database connection yet: it
-always shows the login window. If a database IS reachable, it gets set
-up automatically (tables and the default admin account are created if
-they are missing). If not, the login screen still opens - the user can
-click "Connect to Server" to point the app at a database, or they will
-just see a clear error message when they try to log in.
+Run from the `main` folder:  python main.py
 """
+import os
+from pathlib import Path
 
-from config import settings
-from config.connection_store import load_remembered
-from database.initializer import ensure_database_ready
+import uvicorn
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
+
+def run() -> None:
+    host = os.getenv("API_HOST", "127.0.0.1")
+    port = int(os.getenv("API_PORT", "8000"))
+    reload = os.getenv("API_RELOAD", "true").lower() == "true"
+    uvicorn.run("backend.backend:app", host=host, port=port, reload=reload)
+
 
 if __name__ == "__main__":
-    # If we remembered a host/username from before, use it now, so a
-    # returning user does not have to type the server address again.
-    remembered = load_remembered()
-    if remembered is not None:
-        settings.DB_CONFIG["host"] = remembered["host"]
-        settings.DB_CONFIG["user"] = remembered["user"]
-
-    # Try to set up the database automatically. If this fails (for
-    # example, no database is reachable yet), that is fine - the login
-    # window still opens either way. The reason is printed to the
-    # console rather than swallowed, so "I can't log in" can be told
-    # apart from "the server was never reachable" without guesswork.
-    try:
-        ensure_database_ready()
-    except Exception as e:
-        print("[AppointMed] Database setup skipped: " + str(e))
-
-    from views.shared.login_view import LoginView
-    app = LoginView()
-    app.mainloop()
+    run()
