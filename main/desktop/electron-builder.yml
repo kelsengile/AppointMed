@@ -1,0 +1,11 @@
+appId: com.lspu.appointmed
+productName: AppointMed
+directories:
+  output: release
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+win:
+  target: nsis
+  # Add `icon: icon.ico` here once icon.ico contains a real icon.
