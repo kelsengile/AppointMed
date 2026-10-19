@@ -1,1 +1,27 @@
+# Secrets and local config
 main/.env
+.env
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+main/backend/build/
+main/build/
+main/dist/
+*.egg-info/
+
+# Node
+node_modules/
+main/desktop/dist/
+main/desktop/release/
+main/website/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
