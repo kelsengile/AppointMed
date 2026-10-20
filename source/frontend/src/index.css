@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-50 text-brand-900 antialiased;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
