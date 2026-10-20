@@ -4,7 +4,7 @@
 
 We, the developers of AppointMed, pledge to make participation in this project a respectful, harassment-free, and professional experience for everyone, regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
-AppointMed is a coursework project built by a small team and handles clinic-style records. We hold ourselves to a standard of respect for each other and care for any data we work with.
+AppointMed is a coursework project for CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, and ITEC 105 – Information Management at Laguna State Polytechnic University. It is built by a small team and handles clinic-style records. We hold ourselves to a standard of respect for each other and care for any data we work with.
 
 ## Our Standards
 
@@ -37,18 +37,18 @@ Because AppointMed models patient and appointment records, contributors must als
 
 ## Scope
 
-This Code of Conduct applies to all project spaces, including the GitHub repository (issues, pull requests, discussions, and reviews), group chats, meetings, and presentations. It also applies when an individual is representing the project in public, such as during the final demonstration.
+This Code of Conduct applies to all project spaces, including the GitHub repository (issues, pull requests, discussions, and reviews), group chats, meetings, and presentations. It also applies when an individual is representing the project in public, such as during the final demonstrations for each course.
 
 ## Enforcement
 
-Instances of unacceptable behavior may be reported to the project maintainers at **[Group 9 - CMSC 203 - 2026 | LSPU - SCC]**, or by contacting the course instructor, Ms. Roxanne Garbo, through official class channels. All reports will be reviewed promptly and handled with discretion, and the privacy of the reporter will be respected.
+Instances of unacceptable behavior may be reported to the project maintainers at **[Group 9 - CMSC 203 - 2026 | LSPU - SCC]**, or by contacting the course instructors, Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, or Sir Jencel P. Sofer, through official class channels. All reports will be reviewed promptly and handled with discretion, and the privacy of the reporter will be respected.
 
 Maintainers may respond by:
 
 1. **Private reminder:** a clear, private explanation of the issue and what is expected.
 2. **Warning:** a formal warning with consequences for continued behavior.
 3. **Temporary restriction:** a temporary ban from project spaces or repository access.
-4. **Escalation:** referral to the instructor or the university for further action, in line with the university's student conduct policies.
+4. **Escalation:** referral to the course instructors or the university for further action, in line with the university's student conduct policies.
 
 Maintainers who do not follow or enforce this Code of Conduct may face the same consequences.
 
