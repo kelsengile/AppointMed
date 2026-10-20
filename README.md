@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="/source/assets/icons/appointmed-logo.png" width="250"/><br>
-  <h1 style="margin-top: 0;">AppointMed</h1>
+  <img src="/source/assets/icons/appointmed-logo.png" width="250" style="display: block; margin: 0;"/>
+  <h1 style="margin: 0 0 30px 0;">AppointMed</h1>
 </div>
 
 
