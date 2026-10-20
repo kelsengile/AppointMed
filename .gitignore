@@ -1,27 +1,25 @@
-# Secrets and local config
-main/.env
-.env
+# GITIGNORE:
+
+# Secrets
+source/.env
+source/frontend/.env.local
 
 # Python
+__pycache__/
+*.py[cod]
 .venv/
 venv/
-__pycache__/
-*.pyc
 .pytest_cache/
-main/backend/build/
-main/build/
-main/dist/
-*.egg-info/
+build/
+*.spec
 
-# Node
+# Node / frontend
 node_modules/
-main/desktop/dist/
-main/desktop/release/
-main/website/dist/
+source/frontend/dist/
+source/frontend/release/
 
-# OS / editor
-.DS_Store
-Thumbs.db
+# Editors and OS
 .vscode/
 .idea/
-*.log
+.DS_Store
+Thumbs.db
