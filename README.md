@@ -1,7 +1,8 @@
 <div align="center">
   <img src="/source/assets/icons/appointmed-logo.png" width="250" style="display: block; margin: 0;"/>
-  <h1 align="center" style="border-bottom: none;">AppointMed</h1>
 </div>
+
+<h1 align="center" style="font-size: 40px;">AppointMed</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-111111?style=flat-square&logo=react&logoColor=61DAFB" alt="React">
