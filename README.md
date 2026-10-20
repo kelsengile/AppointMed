@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="/source/assets/icons/appointmed-logo.png" width="120"/><br>
+  <img src="/source/assets/icons/appointmed-logo.png" width="250"/><br>
   <h1 style="margin-top: 0;">AppointMed</h1>
 </div>
 
