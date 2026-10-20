@@ -4,11 +4,9 @@ AppointMed is a web-based clinic appointment and management system built with a 
 
 **Course context**
 
-| | |
-|---|---|
-| **Courses** | CMSC 203 – Object-Oriented Programming<br>ITEC 104 – Data Structures and Algorithm<br>ITEC 105 – Information Management |
-| **Instructors** | Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, Sir Jencel P. Sofer |
-| **Academic year** | 2026–2027 |
+**Courses:** CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, ITEC 105 – Information Management 
+**Instructors** Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, Sir Jencel P. Sofer 
+**Academic year** 2026–2027 
 
 **Contents**
 
