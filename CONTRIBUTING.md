@@ -270,19 +270,21 @@ If the database shows **Not connected**, check that MySQL is running and that `D
 
 | Problem | Likely cause | Fix |
 |---|---|---|
-| `mysql` is not recognized | MySQL `bin` folder not on PATH | Add it to PATH and open a new terminal (see Prerequisites) |
-| `Access denied for user 'appointmed_user'` | Password in `.env` differs from Step 4 | Make `DB_PASSWORD` match, or reset it with `ALTER USER 'appointmed_user'@'localhost' IDENTIFIED BY 'new_password';` as root, then restart the backend |
-| `Can't connect to MySQL server` | MySQL is not running | Start the MySQL service (Windows: Services app; macOS: System Settings or `brew services start mysql`) |
-| `Unknown database 'appointmed'` | Step 4 was skipped | Run the `CREATE DATABASE` line from Step 4 |
-| `Duplicate entry ...` while loading the seed | `seed.sql` was already loaded | Follow [Resetting your database](#resetting-your-database) |
-| `uvicorn` is not recognized | Virtual environment is not active | Activate `.venv` (Step 2) |
-| `ModuleNotFoundError: No module named ...` | Packages not installed, or wrong environment | Activate `.venv`, then run `pip install -r requirements.txt` |
-| `Port 8000 is already in use` | Another backend is still running | Close the other terminal, or find the process using port 8000 and stop it |
-| `Port 5173 is already in use` | Another frontend is still running | Close it. The project uses a fixed port on purpose so the backend allows it. |
-| Page says **Backend API: Offline** | Backend is not running or crashed | Check Terminal 1 for errors and restart `uvicorn` |
-| Page loads but is unstyled | `npm install` did not finish | Run `npm install` again in `source/frontend` |
+| 1. Backend | `main` | Activate `.venv` (Step 6.2), then `python main.py` |
+| 2. Desktop | `main/desktop` | `npm run dev` |
+| 3. Website | `main/website` | `npm run dev` |
 
-Still stuck? Copy the **exact error text** (remove any passwords first) and ask in the group chat.
+Start the **backend first**, since the desktop app and website both depend on it. MySQL should already be running (it starts with your computer by default).
+
+**After pulling changes from GitHub**, check what changed and update accordingly:
+
+| If this changed | Run |
+|---|---|
+| `main/requirements.txt` | `pip install -r requirements.txt` (virtual environment active) |
+| `desktop/package.json` | `npm install` inside `main/desktop` |
+| `website/package.json` | `npm install` inside `main/website` |
+| `main/database/schema.sql` or `seed.sql` | Reload your database (see below) |
+| `main/.env.example` | Add any new variables to your own `main/.env` |
 
 ### Resetting your database
 
