@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/Tailwind_CSS-111111?style=flat-square&logo=tailwindcss&logoColor=06B6D4" alt="Tailwind CSS">
   <img src="https://img.shields.io/badge/Python-111111?style=flat-square&logo=python&logoColor=3776AB" alt="Python">
   <img src="https://img.shields.io/badge/FastAPI-111111?style=flat-square&logo=fastapi&logoColor=009688" alt="FastAPI">
+  <br>
   <img src="https://img.shields.io/badge/MySQL_Server-111111?style=flat-square&logo=mysql&logoColor=4479A1" alt="MySQL Server">
   <img src="https://img.shields.io/badge/MySQL_Connector%2FPython-111111?style=flat-square&logo=mysql&logoColor=4479A1" alt="MySQL Connector/Python">
   <img src="https://img.shields.io/badge/Pydantic-111111?style=flat-square&logo=pydantic&logoColor=E92063" alt="Pydantic">
