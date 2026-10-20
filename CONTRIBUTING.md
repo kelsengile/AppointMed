@@ -391,9 +391,10 @@ After the first setup, starting work takes three terminals:
 
 | Terminal | Folder | Commands |
 |---|---|---|
-| 1. Backend | `main` | Activate `.venv` (Step 6.2), then `python main.py` |
-| 2. Desktop | `main/desktop` | `npm run dev` |
-| 3. Website | `main/website` | `npm run dev` |
+| 1. Virtual Environment | `main` | Activate Virtual Environment `.venv\Scripts\activate` |
+| 2. Backend | `main` | Activate `.venv` (Step 6.2), then `python main.py` |
+| 3. Desktop | `main/desktop` | `npm run dev` |
+| 4. Website | `main/website` | `npm run dev` |
 
 Start the **backend first**, since the desktop app and website both depend on it. MySQL should already be running (it starts with your computer by default).
 
