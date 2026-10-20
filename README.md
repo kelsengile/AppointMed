@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="/source/assets/icons/appointmed-logo.png" width="200" style="display: block; margin: 0;"/>
-  <h1 style="margin: 0 0 30px 0;">AppointMed</h1>
+  <img src="/source/assets/icons/appointmed-logo.png" width="250" style="display: block; margin: 0;"/>
+  <h1 style="margin: 0 0 30px 0; text-decoration: none;">AppointMed</h1>
 </div>
 
 <p align="center">
@@ -17,6 +17,8 @@
   <img src="https://img.shields.io/badge/Git-111111?style=flat-square&logo=git&logoColor=F05032" alt="Git">
   <img src="https://img.shields.io/badge/GitHub-111111?style=flat-square&logo=github&logoColor=FFFFFF" alt="GitHub">
 </p>
+
+<br>
 
 AppointMed is a web-based clinic appointment and management system designed to streamline healthcare operations by connecting clinic staff and patients through a centralized platform. Clinic staff use a browser-based portal to manage patient records, doctor information, and appointments, while patients can conveniently request appointments through a public online booking page.
 
