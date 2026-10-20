@@ -1,4 +1,8 @@
-# AppointMed
+<div align="center">
+  <img src="/source/assets/icons/appointmed-logo.png" width="120"/><br>
+  <h1 style="margin-top: 0;">AppointMed</h1>
+</div>
+
 
 AppointMed is a web-based clinic appointment and management system designed to streamline healthcare operations by connecting clinic staff and patients through a centralized platform. Clinic staff use a browser-based portal to manage patient records, doctor information, and appointments, while patients can conveniently request appointments through a public online booking page.
 
