@@ -1,6 +1,6 @@
 # Security Policy
 
-AppointMed is a web-based system that manages patient, doctor, and appointment records in a shared MySQL database. Even as a coursework project, we treat security seriously and ask contributors to do the same.
+AppointMed is a web-based system that manages patient, doctor, and appointment records in a shared MySQL database. AppointMed is a coursework project for CMSC 203, ITEC 104, and ITEC 105 at Laguna State Polytechnic University. Even so, we treat security seriously and ask contributors to do the same.
 
 ## Supported Versions
 
@@ -28,7 +28,7 @@ Please include:
 - **Assessment and updates** within 7 days, including whether we accept the report.
 - **Fix and disclosure:** accepted issues are fixed as quickly as practical, and we will credit you in the changelog if you wish.
 
-If the report is declined, we will explain why.
+If the report is declined, we will explain why. For issues involving a team member's conduct rather than the code, follow the [Code of Conduct](CODE_OF_CONDUCT.md) instead.
 
 ## Security Practices in This Project
 

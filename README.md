@@ -39,11 +39,11 @@ Ortega, Xavier Kent C.
 ## Coursework Project
 
 **Laguna State Polytechnic University** | **College of Computer Studies**  
-**CMSC 203 – Object-Oriented Programming**  
-**Instructor:** Ms. Roxanne Garbo  
+**CMSC 203 – Object-Oriented Programming, ITEC 104 - Data Structures and Algorithm, ITEC 105 - Information Management**  
+**Instructor:** Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, Sir. Jencel P. Sofer
 **Academic Year:** 2026–2027
 
-AppointMed is developed as the final project for CMSC 203 – Object-Oriented Programming under the supervision of Ms. Roxanne Garbo. The project demonstrates the application of object-oriented programming principles, user interface development, exception handling, database integration, and software engineering practices.
+AppointMed is developed as the final project for CMSC 203, ITEC 104, and ITEC 105, under the supervision of Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, and Sir. Jencel P. Sofer. The project demonstrates the application of object-oriented programming principles, user interface development, exception handling, database integration, and software engineering practices.
 
 The system applies object-oriented design principles in its Python backend while providing a React-based web interface for clinic staff and a public appointment booking page for patients. It aims to address practical clinic management needs through centralized data storage, organized appointment scheduling, and accessible patient booking.
 

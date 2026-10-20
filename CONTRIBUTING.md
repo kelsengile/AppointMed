@@ -1,13 +1,21 @@
 # CONTRIBUTING GUIDELINES
 
-AppointMed is a web-based clinic appointment and management system built with a Python (FastAPI) backend and a React + TypeScript web frontend. Clinic staff (Doctor, Nurse, and Admin users) work in a browser-based portal, and patients use a public booking page. Everything connects to one MySQL database so all users work with the same live data. This project was developed as the final requirement for CMSC 203 – Object-Oriented Programming, and follows an MVC-inspired architecture that separates data models, user interface views, and business-logic controllers to keep the codebase modular, maintainable, and easy to extend. These guidelines outline how to set up the project locally, understand its folder structure, and contribute changes in a way that keeps the system consistent.
+AppointMed is a web-based clinic appointment and management system built with a Python (FastAPI) backend and a React + TypeScript web frontend. Clinic staff (Doctor, Nurse, and Admin users) work in a browser-based portal, and patients use a public booking page. Everything connects to one MySQL database so all users work with the same live data. This project was developed as the final requirement for three courses at Laguna State Polytechnic University: CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, and ITEC 105 – Information Management. It follows an MVC-inspired architecture that separates data models, user interface views, and business-logic controllers to keep the codebase modular, maintainable, and easy to extend. These guidelines outline how to set up the project locally, understand its folder structure, and contribute changes in a way that keeps the system consistent.
+
+**Course context**
+
+| | |
+|---|---|
+| **Courses** | CMSC 203 – Object-Oriented Programming<br>ITEC 104 – Data Structures and Algorithm<br>ITEC 105 – Information Management |
+| **Instructors** | Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, Sir Jencel P. Sofer |
+| **Academic year** | 2026–2027 |
 
 **Contents**
 
 - [Initialization](#initialization): get the project running on your computer
 - [Project Structure](#project-structure): what lives where
 - [Contributing](#contributing): how we work together and write code
-- [Final Project Instructions](#final-project-instructions): the course requirements we are graded against
+- [Final Project Instructions](#final-project-instructions): the CMSC 203 course requirements we are graded against
 
 ---
 
@@ -304,21 +312,34 @@ Each time you start working, after `git pull`:
 ## Project Structure
 
 ```
-AppointMed
-├── 📁 source                       # All application code and project resources
-│   ├── 📁 assets                   # Static files shared by the web app
-│   ├── 📁 backend                  # FastAPI server code (MVC-inspired layers)
-│   ├── 📁 database                 # MySQL scripts for structure and sample data
-│   ├── 📁 documentation            # Technical docs, diagrams, and screenshots
-│   ├── 📁 frontend                 # React + TypeScript web app (Vite, Tailwind)
-│   ├── 📁 test                     # Automated and manual test cases
-│   ├── 🐍 main.py                  # Backend entry point: starts the FastAPI app
-│   └── 📄 requirements.txt         # Python packages needed by the backend
-├── ⚙️ .gitignore                   # Files Git must never track (.env, node_modules)
-├── 📝 CODE_OF_CONDUCT.md           # Team behavior and data-handling standards
-├── 📝 CONTRIBUTING.md              # Setup guide, workflow, and coding standards
-├── 📝 README.md                    # Project overview, features, and quick start
-└── 📝 SECURITY.md                  # Vulnerability reporting and security practices
+.
+├── .gitignore
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── README.md
+├── SECURITY.md
+└── source/
+    ├── .env                  # local secrets (gitignored)
+    ├── .env.example          # template for .env
+    ├── main.py               # FastAPI entry point
+    ├── requirements.txt      # Python dependencies
+    ├── assets/               # fonts, icons, and images
+    ├── database/
+    │   ├── schema.sql        # tables and constraints
+    │   └── seed.sql          # fictional sample data
+    ├── documentation/
+    │   ├── DOCUMENTATION.md  # technical documentation
+    │   ├── diagrams/         # UML class diagrams
+    │   ├── flowcharts/
+    │   └── screenshots/
+    └── frontend/             # React + TypeScript web app (Vite)
+        ├── index.html
+        ├── package.json
+        ├── vite.config.ts
+        ├── tailwind.config.js
+        └── src/
+            ├── main.tsx
+            └── app.tsx
 ```
 
 As the backend grows, split `main.py` into modules (models, repositories, services, routes) rather than letting one file grow large. See [Where code belongs](#where-code-belongs).
@@ -464,7 +485,7 @@ Rules of thumb:
 - Only repositories contain SQL. Only services contain business rules. Do not mix them.
 - In the frontend, put pages in `pages/`, reusable pieces in `components/`, and all calls to the backend in `api/`, with shared types in `types/`.
 
-The course rubric awards 30 points for object-oriented design, so use these ideas where they fit naturally:
+The CMSC 203 rubric awards 30 points for object-oriented design, so use these ideas where they fit naturally:
 
 | Concept | Example in AppointMed |
 |---|---|
@@ -474,6 +495,8 @@ The course rubric awards 30 points for object-oriented design, so use these idea
 | Polymorphism | Each role class answering `can_access(feature)` in its own way |
 | Constructors | Classes that validate their data when created |
 | Custom exceptions | `AppointmentConflictError`, `InvalidScheduleError` |
+
+Because the project also counts for ITEC 104 and ITEC 105, look for natural places to apply data structures and algorithms (for example, the check-in waiting queue ordered by `checked_in_at`, and searching and sorting records) and sound information-management practice (normalized tables, keys and constraints, and queries that match the schema in `schema.sql`). Note each of these in `DOCUMENTATION.md` so it is easy to point to during the presentation.
 
 ### Coding standards
 
@@ -545,7 +568,7 @@ The project does not have automated tests yet, so test by hand, and add automate
 
 ### Documentation
 
-The technical documentation is part of the grade, so keep it current as you build.
+The technical documentation is part of the grade in each course, so keep it current as you build.
 
 - Update `source/documentation/DOCUMENTATION.md` when you add or change a feature.
 - Save UML diagrams in `diagrams/`, flowcharts in `flowcharts/`, and screenshots in `screenshots/`, all inside `source/documentation/`.
@@ -580,13 +603,13 @@ A task is finished when:
 
 ### Understand what you submit
 
-AI-assisted tools may be used for learning and productivity, but every team member must understand and be able to explain any code they commit. During the final presentation, any member may be asked to walk through any part of the system.
+AI-assisted tools may be used for learning and productivity, but every team member must understand and be able to explain any code they commit. During the final presentation, the instructors may ask any member to walk through any part of the system.
 
 ---
 
 ## Final Project Instructions
 
-*These are the official course requirements the project is graded against.*
+*These are the official CMSC 203 course requirements the project is graded against. Requirements for ITEC 104 and ITEC 105 are not listed here; add them below when they are provided.*
 
 ## CMSC 203 – Object-Oriented Programming
 ### Final Project: Object-Oriented Application Development
