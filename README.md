@@ -16,7 +16,6 @@ With a shared MySQL database, AppointMed keeps clinic records centralized, helpi
 - **Role-Based Access Control** — Restrict system functions according to user roles.
 - **Dashboard and Reports** — View appointment schedules, patient records, and appointment statuses.
 - **Exception Handling and Validation** — Handle invalid inputs, database errors, and scheduling conflicts.
-- **Cross-Platform Web Access** — Allow patients to access the booking website through a web browser.
 
 **Tech Stack:**
 
