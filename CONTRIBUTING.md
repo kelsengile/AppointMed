@@ -1,274 +1,395 @@
 # CONTRIBUTING GUIDELINES
 
-AppointMed is a web-based clinic appointment and management system built with a Python (FastAPI) backend and a React + TypeScript web frontend. Clinic staff (Doctor, Nurse, and Admin users) work in a browser-based portal, and patients use a public booking page. Everything connects to one MySQL database so all users work with the same live data. This project was developed as the final requirement for three courses at Laguna State Polytechnic University: CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, and ITEC 105 – Information Management. It follows an MVC-inspired architecture that separates data models, user interface views, and business-logic controllers to keep the codebase modular, maintainable, and easy to extend. These guidelines outline how to set up the project locally, understand its folder structure, and contribute changes in a way that keeps the system consistent.
+AppointMed is a clinic appointment and management system built with a Python (FastAPI) backend, an Electron + React + TypeScript desktop application, and a public one-page booking website. All clients connect to one MySQL database so that Doctor, Nurse/Secretary, and Admin users and the patient booking website all work with the same live data. This project was developed as the final requirement for CMSC 203 – Object-Oriented Programming, and follows an MVC-inspired architecture that separates data models, user interface views, and business-logic controllers to keep the codebase modular, maintainable, and easy to extend. These guidelines outline how to set up the project locally, understand its folder structure, and contribute changes in a way that keeps the system consistent.
 
-**Course context**
-
-**Courses:** CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, ITEC 105 – Information Management 
-**Instructors** Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, Sir Jencel P. Sofer 
-**Academic year** 2026–2027 
-
-**Contents**
-
-- [Initialization](#initialization): get the project running on your computer
-- [Project Structure](#project-structure): what lives where
-- [Contributing](#contributing): how we work together and write code
-- [Final Project Instructions](#final-project-instructions): the CMSC 203 course requirements we are graded against
+The project is not deployed. Everything runs locally: MySQL, the backend, the desktop app, and the website all run on one machine and talk to each other over `127.0.0.1`.
 
 ---
 
-## Initialization
+## Table of Contents
 
-By the end of this section you will have three things running on your computer:
+1. [Project Structure](#project-structure)
+2. [Initialization (Local Setup)](#initialization-local-setup)
+3. [Contributing](#contributing)
+4. [Final Project Instructions](#final-project-instructions)
 
-| Part | What it is | Address |
-|---|---|---|
-| MySQL | The shared database | `localhost:3306` |
-| Backend | FastAPI (Python) | http://127.0.0.1:8000 |
-| Frontend | React web app (Vite) | http://localhost:5173 |
+---
 
-Set aside about 30 minutes the first time. Do the steps in order, and use the **Verify** line at the end of each step before moving on. If something fails, check [Troubleshooting](#troubleshooting).
+## Project Structure
 
-### Prerequisites
-
-Install these first, then confirm each one from a terminal.
-
-| Tool | Version | Check with | Download |
-|---|---|---|---|
-| Git | any recent | `git --version` | [git-scm.com](https://git-scm.com/) |
-| Python | 3.11 or newer | `python --version` (Windows: `py --version`) | [python.org](https://www.python.org/) |
-| Node.js (includes npm) | 20 or newer | `node --version` and `npm --version` | [nodejs.org](https://nodejs.org/) |
-| MySQL Server | 8.0 or newer | `mysql --version` | [dev.mysql.com](https://dev.mysql.com/downloads/mysql/) |
-
-Notes:
-
-- **Windows, Python:** tick **Add python.exe to PATH** in the installer.
-- **Windows, MySQL:** if `mysql --version` says the command is not recognized, add the MySQL `bin` folder to your PATH (usually `C:\Program Files\MySQL\MySQL Server 8.0\bin`), then open a new terminal.
-- **Windows, terminals:** commands below work in Git Bash, PowerShell, and Command Prompt unless a step says otherwise.
-- Write down the MySQL `root` password you chose during installation. You need it in Steps 4 and 5.
-- A code editor such as [VS Code](https://code.visualstudio.com/) is recommended.
-
-### Step 1: Clone the repository
-
-```bash
-git clone <repository-url>
-cd <repository-folder>
+```
+├── 📁 main
+│   ├── 📁 backend        # FastAPI app: models, schemas, repositories, services, routes, core, exceptions, utils, tests
+│   ├── 📁 database       # schema.sql, seed.sql
+│   ├── 📁 desktop        # Electron + React + TypeScript + Tailwind staff application
+│   ├── 📁 documentation  # UML, flowchart, screenshots, testing results, presentation
+│   ├── 📁 scripts        # Build and setup scripts
+│   ├── 📁 website        # Public one-page booking site (React + TypeScript + Tailwind)
+│   ├── 📄 .env.example   # Template for your local .env
+│   ├── 🐍 .env           # Local configuration (never committed)
+│   ├── 🐍 main.py        # Entry point that starts the backend
+│   └── 📄 requirements.txt
+├── ⚙️ .gitignore
+├── 📝 CODE_OF_CONDUCT.md
+├── 📝 CONTRIBUTING.md
+├── 📝 README.md
+└── 📝 SECURITY.md
 ```
 
-Tell Git who you are, so your commits are credited to you (skip if already set):
+**How the MVC-inspired layers map to the code:**
+
+| Layer | Location | Responsibility |
+|---|---|---|
+| Model | `backend/models`, `backend/schemas` | Domain classes (OOP entities) and Pydantic validation |
+| Controller | `backend/routes`, `backend/services` | API endpoints and business logic, such as conflict checking |
+| View | `desktop/source`, `website/source` | React pages and components |
+| Data access | `backend/repositories`, `backend/core/connection.py` | All SQL and the MySQL connection |
+
+Keep these layers separate: routes call services, services call repositories, and only repositories talk to MySQL.
+
+**Ports used locally:**
+
+| Part | Address |
+|---|---|
+| Backend API | `http://127.0.0.1:8000` (Swagger docs at `/docs`) |
+| Website (Vite) | `http://127.0.0.1:5173` |
+| Desktop (Vite, loaded inside Electron) | `http://127.0.0.1:5174` |
+| MySQL | `localhost:3306` |
+
+---
+
+## Initialization (Local Setup)
+
+This guide takes you from a fresh computer to a working development environment. Allow about 30 to 45 minutes the first time, mostly for downloads.
+
+**What you will have at the end:**
+
+- A local MySQL database named `appointmed` with its tables and sample data.
+- The backend API running at `http://127.0.0.1:8000`.
+- The desktop app (an Electron window) showing **Connected** for the backend and the database.
+- The booking website in your browser showing **Connected** for the backend.
+
+**Setup checklist (follow in order):**
+
+- [ ] [Step 1: Install the required tools](#step-1-install-the-required-tools)
+- [ ] [Step 2: Verify the tools](#step-2-verify-the-tools)
+- [ ] [Step 3: Clone the repository](#step-3-clone-the-repository)
+- [ ] [Step 4: Set up the database](#step-4-set-up-the-database)
+- [ ] [Step 5: Configure environment variables](#step-5-configure-environment-variables)
+- [ ] [Step 6: Run the backend](#step-6-run-the-backend)
+- [ ] [Step 7: Run the desktop application](#step-7-run-the-desktop-application)
+- [ ] [Step 8: Run the booking website](#step-8-run-the-booking-website)
+- [ ] [Step 9: Final verification](#step-9-final-verification)
+
+> **Commands in this guide** work on Windows, macOS, and Linux unless a Windows-specific version is shown. On Windows, use **Command Prompt** or **Git Bash** if PowerShell gives you trouble (notes are included where it matters).
+
+### Step 1: Install the required tools
+
+Install each tool below. If you already have one, skip to [Step 2](#step-2-verify-the-tools) to confirm the version.
+
+| Tool | Version | Download | Used for |
+|---|---|---|---|
+| Git | Latest | [git-scm.com](https://git-scm.com/downloads) | Version control |
+| Python | 3.11 or newer | [python.org/downloads](https://www.python.org/downloads/) | Backend |
+| Node.js (includes npm) | 20 LTS or newer | [nodejs.org](https://nodejs.org) | Desktop app and website |
+| MySQL Server | 8.0 or newer | [dev.mysql.com/downloads/installer](https://dev.mysql.com/downloads/installer/) | Database |
+| VS Code (recommended) | Latest | [code.visualstudio.com](https://code.visualstudio.com) | Code editor |
+
+**Installation notes:**
+
+- **Python (Windows):** On the first installer screen, tick **"Add python.exe to PATH"** before clicking Install. This is the most common setup mistake.
+- **Node.js:** Choose the **LTS** download. npm is installed with it, so you do not install npm separately. If the installer offers **"Automatically install the necessary tools"**, leave it unchecked. This project does not need them.
+- **MySQL (Windows):** Use the MySQL Installer. Choose **"Server only"** (or "Custom" and select only MySQL Server and, optionally, MySQL Workbench). During configuration:
+  - Keep the default port **3306**.
+  - Set a **root password** and write it down. You need it in Step 4.
+  - Keep the "Start MySQL Server at system startup" option on so you do not have to start it by hand.
+- **MySQL (macOS):** Use the DMG installer, or `brew install mysql` then `brew services start mysql`.
+- **Git:** The default options are fine.
+
+**Recommended VS Code extensions** (optional, but they make development easier):
+
+| Extension | Why |
+|---|---|
+| Python (Microsoft) | Python support and virtual environment detection |
+| Pylance | Type checking and autocomplete for Python |
+| ESLint | Catches TypeScript and React mistakes |
+| Tailwind CSS IntelliSense | Autocomplete for Tailwind classes |
+| Prettier | Consistent formatting |
+| MySQL (or SQLTools) | Browse the database from the editor |
+
+### Step 2: Verify the tools
+
+**Close and reopen your terminal** after installing (so the PATH updates), then run:
+
+```bash
+git --version
+python --version
+node --version
+npm --version
+mysql --version
+```
+
+You should see something like `Python 3.12.x`, `v20.x.x` (or newer) for Node, and `mysql  Ver 8.x`.
+
+| Output | What to do |
+|---|---|
+| `'python' is not recognized` | Try `py --version`. If that works, use `py` wherever this guide says `python`. Otherwise reinstall Python with "Add python.exe to PATH" ticked. |
+| `'mysql' is not recognized` | MySQL is installed but not on your PATH. Add its `bin` folder (for example `C:\Program Files\MySQL\MySQL Server 8.0\bin`) to your PATH, then reopen the terminal. See the [Troubleshooting](#troubleshooting) table. |
+| Version is too old | Install the newer version from the links above. |
+
+On macOS or Linux you may need `python3` instead of `python`.
+
+### Step 3: Clone the repository
+
+```bash
+git clone https://github.com/<organization-or-username>/AppointMed.git
+cd AppointMed
+```
+
+Tell Git who you are (once per computer), so your commits are credited to you:
 
 ```bash
 git config --global user.name "Your Name"
 git config --global user.email "you@example.com"
 ```
 
-**Verify:** `git status` prints `On branch main` and `nothing to commit, working tree clean`.
-
-### Step 2: Install backend dependencies
-
-A virtual environment keeps this project's Python packages separate from the rest of your computer.
+Open the project in VS Code:
 
 ```bash
-cd source
-python -m venv .venv
+code .
 ```
 
-Activate it. You must do this in every new terminal you use for the backend.
+You can use the integrated terminal (`` Ctrl+` ``) for the commands below. You will need **three terminals** open at the same time later, so use the **+** button for new ones.
 
-```bash
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-# Windows (Command Prompt)
-.venv\Scripts\activate.bat
-# Windows (Git Bash) or macOS / Linux
-source .venv/Scripts/activate     # Git Bash on Windows
-source .venv/bin/activate         # macOS / Linux
-```
+### Step 4: Set up the database
 
-Then install the packages:
+AppointMed stores everything in MySQL. In this step you create an empty database, create a limited user for the app, then load the tables and sample data.
 
-```bash
-pip install -r requirements.txt
-```
-
-**Verify:** your prompt starts with `(.venv)`, and `pip list` shows `fastapi`, `uvicorn`, `mysql-connector-python`, and `python-dotenv`.
-
-> **PowerShell says "running scripts is disabled"?** Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, then try activating again. Or use Command Prompt instead.
-
-To leave the virtual environment later, type `deactivate`.
-
-### Step 3: Install frontend dependencies
-
-```bash
-cd source/frontend
-npm install
-```
-
-This creates a `node_modules` folder. It is large and is gitignored, so never commit it.
-
-**Verify:** the command ends without `npm ERR!` lines, and `node_modules` exists inside `source/frontend`.
-
-### Step 4: Create the database and the app user
-
-Log in to MySQL as root and enter your root password when asked:
+**4.1 Log in to MySQL as root**
 
 ```bash
 mysql -u root -p
 ```
 
-Then run the following. Replace `change_this_password` with a password of your own, and use the same one in Step 6.
+Enter the root password from Step 1. You should see a `mysql>` prompt.
+
+**4.2 Create the database and application user**
+
+Paste this at the `mysql>` prompt. Replace `choose-a-strong-password` with your own password and remember it. You need it in Step 5.
 
 ```sql
 CREATE DATABASE appointmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'appointmed_user'@'localhost' IDENTIFIED BY 'change_this_password';
+CREATE USER 'appointmed_user'@'localhost' IDENTIFIED BY 'password';
 GRANT SELECT, INSERT, UPDATE, DELETE ON appointmed.* TO 'appointmed_user'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
 
-What each line does:
+> The app uses `appointmed_user`, not `root`, so a bug or leaked password cannot damage other databases. Only `root` can change table structure (you use it to load `schema.sql`).
 
-- `CREATE DATABASE` makes an empty database named `appointmed`. `utf8mb4` lets it store any character, including names with accents.
-- `CREATE USER` makes a limited account just for the web app.
-- `GRANT` lets that account read and write data inside `appointmed` only. It cannot create or drop tables, which is intentional. Only `root` changes the structure.
-- `FLUSH PRIVILEGES` applies the change right away.
+**4.3 Load the tables and sample data**
 
-The web app connects as `appointmed_user`, never as `root`.
-
-**Verify:** log in again with `mysql -u root -p` and run `SHOW DATABASES;`. `appointmed` should be in the list.
-
-### Step 5: Load the schema and sample data
-
-The schema creates the 12 tables. The seed fills them with fictional sample data. Run both from the **project root**, in this order.
-
-**Git Bash, Command Prompt, macOS, or Linux:**
+Run these from the **project root** (the `AppointMed` folder), not from inside `main`:
 
 ```bash
-mysql -u root -p appointmed < source/database/schema.sql
-mysql -u root -p appointmed < source/database/seed.sql
+mysql -u root -p appointmed < main/database/schema.sql
+mysql -u root -p appointmed < main/database/seed.sql
 ```
 
-**PowerShell** does not support the `<` operator. Use one of these instead:
+> **PowerShell does not support the `<` symbol.** If you see an error about `<`, use Command Prompt or Git Bash, or run this instead:
+> ```
+> mysql -u root -p appointmed -e "source main/database/schema.sql"
+> mysql -u root -p appointmed -e "source main/database/seed.sql"
+> ```
+> You can also open each file in MySQL Workbench and run it against the `appointmed` database.
 
-```powershell
-cmd /c "mysql -u root -p appointmed < source\database\schema.sql"
-cmd /c "mysql -u root -p appointmed < source\database\seed.sql"
+**4.4 Check that it worked**
+
+```bash
+mysql -u appointmed_user -p appointmed -e "SHOW TABLES;"
 ```
 
-or, from the project root, open MySQL and use `SOURCE`:
+Enter the **appointmed_user** password. You should see a list of tables once `schema.sql` has content. If you get `Access denied`, recheck the user and password from step 4.2.
 
-```sql
-mysql -u root -p appointmed
-SOURCE source/database/schema.sql;
-SOURCE source/database/seed.sql;
+> **Load `seed.sql` only once.** Running it twice can duplicate or conflict with existing records. To start over, see [Resetting your database](#resetting-your-database).
+
+> **Each teammate has their own local database.** The shared source of truth is `schema.sql` and `seed.sql` in the repository. See [Database changes](#database-changes) for what to do when they change.
+
+### Step 5: Configure environment variables
+
+Settings that differ per computer, such as passwords, live in a file called `.env`. It is never committed to Git. A template named `.env.example` is provided.
+
+**5.1 Copy the template**
+
+```bash
+# Windows (Command Prompt)
+copy main\.env.example main\.env
+
+# macOS / Linux / Git Bash / PowerShell
+cp main/.env.example main/.env
 ```
 
-Load `seed.sql` **once**. Running it twice causes `Duplicate entry` errors. To start over, see [Resetting your database](#resetting-your-database).
+For reference, `main/.env.example` contains:
 
-**Verify:** in the MySQL prompt, run:
+```dotenv
+# Copy this file to main/.env and fill in your values. Never commit .env.
 
-```sql
-SHOW TABLES;                          -- 12 tables
-SELECT username, role FROM users;     -- 5 users
-```
-
-The sample staff accounts (all fictional, for development only) are:
-
-| Username | Password | Role |
-|---|---|---|
-| `admin` | `admin123` | Admin |
-| `dr.cheeks` | `doctor123` | Doctor |
-| `dr.tentacles` | `doctor123` | Doctor |
-| `nurse.spongebob` | `nurse123` | Nurse |
-| `nurse.patrick` | `nurse123` | Nurse |
-
-Appointment dates in the seed are relative to the day you load it, so "today" always has sample appointments to work with. The top of `seed.sql` describes exactly what data it covers.
-
-### Step 6: Configure the environment
-
-Copy the template and fill in your values in a new source/.env file:
-
-```
-# AppointMed local configuration. This file is gitignored: never commit it.
-# Copy values from .env.example and change the placeholders.
-
-APP_ENV=development
-
+# Database
 DB_HOST=localhost
 DB_PORT=3306
-DB_NAME=appointmed
 DB_USER=appointmed_user
-DB_PASSWORD=change_this_password
+DB_PASSWORD=your-password-here
+DB_NAME=appointmed
 
-# Used later for login tokens. Generate one with: python -c "import secrets; print(secrets.token_hex(32))"
-JWT_SECRET=change_this_secret
+# Backend
+API_HOST=127.0.0.1
+API_PORT=8000
+API_RELOAD=true
+SECRET_KEY=generate-a-long-random-string
+ACCESS_TOKEN_EXPIRE_MINUTES=60
 
-# Comma-separated list of origins allowed to call the API from a browser
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-
+# Origins allowed to call the API (desktop dev server and website dev server)
+CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174
 ```
 
-Set `DB_PASSWORD` to the password from Step 4, and set a new `JWT_SECRET`. The `.env` file is gitignored. **Never commit it.**
+**5.2 Generate a secret key**
 
-What each setting means:
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
 
-| Setting | Meaning |
+Copy the long string it prints.
+
+**5.3 Edit `main/.env`**
+
+Open the file and replace the two placeholder values: `DB_PASSWORD=your-password-here` and `SECRET_KEY=generate-a-long-random-string`. Leave the rest as is unless noted below.
+
+| Variable | Meaning | What to set |
+|---|---|---|
+| `DB_HOST` | Where MySQL runs | `localhost` (leave as is) |
+| `DB_PORT` | MySQL port | `3306` (leave as is) |
+| `DB_USER` | MySQL application user | `appointmed_user` (from Step 4.2) |
+| `DB_PASSWORD` | Password for that user | **The password you chose in Step 4.2** |
+| `DB_NAME` | Database name | `appointmed` (leave as is) |
+| `API_HOST` | Address the backend listens on | `127.0.0.1` (leave as is) |
+| `API_PORT` | Backend port | `8000` (leave as is) |
+| `API_RELOAD` | Restart the backend automatically when code changes | `true` for development |
+| `SECRET_KEY` | Signs login tokens | **The string from step 5.2** |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | How long a login lasts | `60` |
+| `CORS_ORIGINS` | Websites allowed to call the API (desktop dev server on port 5174, website dev server on port 5173) | Leave as is |
+
+> **Never commit `.env` or share it in chats or issues.** If you edit `.env` while the backend is running, **restart the backend** so it reads the new values.
+
+**6.1 Create the virtual environment** (once)
+
+```bash
+cd main
+python -m venv .venv
+```
+
+**6.2 Activate it** (every time you open a new terminal for the backend)
+
+```bash
+# Windows (Command Prompt)
+.venv\Scripts\activate
+
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+
+# macOS / Linux / Git Bash on Windows
+source .venv/bin/activate        # Git Bash on Windows: source .venv/Scripts/activate
+```
+
+Your prompt now starts with `(.venv)`. If it does not, the environment is not active.
+
+> **PowerShell says running scripts is disabled?** Run this once, then try again:
+> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+
+**6.3 Install the backend packages** (once, and again whenever `requirements.txt` changes)
+
+```bash
+pip install -r requirements.txt
+```
+
+**6.4 Start the backend**
+
+```bash
+python main.py
+```
+
+You should see lines ending with `Uvicorn running on http://127.0.0.1:8000` and `Application startup complete.` **Leave this terminal open.**
+
+**6.5 Check it in your browser**
+
+| URL | Expected result |
 |---|---|
-| `APP_ENV` | `development` on your computer. Do not change it unless the team agrees. |
-| `DB_HOST`, `DB_PORT` | Where MySQL is running. Leave as is for a local install. |
-| `DB_NAME` | The database from Step 4. |
-| `DB_USER`, `DB_PASSWORD` | The app account from Step 4, **not** `root`. |
-| `JWT_SECRET` | A long random string used to sign login tokens. Each developer generates their own. |
-| `CORS_ORIGINS` | Websites allowed to call the API from a browser. Keep it to the two frontend addresses above. |
+| `http://127.0.0.1:8000/health` | `{"status":"ok","service":"AppointMed API"}` |
+| `http://127.0.0.1:8000/health/db` | `{"status":"ok"}` (the API can reach MySQL) |
+| `http://127.0.0.1:8000/docs` | The interactive Swagger API page |
 
-Common mistakes:
+If `/health/db` shows `"status":"error"`, recheck `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in `main/.env`, make sure MySQL is running, then restart the backend.
 
-- The file must be at `source/.env`, next to `main.py`. Not in `source/frontend` and not at the project root.
-- No spaces around `=`, and no quotes around values.
-- The file name starts with a dot and has no extension. Make sure your editor did not save it as `.env.txt`.
-- Restart the backend after editing `.env`. It is read only at startup.
+To stop the backend, press `Ctrl+C` in its terminal. To leave the virtual environment, type `deactivate`.
 
-### Step 7: Run the project
+### Step 7: Run the desktop application
 
-Use two terminals, and leave both running.
-
-**Terminal 1: Backend** (from `source`, with `(.venv)` active):
+Open a **new terminal** (leave the backend running in the first one).
 
 ```bash
-uvicorn main:app --reload
-```
-
-You should see `Uvicorn running on http://127.0.0.1:8000`. With `--reload`, the server restarts by itself when you save a Python file.
-
-- Status page: http://127.0.0.1:8000
-- API docs (interactive): http://127.0.0.1:8000/docs
-
-**Terminal 2: Frontend** (from `source/frontend`):
-
-```bash
+cd main/desktop
+npm install
 npm run dev
 ```
 
-You should see `Local: http://localhost:5173/`. The page updates in the browser as you save files.
+- `npm install` downloads all desktop dependencies, including Electron. It takes a few minutes the first time and creates a `node_modules` folder (ignored by Git). You only repeat it when `package.json` changes.
+- `npm run dev` starts the Vite dev server and then opens an Electron window titled **AppointMed**.
 
-- Web app: http://localhost:5173
+**Expected result:** a card titled "AppointMed Desktop" with **Backend API: Connected** and **MySQL database: Connected** in green.
 
-Stop either server with `Ctrl + C`.
+**Handy tips:**
 
-### Verify the setup
+- Open the developer tools inside the Electron window with `Ctrl+Shift+I` (Windows/Linux) or `Cmd+Option+I` (macOS) to see console errors.
+- Changes to files in `desktop/source` appear in the window automatically (hot reload).
+- To stop the desktop app, press `Ctrl+C` in its terminal.
 
-Open http://localhost:5173. You should see:
+### Step 8: Run the booking website
 
-- **Backend API: Online** means the frontend can reach FastAPI.
-- **Database: Connected** means FastAPI can reach MySQL.
+Open a **third terminal**.
 
-Also check http://127.0.0.1:8000/api/health in your browser. It should show JSON with `"status":"ok"`.
+```bash
+cd main/website
+npm install
+npm run dev
+```
 
-If the database shows **Not connected**, check that MySQL is running and that `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in `source/.env` match Step 4.
+Open `http://127.0.0.1:5173` in your browser.
 
-### Troubleshooting
+**Expected result:** a card titled "AppointMed" with **Backend API: Connected** in green. Edits to files in `website/source` refresh the page automatically.
 
-| Problem | Likely cause | Fix |
+### Step 9: Final verification
+
+Confirm all of the following before you start working on features:
+
+- [x] `http://127.0.0.1:8000/docs` loads.
+- [x] `http://127.0.0.1:8000/health/db` returns `{"status":"ok"}`.
+- [x] The desktop window shows Backend API and MySQL database as **Connected**.
+- [x] The website at `http://127.0.0.1:5173` shows Backend API as **Connected**.
+- [ ] If the database seed includes a default admin account, log in with it and **change the password immediately**.
+- [ ] Backend tests run (from `main`, with the virtual environment active):
+
+```bash
+pytest backend/test
+```
+
+> While `backend/test` is still empty, pytest reports `no tests ran`. That is normal.
+
+If a check fails, see [Troubleshooting](#troubleshooting).
+
+### Everyday workflow
+
+After the first setup, starting work takes three terminals:
+
+| Terminal | Folder | Commands |
 |---|---|---|
 | 1. Backend | `main` | Activate `.venv` (Step 6.2), then `python main.py` |
 | 2. Desktop | `main/desktop` | `npm run dev` |
@@ -288,328 +409,195 @@ Start the **backend first**, since the desktop app and website both depend on it
 
 ### Resetting your database
 
-To start over with fresh sample data, log in as root and run:
+Use this when `schema.sql` or `seed.sql` changed, or when your local data is messy. **This deletes all data in your local `appointmed` database.**
+
+```bash
+mysql -u root -p -e "DROP DATABASE appointmed; CREATE DATABASE appointmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p appointmed < main/database/schema.sql
+mysql -u root -p appointmed < main/database/seed.sql
+```
+
+If you dropped the database, the application user's privileges on it are removed too, so re-run the `GRANT` and `FLUSH PRIVILEGES` lines from Step 4.2:
 
 ```sql
-DROP DATABASE appointmed;
-CREATE DATABASE appointmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 GRANT SELECT, INSERT, UPDATE, DELETE ON appointmed.* TO 'appointmed_user'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
-Then repeat Step 5. Never run `seed.sql` against a shared or production database.
+### Building executables (optional)
 
-### Staying up to date
+Use the scripts in `main/scripts` to build the deliverables:
 
-Each time you start working, after `git pull`:
-
-1. If `source/requirements.txt` changed, run `pip install -r requirements.txt` (with `.venv` active).
-2. If `source/frontend/package.json` changed, run `npm install` in `source/frontend`.
-3. If `source/database/schema.sql` changed, reset your database (see above) so it matches the team's.
-4. Start the backend and the frontend as in Step 7.
-
----
-
-## Project Structure
-
-```
-.
-├── .gitignore
-├── CODE_OF_CONDUCT.md
-├── CONTRIBUTING.md
-├── README.md
-├── SECURITY.md
-└── source/
-    ├── .env                  # local secrets (gitignored)
-    ├── .env.example          # template for .env
-    ├── main.py               # FastAPI entry point
-    ├── requirements.txt      # Python dependencies
-    ├── assets/               # fonts, icons, and images
-    ├── database/
-    │   ├── schema.sql        # tables and constraints
-    │   └── seed.sql          # fictional sample data
-    ├── documentation/
-    │   ├── DOCUMENTATION.md  # technical documentation
-    │   ├── diagrams/         # UML class diagrams
-    │   ├── flowcharts/
-    │   └── screenshots/
-    └── frontend/             # React + TypeScript web app (Vite)
-        ├── index.html
-        ├── package.json
-        ├── vite.config.ts
-        ├── tailwind.config.js
-        └── src/
-            ├── main.tsx
-            └── app.tsx
+```bash
+main\scripts\build-backend.bat    # PyInstaller: bundles the FastAPI backend
+main\scripts\build-desktop.bat    # Electron Builder: packages the desktop app
 ```
 
-As the backend grows, split `main.py` into modules (models, repositories, services, routes) rather than letting one file grow large. See [Where code belongs](#where-code-belongs).
+The desktop app can also be packaged manually with `npm run package` inside `main/desktop`. Running with `npm run dev` is enough for the final demo.
+
+### Troubleshooting
+
+**Tools and installation**
+
+| Problem | What to check |
+|---|---|
+| `'python' is not recognized` | Try `py` instead. Otherwise reinstall Python with "Add python.exe to PATH" ticked, then reopen the terminal. |
+| `'mysql' is not recognized` | Add the MySQL `bin` folder (for example `C:\Program Files\MySQL\MySQL Server 8.0\bin`) to your PATH: Windows search, "Edit the system environment variables", Environment Variables, select `Path`, Edit, New. Reopen the terminal. |
+| `'npm' is not recognized` | Reinstall Node.js, then reopen the terminal. |
+| `npm install` fails | Confirm Node.js is version 20 or newer. Delete the `node_modules` folder and `package-lock.json`, then run `npm install` again. |
+| Electron download is slow or fails | Check your internet connection and try `npm install` again. On school networks, a different network or a phone hotspot often helps. |
+
+**Database**
+
+| Problem | What to check |
+|---|---|
+| `Can't connect to MySQL server` | MySQL is running (Windows: open "Services", find **MySQL80**, and start it). Check `DB_HOST` and `DB_PORT` in `.env`. |
+| `Access denied for user` | The user exists, the password in `.env` matches, and privileges were granted on `appointmed` (Step 4.2). |
+| `Unknown database 'appointmed'` | The database was not created. Repeat Step 4.2. |
+| `/health/db` returns `"status":"error"` | Recheck every `DB_*` value in `.env`, then restart the backend. |
+| Duplicate entry errors when loading `seed.sql` | It was already loaded. See [Resetting your database](#resetting-your-database). |
+| `<` is not recognized (PowerShell) | Use Command Prompt or Git Bash, or the `source` form shown in Step 4.3. |
+
+**Backend**
+
+| Problem | What to check |
+|---|---|
+| `ModuleNotFoundError` | The virtual environment is active (prompt starts with `(.venv)`) and `pip install -r requirements.txt` was run. |
+| `ModuleNotFoundError: backend` | Run `python main.py` from inside the `main` folder, not from the repository root. |
+| PowerShell blocks `Activate.ps1` | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or use Command Prompt. |
+| Changes to `.env` have no effect | Stop the backend with `Ctrl+C` and start it again. |
+
+**Desktop and website**
+
+| Problem | What to check |
+|---|---|
+| Shows "Not reachable" | The backend is running on the port in `API_PORT`, and the page's origin is listed in `CORS_ORIGINS` in `.env`. Restart the backend after editing `.env`. |
+| Browser console shows a CORS error | Add the page's exact origin (for example `http://127.0.0.1:5173`) to `CORS_ORIGINS` and restart the backend. |
+| Electron window is blank | Wait a few seconds for Vite to start, then press `Ctrl+R`. Check the terminal and the developer tools (`Ctrl+Shift+I`) for errors. |
+| Electron window never opens | Another process may be using port 5174. Close it and rerun `npm run dev`. |
+| `Port 5173`, `5174`, or `8000` is already in use | Another program or an old copy of this app is using it. Find it with `netstat -ano \| findstr :8000` (Windows) or `lsof -i :8000` (macOS/Linux), then close it (Windows: `taskkill /PID <number> /F`). The Vite ports are fixed on purpose so they match the CORS settings. |
+| TypeScript errors in the editor | Run `npm install` in that folder, then restart VS Code's TypeScript server (Command Palette, "TypeScript: Restart TS Server"). |
+
+If you are still stuck, ask in the team chat with the **exact error message**, the **step number** you were on, and your operating system. Do not paste your `.env` contents.
 
 ---
 
 ## Contributing
 
-Thank you for helping build AppointMed. This section explains how we plan work, write and review code, and keep the project consistent. Please also read the [Code of Conduct](CODE_OF_CONDUCT.md) and [SECURITY.md](SECURITY.md).
+### Workflow
 
-### Before you start
+1. **Pick or create an issue** so the team knows who is working on what.
+2. **Sync with `main`:**
+```bash
+   git checkout main
+   git pull origin main
+```
+3. **Create a branch** for your work. Never commit directly to `main`.
+```bash
+   git checkout -b feat/appointment-conflict-check
+```
+4. **Make your changes** in small, focused commits.
+5. **Test** your changes locally, with the backend, desktop app, and (if affected) website all running.
+6. **Push** your branch and **open a pull request** into `main`.
+7. **Get at least one teammate's review** before merging. Respond to feedback and push fixes to the same branch.
+8. **Merge** once approved, then delete the branch.
 
-1. **Pick or create an issue.** Every change should start from a GitHub issue describing what is needed. Comment on it (or tell the group) that you are taking it, so two people do not do the same work.
-2. **Keep the scope small.** One issue, one branch, one pull request. Split big features into pieces a teammate can review in about 15 minutes.
-3. **Ask early.** If the requirement is unclear or touches the database design, ask the team before writing a lot of code.
-
-### Branching
-
-`main` always holds working code. Never commit directly to it. Create a branch for each piece of work, named `type/short-description` in lowercase with hyphens:
+### Branch naming
 
 | Prefix | Use for | Example |
 |---|---|---|
-| `feature/` | New functionality | `feature/appointment-booking` |
-| `fix/` | Bug fixes | `fix/slot-conflict` |
-| `docs/` | Documentation, diagrams, screenshots | `docs/uml-diagram` |
-| `refactor/` | Restructuring code without changing behavior | `refactor/split-main-routes` |
-| `test/` | Adding or improving tests | `test/booking-validation` |
-| `chore/` | Dependencies, config, tooling | `chore/update-dependencies` |
-
-### Step-by-step workflow
-
-```bash
-# 1. Start from the latest main
-git switch main
-git pull
-
-# 2. Create your branch
-git switch -c feature/doctor-availability
-
-# 3. Do the work, running the app as you go (see "Testing your changes")
-
-# 4. Review what you changed before committing
-git status
-git diff
-
-# 5. Stage and commit
-git add source/main.py source/frontend/src/app.tsx    # add specific files, not everything
-git commit -m "Add doctor availability endpoint"
-
-# 6. Push your branch and open a pull request on GitHub
-git push -u origin feature/doctor-availability
-```
-
-Tips:
-
-- Stage specific files instead of `git add .`, so you never commit `.env`, `node_modules`, or stray files by accident. Always read `git status` first.
-- Commit often in small steps. It is easier to review and to undo.
-- If you are mid-work and need to switch tasks, commit to your branch (or use `git stash`) before switching.
-
-### Keeping your branch up to date
-
-If `main` moves on while you work, bring those changes into your branch before opening or merging your pull request:
-
-```bash
-git fetch origin
-git merge origin/main
-```
-
-If Git reports a **merge conflict**, it marks the clashing lines in the file with `<<<<<<<`, `=======`, and `>>>>>>>`. Edit the file to keep the correct version, remove the markers, then:
-
-```bash
-git add <the-fixed-file>
-git commit
-```
-
-Run the app again afterward to be sure nothing broke. When two people changed the same code in different ways, talk to each other rather than guessing which version wins.
+| `feat/` | New features | `feat/patient-search` |
+| `fix/` | Bug fixes | `fix/double-booking` |
+| `docs/` | Documentation only | `docs/uml-diagram` |
+| `refactor/` | Code changes with no behavior change | `refactor/repository-base-class` |
+| `test/` | Adding or fixing tests | `test/auth-permissions` |
+| `chore/` | Tooling, dependencies, config | `chore/update-requirements` |
 
 ### Commit messages
 
-Write the subject line as a short command that says what the commit does, in 72 characters or fewer, with no period at the end. Add a blank line and a few sentences of explanation if the *why* is not obvious.
+Use the format `type: short summary in present tense`.
 
-| Good | Not helpful |
-|---|---|
-| `Add conflict check when booking a slot` | `fixed stuff` |
-| `Validate phone number on booking request` | `update` |
-| `Fix nurse routing when no doctor is assigned` | `changes to main.py` |
-
-Each commit should do one thing and leave the app in a working state.
-
-### Opening a pull request
-
-1. Push your branch and click **Compare & pull request** on GitHub, targeting `main`.
-2. Give it a clear title, like a commit subject.
-3. Fill in the description using this template:
-
-```markdown
-## What changed
-A short summary of the change and why it is needed.
-
-Closes #<issue-number>
-
-## How to test
-1. Steps a reviewer can follow to see it working.
-2. Include which user to log in as, if relevant.
-
-## Screenshots
-(For visible changes. Fictional data only.)
-
-## Checklist
-- [ ] The app runs and the change works as described
-- [ ] `npm run build` passes (no TypeScript errors)
-- [ ] Input is validated and errors are handled
-- [ ] No secrets, `.env` contents, or real personal data included
-- [ ] Documentation updated if behavior or database changed
-- [ ] I can explain every part of this code
+```
+feat: add doctor availability check
+fix: prevent overlapping appointments for the same doctor
+docs: add flowchart to documentation folder
 ```
 
-### Reviewing a pull request
+Keep the summary under about 72 characters, and add a body if the reason for the change isn't obvious.
 
-- **At least one teammate** must approve before merging. You may not approve your own pull request.
-- Aim to review within **2 days**, so nobody is blocked for long.
-- Review for: does it do what the issue asks, is it readable, are errors handled, is input validated, is SQL parameterized, are roles checked on the backend, and does it follow these guidelines.
-- Comment on the code, not the person. Explain *why* and suggest an alternative. Mark small style points as optional ("nit:").
-- Authors respond to every comment, push fixes to the same branch, and ask for another look.
-- After approval, the author merges the pull request and deletes the branch.
+### Pull request checklist
 
-### Where code belongs
+Before requesting a review, confirm that:
 
-AppointMed follows an MVC-inspired layout. The backend modules below are the target structure, so create them as features need them, rather than all at once.
-
-| Layer | Role | Where it lives |
-|---|---|---|
-| **Model** | Data shapes and domain objects (`User`, `Doctor`, `Appointment`) and Pydantic schemas for requests and responses | `source/models/` and `source/schemas/` |
-| **Repository** | The only place that talks to MySQL. Runs queries and returns objects. | `source/repositories/` |
-| **Service (Controller logic)** | Business rules: booking conflicts, who may do what, status changes | `source/services/` |
-| **Routes (Controller)** | Thin FastAPI endpoints that call services and return responses | `source/routes/` |
-| **Core** | Settings, database connection, permissions, custom exceptions, error handlers | `source/core/` |
-| **View** | What the user sees: React pages and components | `source/frontend/src/` |
-
-Rules of thumb:
-
-- A route function should be short. It reads the request, calls a service, and returns the result.
-- Only repositories contain SQL. Only services contain business rules. Do not mix them.
-- In the frontend, put pages in `pages/`, reusable pieces in `components/`, and all calls to the backend in `api/`, with shared types in `types/`.
-
-The CMSC 203 rubric awards 30 points for object-oriented design, so use these ideas where they fit naturally:
-
-| Concept | Example in AppointMed |
-|---|---|
-| Encapsulation | A `Settings` or `Database` class that hides connection details behind methods |
-| Abstraction | An abstract `BaseRepository` that defines `get`, `list`, `create`, `update`, `delete` |
-| Inheritance | `Doctor`, `Nurse`, and `Admin` extending a base `User` class |
-| Polymorphism | Each role class answering `can_access(feature)` in its own way |
-| Constructors | Classes that validate their data when created |
-| Custom exceptions | `AppointmentConflictError`, `InvalidScheduleError` |
-
-Because the project also counts for ITEC 104 and ITEC 105, look for natural places to apply data structures and algorithms (for example, the check-in waiting queue ordered by `checked_in_at`, and searching and sorting records) and sound information-management practice (normalized tables, keys and constraints, and queries that match the schema in `schema.sql`). Note each of these in `DOCUMENTATION.md` so it is easy to point to during the presentation.
+- [ ] The branch is up to date with `main` and has no merge conflicts.
+- [ ] The app runs, and the feature works with each affected role (Admin, Doctor, Nurse/Secretary).
+- [ ] Tests were added or updated, and `pytest backend/test` passes.
+- [ ] Invalid input and errors are handled with clear messages, using the custom exceptions where appropriate.
+- [ ] No secrets, `.env` files, real personal data, or build output are committed.
+- [ ] Changes to the database are reflected in `main/database/schema.sql` (and `seed.sql` if needed) and announced to the team.
+- [ ] New dependencies are added to `requirements.txt` or the relevant `package.json`.
+- [ ] Documentation is updated if behavior, endpoints, or setup changed.
+- [ ] You can explain every part of your code. The course requires it.
 
 ### Coding standards
 
 **Python (backend)**
 
-- Follow [PEP 8](https://peps.python.org/pep-0008/): `snake_case` for functions and variables, `PascalCase` for classes, `UPPER_CASE` for constants, 4-space indentation.
-- Add type hints to function parameters and return values.
-- Give every class and public method a short docstring that says what it does.
-- Catch specific exceptions (`except MySQLError:`), never a bare `except:`.
-- Keep business logic in service classes, not in route functions.
-- Read configuration from `Settings`. Never hard-code passwords, hosts, or secrets.
+- Follow [PEP 8](https://peps.python.org/pep-0008/): `snake_case` for functions and variables, `PascalCase` for classes, `UPPER_CASE` for constants.
+- Add type hints and short docstrings to classes and public methods.
+- Apply OOP principles deliberately, since they make up 30% of the grade:
+  - **Encapsulation:** use private attributes with properties in models.
+  - **Inheritance:** share common fields through base classes such as `Person`, `Patient`, and `Doctor`.
+  - **Polymorphism:** let each role in `roles.py` implement its own permissions.
+  - **Abstraction:** define abstract base classes such as `BaseEntity` and `BaseRepository`.
+- Raise custom exceptions from `backend/exceptions` rather than generic ones, and keep error mapping in `exception_handlers.py`.
+- Keep SQL in repositories only, and always use parameterized queries.
+- Validate all external input with Pydantic schemas.
 
-**TypeScript and React (frontend)**
+**TypeScript / React (desktop and website)**
 
-- TypeScript strict mode is on. Avoid `any`; define a type or interface instead.
-- Components are function components in `PascalCase`. Variables and functions are `camelCase`.
-- Type your props. Keep each component focused on one job.
-- Keep all backend calls in the `api/` folder rather than scattering `fetch` calls across components.
-- Style with Tailwind utility classes. Handle loading, empty, and error states on every screen that fetches data.
-- Check access on the backend. Hiding a button is a convenience, not security.
+- Use TypeScript types for props, API responses, and state, and avoid `any`.
+- Name components and their files in `PascalCase` (`PatientsPage.tsx`) and hooks with a `use` prefix (`useAuth.ts`).
+- Keep API calls in `source/api`, reusable UI in `source/components`, and page-level screens in `source/pages`.
+- Style with Tailwind utility classes. Avoid inline styles.
+- Hiding UI by role is a convenience only. The backend must enforce permissions.
 
-**SQL and database**
+**General**
 
-Always use parameterized queries. Never build SQL by joining user input into a string.
+- Prefer small, reusable functions and clear names over clever code.
+- Comment the *why*, not the obvious *what*.
+- Don't leave dead code or debugging prints in merged work.
 
-```python
-# Good: the value is passed separately, so it cannot change the query
-cursor.execute("SELECT * FROM patients WHERE full_name LIKE %s", (f"%{term}%",))
+### Database changes
 
-# Bad: vulnerable to SQL injection
-cursor.execute(f"SELECT * FROM patients WHERE full_name LIKE '%{term}%'")
-```
+Every teammate has their own local database, so schema changes must be shared through the repository:
 
-**Changing the database structure**
+1. Update `main/database/schema.sql` (and `seed.sql` if starting data changes).
+2. Mention the change in your pull request description, with the exact SQL needed to update an existing database.
+3. Tell the team once it is merged so everyone reloads their local database (see [Resetting your database](#resetting-your-database)).
 
-1. Edit `source/database/schema.sql` (and `seed.sql` if sample data must change). Do not change tables by hand in MySQL without updating the file.
-2. Mention it clearly in your pull request.
-3. After merging, teammates reset their database (see [Staying up to date](#staying-up-to-date)).
+### Documentation and deliverables
 
-**Errors and validation**
+Keep `main/documentation` current as you work. The final submission needs the technical documentation (PDF), UML class diagram, flowchart, application screenshots, testing results, and the PowerPoint presentation. Update the diagrams when classes or flows change, and save test results and screenshots as you go instead of at the end. Use only fictional data in screenshots.
 
-- Validate every input with Pydantic before it reaches a service or the database.
-- Raise meaningful custom exceptions for business problems, and turn them into clear responses with an exception handler.
-- Show users a plain message that says what went wrong and how to fix it. Never expose stack traces, SQL, or password hashes.
-
-```python
-class AppointmentConflictError(Exception):
-    """Raised when a doctor already has an active appointment at the requested time."""
-```
-
-**API conventions**
-
-- All endpoints live under `/api`, use lowercase plural nouns (`/api/appointments`), and exchange JSON.
-- Use proper status codes: `200` OK, `201` created, `400` or `422` invalid input, `401` not signed in, `403` not allowed, `404` not found, `409` conflict (such as a double booking).
-
-**Comments and naming**
-
-Explain *why*, not *what*. Use descriptive names (`available_slots`, not `x`). Remove dead code and debugging prints before committing.
-
-### Testing your changes
-
-The project does not have automated tests yet, so test by hand, and add automated tests as the backend grows.
-
-- **Backend:** open http://127.0.0.1:8000/docs and try your endpoint with valid input, invalid input, and empty fields.
-- **Frontend:** use the page as each affected role would. Try the unhappy paths too: empty form, wrong values, backend turned off.
-- **Type check:** run `npm run build` in `source/frontend`. It must finish with no errors.
-- **Database:** if you touched the schema, reset your database and reload both SQL files from scratch to confirm they run cleanly.
-- Record notable test cases in the Testing Results section of `DOCUMENTATION.md`.
-
-### Documentation
-
-The technical documentation is part of the grade in each course, so keep it current as you build.
-
-- Update `source/documentation/DOCUMENTATION.md` when you add or change a feature.
-- Save UML diagrams in `diagrams/`, flowcharts in `flowcharts/`, and screenshots in `screenshots/`, all inside `source/documentation/`.
-- Use fictional data in every screenshot.
-- Update this file or the README if you change how the project is set up or run.
-
-### Reporting bugs and suggesting features
+### Reporting bugs and requesting features
 
 Open a GitHub issue with:
 
-- **Bug:** what you expected, what happened, steps to reproduce, the role you were using, and a screenshot or error text (no secrets).
-- **Feature:** the problem it solves, who uses it (patient, nurse, doctor, admin), and a short description of how it should work.
+- **Bugs:** what you expected, what happened, the steps to reproduce it, your role (Admin, Doctor, Nurse/Secretary), and any error message.
+- **Features:** the problem it solves and how you imagine it working.
 
-Report security problems privately as described in [SECURITY.md](SECURITY.md), never in a public issue.
+For security problems, do **not** open a public issue. See [SECURITY.md](SECURITY.md).
 
-### Data and secrets
+### AI-assisted coding
 
-- Use only fictional or anonymized data in code, screenshots, and demos.
-- Never commit `.env`, database dumps with real data, or credentials.
-- **If you commit a secret by mistake,** tell the team right away and change that secret (new database password, new `JWT_SECRET`). Deleting the file in a later commit is not enough because it stays in Git history.
-- Read [SECURITY.md](SECURITY.md) before touching authentication, roles, or public booking endpoints.
-
-### Definition of done
-
-A task is finished when:
-
-- It meets the issue's description and has been run and tested by hand.
-- Errors and invalid input are handled with clear messages.
-- Code follows the standards above, with no leftover debug code.
-- Documentation is updated where needed.
-- A teammate reviewed and approved the pull request, and it is merged into `main`.
-
-### Understand what you submit
-
-AI-assisted tools may be used for learning and productivity, but every team member must understand and be able to explain any code they commit. During the final presentation, the instructors may ask any member to walk through any part of the system.
+Per the course rules, AI tools may be used ethically for learning and productivity, but the work must be your own, and you must understand and be able to explain every part of your code. Don't submit code you cannot explain during the demonstration.
 
 ---
 
 ## Final Project Instructions
 
-*These are the official CMSC 203 course requirements the project is graded against. Requirements for ITEC 104 and ITEC 105 are not listed here; add them below when they are provided.*
+*These are the official course requirements the project is graded against.*
 
 ## CMSC 203 – Object-Oriented Programming
 ### Final Project: Object-Oriented Application Development
