@@ -2,7 +2,6 @@
   <img src="/source/assets/icons/appointmed-logo.png" width="250" style="display: block; margin: 0;"/>
 </div>
 
-<<<<<<< HEAD
 <h1 align="center" style="font-size: 40px;">AppointMed</h1>
 
 <p align="center">
@@ -22,8 +21,6 @@
 
 <br>
 
-=======
->>>>>>> 84a1e50895182707e6c6f3076b763c92ecaf2252
 AppointMed is a web-based clinic appointment and management system designed to streamline healthcare operations by connecting clinic staff and patients through a centralized platform. Clinic staff use a browser-based portal to manage patient records, doctor information, and appointments, while patients can conveniently request appointments through a public online booking page.
 
 With a shared MySQL database, AppointMed keeps clinic records centralized, helping staff coordinate schedules, manage appointments, and maintain organized patient information.
@@ -40,19 +37,6 @@ With a shared MySQL database, AppointMed keeps clinic records centralized, helpi
 - **Role-Based Access Control** — Restrict system functions according to user roles.
 - **Dashboard and Reports** — View appointment schedules, patient records, and appointment statuses.
 - **Exception Handling and Validation** — Handle invalid inputs, database errors, and scheduling conflicts.
-<<<<<<< HEAD
-=======
-
-**Tech Stack:**
-
-- **Frontend:** React, TypeScript, Vite
-- **UI Styling:** Tailwind CSS
-- **Backend:** Python, FastAPI
-- **Database:** MySQL Server
-- **Database Connector:** MySQL Connector/Python
-- **Data Validation:** Pydantic
-- **Version Control:** Git, GitHub
->>>>>>> 84a1e50895182707e6c6f3076b763c92ecaf2252
 
 **Developers:**
 
