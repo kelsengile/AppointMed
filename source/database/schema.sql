@@ -1,10 +1,10 @@
 -- ============================================================
 -- AppointMed database schema
--- Location in repo: main/database/schema.sql
+-- Location in repo: source/database/schema.sql
 --
 -- Load as root, from the project root, AFTER creating the
 -- `appointmed` database (see CONTRIBUTING.md, Step 4):
---     mysql -u root -p appointmed < main/database/schema.sql
+--     mysql -u root -p appointmed < source/database/schema.sql
 --
 -- This file contains structure only. Sample data lives in seed.sql.
 --
@@ -12,15 +12,18 @@
 -- 1. A patient requests an appointment on the public website (or by
 --    phone). The request is stored in `notifications`, addressed to
 --    the doctor they chose and to a nurse assigned to that doctor.
--- 2. The nurse converts the notification into an appointment, or
---    dismisses it. The nurse can also create a walk-in appointment
---    directly. A doctor can book for themselves (nurse_id stays NULL).
--- 3. The patient checks in (checked_in_at orders the waiting queue),
---    is assigned a room, and the doctor examines them. The examination
---    creates/links a `patients` record and the doctor either schedules
---    a follow-up or sends the encounter to history. The doctor may
---    write a prescription, handed to the patient to buy elsewhere.
--- 4. The nurse bills the session (`invoices`).
+--    The request carries the patient's details (name, birthdate, sex,
+--    contact, email, address) so a patient record can be created.
+-- 2. The nurse (or the doctor) approves the notification, which creates
+--    the patient record (or reuses a matching one) and an appointment,
+--    or dismisses it. Either way the requester is emailed.
+-- 3. The nurse checks the patient in (checked_in_at orders the waiting
+--    queue). The doctor starts the examination (status Consulting, only
+--    one at a time per doctor). Starting it creates the invoice. When
+--    the doctor finishes, the examination, prescription and invoice
+--    totals (consultation fee + medicines) are saved.
+-- 4. The doctor or the nurse marks the invoice paid. The appointment
+--    becomes Completed and shows up in History and Patient records.
 -- 5. The admin (desktop app) manages users, clinic settings, and can
 --    review the audit log. Admins do not take part in appointments.
 --
@@ -32,6 +35,7 @@
 -- ============================================================
 
 SET NAMES utf8mb4;
+CREATE DATABASE appointmed;
 USE appointmed;
 
 -- ============================================================
@@ -89,8 +93,10 @@ CREATE TABLE IF NOT EXISTS rooms (
 
 -- ============================================================
 -- NOTIFICATIONS: incoming appointment requests (mostly from the
--- public website) routed to a doctor and a nurse. A nurse resolves
--- each one by converting it to an appointment or dismissing it.
+-- public website) routed to a doctor and a nurse. Staff resolve
+-- each one by approving it (creates the appointment) or dismissing it.
+-- The requester's personal details are kept here so the patient record
+-- can be created on approval.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS notifications (
     id                 INT AUTO_INCREMENT PRIMARY KEY,
@@ -99,21 +105,28 @@ CREATE TABLE IF NOT EXISTS notifications (
     requester_name     VARCHAR(100) NOT NULL,
     contact_number     VARCHAR(20),
     email              VARCHAR(100),
+    birthdate          DATE NULL,
+    sex                ENUM('Male', 'Female', 'Other') NULL,
+    address            VARCHAR(255) NULL,
     preferred_datetime DATETIME NULL,                      -- slot the requester picked on the website
     reason             VARCHAR(255),
     origin             ENUM('Website', 'Phone', 'Other') NOT NULL DEFAULT 'Website',
     status             ENUM('Pending', 'Converted', 'Dismissed') NOT NULL DEFAULT 'Pending',
+    decision_note      VARCHAR(255) NULL,                  -- reason given when dismissed (emailed to the requester)
+    decided_by         INT NULL,                           -- staff member who approved or dismissed
     created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     resolved_at        TIMESTAMP NULL,
-    CONSTRAINT fk_notifications_doctor FOREIGN KEY (doctor_id) REFERENCES users(id),
-    CONSTRAINT fk_notifications_nurse  FOREIGN KEY (nurse_id)  REFERENCES users(id),
+    CONSTRAINT fk_notifications_doctor     FOREIGN KEY (doctor_id)  REFERENCES users(id),
+    CONSTRAINT fk_notifications_nurse      FOREIGN KEY (nurse_id)   REFERENCES users(id),
+    CONSTRAINT fk_notifications_decided_by FOREIGN KEY (decided_by) REFERENCES users(id),
     INDEX idx_notifications_nurse_status (nurse_id, status),
     INDEX idx_notifications_doctor_status (doctor_id, status)
 ) ENGINE=InnoDB;
 
 -- ============================================================
--- PATIENTS: the person's clinical record. A row is created the
--- first time a doctor formally examines an appointee.
+-- PATIENTS: the person's clinical record. A row is created when a
+-- booking request is approved (or reused if the same name and
+-- birthdate already exist).
 -- ============================================================
 CREATE TABLE IF NOT EXISTS patients (
     id                INT AUTO_INCREMENT PRIMARY KEY,
@@ -131,10 +144,10 @@ CREATE TABLE IF NOT EXISTS patients (
 ) ENGINE=InnoDB;
 
 -- ============================================================
--- APPOINTMENTS: created by a nurse (from a notification or as a
--- walk-in), by a doctor for themselves, or as a follow-up.
--- patient_id starts NULL for a first-time visitor and is filled in
--- once the doctor's examination links/creates the patient record.
+-- APPOINTMENTS: created when a notification is approved, by a nurse
+-- as a walk-in, by a doctor for themselves, or as a follow-up.
+-- Status flow: Scheduled -> Checked-in (nurse) -> Consulting (doctor)
+-- -> Examined (doctor, awaiting payment) -> Completed (invoice paid).
 -- ============================================================
 CREATE TABLE IF NOT EXISTS appointments (
     id              INT AUTO_INCREMENT PRIMARY KEY,
@@ -171,9 +184,7 @@ CREATE TABLE IF NOT EXISTS appointments (
 ) ENGINE=InnoDB;
 
 -- ============================================================
--- EXAMINATIONS: the doctor's record of seeing the appointee. This is
--- where an appointee becomes a patient, and where the doctor decides
--- "follow-up" vs "history".
+-- EXAMINATIONS: the doctor's record of seeing the patient.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS examinations (
     id                       INT AUTO_INCREMENT PRIMARY KEY,
@@ -193,9 +204,8 @@ CREATE TABLE IF NOT EXISTS examinations (
 ) ENGINE=InnoDB;
 
 -- ============================================================
--- PRESCRIPTIONS: written by the doctor after an examination and given
--- directly to the patient to buy elsewhere. Record-keeping only: no
--- pharmacist role and no in-house billing.
+-- PRESCRIPTIONS: written by the doctor after an examination. Each
+-- item carries a unit price, and the total is billed on the invoice.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS prescriptions (
     id             INT AUTO_INCREMENT PRIMARY KEY,
@@ -216,28 +226,36 @@ CREATE TABLE IF NOT EXISTS prescription_items (
     medicine_name   VARCHAR(150) NOT NULL,
     dosage          VARCHAR(100),
     quantity        INT NOT NULL DEFAULT 1,
+    unit_price      DECIMAL(10,2) NOT NULL DEFAULT 0,      -- price per unit, billed on the invoice
     instructions    VARCHAR(255),                          -- e.g. "Take twice daily after meals"
     CONSTRAINT fk_rx_items_rx FOREIGN KEY (prescription_id) REFERENCES prescriptions(id)
         ON DELETE CASCADE,
-    CONSTRAINT chk_rx_items_qty CHECK (quantity > 0)
+    CONSTRAINT chk_rx_items_qty CHECK (quantity > 0),
+    CONSTRAINT chk_rx_items_price CHECK (unit_price >= 0)
 ) ENGINE=InnoDB;
 
 -- ============================================================
--- INVOICES: session billing only, issued by a nurse against an
--- appointment. One invoice per appointment.
+-- INVOICES: one per appointment. Created when the doctor starts the
+-- examination (consultation fee only), then updated when the doctor
+-- finishes (consultation fee + prescribed medicines). Paid by the
+-- doctor or a nurse; paying completes the appointment.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS invoices (
-    id             INT AUTO_INCREMENT PRIMARY KEY,
-    patient_id     INT NOT NULL,
-    appointment_id INT NOT NULL UNIQUE,
-    issued_by      INT NOT NULL,                           -- nurse who issued it
-    amount         DECIMAL(10,2) NOT NULL,
-    status         ENUM('Unpaid', 'Paid', 'Cancelled') NOT NULL DEFAULT 'Unpaid',
-    issued_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    paid_at        TIMESTAMP NULL,
+    id               INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id       INT NOT NULL,
+    appointment_id   INT NOT NULL UNIQUE,
+    issued_by        INT NOT NULL,                         -- staff member who started the examination or billed it
+    consultation_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
+    medicines_total  DECIMAL(10,2) NOT NULL DEFAULT 0,
+    amount           DECIMAL(10,2) NOT NULL,               -- consultation_fee + medicines_total
+    status           ENUM('Unpaid', 'Paid', 'Cancelled') NOT NULL DEFAULT 'Unpaid',
+    issued_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    paid_at          TIMESTAMP NULL,
+    paid_by          INT NULL,                             -- doctor or nurse who received the payment
     CONSTRAINT fk_invoices_patient     FOREIGN KEY (patient_id)     REFERENCES patients(id),
     CONSTRAINT fk_invoices_appointment FOREIGN KEY (appointment_id) REFERENCES appointments(id),
     CONSTRAINT fk_invoices_issued_by   FOREIGN KEY (issued_by)      REFERENCES users(id),
+    CONSTRAINT fk_invoices_paid_by     FOREIGN KEY (paid_by)        REFERENCES users(id),
     CONSTRAINT chk_invoices_amount CHECK (amount >= 0),
     INDEX idx_invoices_status (status)
 ) ENGINE=InnoDB;
@@ -272,3 +290,4 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     INDEX idx_audit_created (created_at),
     INDEX idx_audit_user (user_id)
 ) ENGINE=InnoDB;
+
