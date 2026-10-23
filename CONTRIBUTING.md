@@ -1,12 +1,14 @@
 # CONTRIBUTING GUIDELINES
 
-AppointMed is a web-based clinic appointment and management system built with a Python (FastAPI) backend and a React + TypeScript web frontend. Clinic staff (Doctor, Nurse, and Admin users) work in a browser-based portal, and patients use a public booking page. Everything connects to one MySQL database so all users work with the same live data. This project was developed as the final requirement for three courses at Laguna State Polytechnic University: CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, and ITEC 105 – Information Management. It follows an MVC-inspired architecture that separates data models, user interface views, and business-logic controllers to keep the codebase modular, maintainable, and easy to extend. These guidelines outline how to set up the project locally, understand its folder structure, and contribute changes in a way that keeps the system consistent.
+AppointMed is a web-based clinic appointment and management system built with a Python (FastAPI) backend and a React + TypeScript web frontend. Clinic staff (Doctor, Nurse, and Admin users) work in a browser-based portal, and patients use a public booking page. Everything connects to one MySQL database, so all users work with the same live data. The project was developed as the final requirement for three courses at Laguna State Polytechnic University: CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, and ITEC 105 – Information Management.
+
+The backend is layered (routes, services, repositories, MySQL) and the frontend is a single-page React app that talks to it through `/api`. These guidelines explain how to set the project up locally, where code belongs, and how to contribute changes in a way that keeps the system consistent.
 
 **Course context**
 
-**Courses:** CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, ITEC 105 – Information Management 
-**Instructors** Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, Sir Jencel P. Sofer 
-**Academic year** 2026–2027 
+**Courses:** CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, ITEC 105 – Information Management  
+**Instructors:** Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, Sir Jencel P. Sofer  
+**Academic year:** 2026–2027
 
 **Contents**
 
@@ -66,7 +68,7 @@ git config --global user.email "you@example.com"
 
 ### Step 2: Install backend dependencies
 
-A virtual environment keeps this project's Python packages separate from the rest of your computer.
+A virtual environment keeps this project's Python packages separate from the rest of your computer. From the project root:
 
 ```bash
 cd source
@@ -80,9 +82,10 @@ Activate it. You must do this in every new terminal you use for the backend.
 .venv\Scripts\Activate.ps1
 # Windows (Command Prompt)
 .venv\Scripts\activate.bat
-# Windows (Git Bash) or macOS / Linux
-source .venv/Scripts/activate     # Git Bash on Windows
-source .venv/bin/activate         # macOS / Linux
+# Windows (Git Bash)
+source .venv/Scripts/activate
+# macOS / Linux
+source .venv/bin/activate
 ```
 
 Then install the packages:
@@ -91,13 +94,15 @@ Then install the packages:
 pip install -r requirements.txt
 ```
 
-**Verify:** your prompt starts with `(.venv)`, and `pip list` shows `fastapi`, `uvicorn`, `mysql-connector-python`, and `python-dotenv`.
+**Verify:** your prompt starts with `(.venv)`, and `pip list` shows `fastapi`, `uvicorn`, `pydantic`, `mysql-connector-python`, `python-dotenv`, `bcrypt`, and `PyJWT`.
 
 > **PowerShell says "running scripts is disabled"?** Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, then try activating again. Or use Command Prompt instead.
 
 To leave the virtual environment later, type `deactivate`.
 
 ### Step 3: Install frontend dependencies
+
+From the project root:
 
 ```bash
 cd source/frontend
@@ -139,7 +144,7 @@ The web app connects as `appointmed_user`, never as `root`.
 
 ### Step 5: Load the schema and sample data
 
-The schema creates the 12 tables. The seed fills them with fictional sample data. Run both from the **project root**, in this order.
+The schema creates the 12 tables. The seed fills them with fictional sample data: staff are SpongeBob SquarePants characters and patients are cartoon characters. Run both from the **project root**, in this order.
 
 **Git Bash, Command Prompt, macOS, or Linux:**
 
@@ -174,22 +179,21 @@ SELECT username, role FROM users;     -- 5 users
 
 The sample staff accounts (all fictional, for development only) are:
 
-| Username | Password | Role |
-|---|---|---|
-| `admin` | `admin123` | Admin |
-| `dr.cheeks` | `doctor123` | Doctor |
-| `dr.tentacles` | `doctor123` | Doctor |
-| `nurse.spongebob` | `nurse123` | Nurse |
-| `nurse.patrick` | `nurse123` | Nurse |
+| Username | Password | Role | Notes |
+|---|---|---|---|
+| `admin` | `admin123` | Admin | Eugene H. Krabs |
+| `dr.cheeks` | `doctor123` | Doctor | General Medicine, works Monday to Friday |
+| `dr.tentacles` | `doctor123` | Doctor | Pediatrics, works Monday, Wednesday, Friday |
+| `nurse.spongebob` | `nurse123` | Nurse | Supports `dr.cheeks` |
+| `nurse.patrick` | `nurse123` | Nurse | Supports `dr.tentacles` |
 
-Appointment dates in the seed are relative to the day you load it, so "today" always has sample appointments to work with. The top of `seed.sql` describes exactly what data it covers.
+These passwords are public. Never use them outside your own computer. Appointment dates in the seed are relative to the day you load it, so "today" always has a live queue to test with. The top of `seed.sql` describes exactly what data it covers.
 
 ### Step 6: Configure the environment
 
-Copy the template and fill in your values in a new source/.env file:
+Copy `source/.env.example` to `source/.env` and fill in your values. The template looks like this:
 
 ```
-
 # AppointMed local configuration. Copy this file to .env (same folder) and change the placeholders.
 # .env is gitignored: never commit it.
 
@@ -216,10 +220,9 @@ SMTP_USER=
 SMTP_PASSWORD=
 SMTP_FROM=no-reply@appointmed.example
 SMTP_TLS=true
-
 ```
 
-Set `DB_PASSWORD` to the password from Step 4, and set a new `JWT_SECRET`. The `.env` file is gitignored. **Never commit it.**
+Set `DB_PASSWORD` to the password from Step 4, and generate your own `JWT_SECRET`. The `.env` file is gitignored. **Never commit it.**
 
 What each setting means:
 
@@ -229,8 +232,10 @@ What each setting means:
 | `DB_HOST`, `DB_PORT` | Where MySQL is running. Leave as is for a local install. |
 | `DB_NAME` | The database from Step 4. |
 | `DB_USER`, `DB_PASSWORD` | The app account from Step 4, **not** `root`. |
-| `JWT_SECRET` | A long random string used to sign login tokens. Each developer generates their own. |
+| `JWT_SECRET` | A long random string used to sign login tokens. **Required:** the backend refuses to start without it, and warns if it is still `change_this_secret`. Each developer generates their own. |
+| `JWT_EXPIRE_MINUTES` | How long a login stays valid. |
 | `CORS_ORIGINS` | Websites allowed to call the API from a browser. Keep it to the two frontend addresses above. |
+| `SMTP_*` | Optional email settings. When `SMTP_HOST` is empty, booking confirmation and disapproval emails are written to the backend console instead of being sent. That is enough for development. |
 
 Common mistakes:
 
@@ -241,7 +246,7 @@ Common mistakes:
 
 ### Step 7: Run the project
 
-Use two terminals, and leave both running.
+Use two terminals, and leave both running. **Start the backend first**, because the frontend dev server forwards every `/api` request to it.
 
 **Terminal 1: Backend** (from `source`, with `(.venv)` active):
 
@@ -249,7 +254,7 @@ Use two terminals, and leave both running.
 uvicorn main:app --reload
 ```
 
-You should see `Uvicorn running on http://127.0.0.1:8000`. With `--reload`, the server restarts by itself when you save a Python file.
+You should see `Uvicorn running on http://127.0.0.1:8000`. With `--reload`, the server restarts by itself when you save a Python file. Run it from the `source` folder, otherwise Python cannot find the `backend` package.
 
 - Status page: http://127.0.0.1:8000
 - API docs (interactive): http://127.0.0.1:8000/docs
@@ -268,34 +273,39 @@ Stop either server with `Ctrl + C`.
 
 ### Verify the setup
 
-Open http://localhost:5173. You should see:
-
-- **Backend API: Online** means the frontend can reach FastAPI.
-- **Database: Connected** means FastAPI can reach MySQL.
-
-Also check http://127.0.0.1:8000/api/health in your browser. It should show JSON with `"status":"ok"`.
+1. Open http://127.0.0.1:8000. The status page should show **API: Online** and **Database: Connected**. Also check http://127.0.0.1:8000/api/health, which should show JSON with `"status":"ok"`.
+2. Open http://localhost:5173. You should see the AppointMed landing page. Click **Staff login** and sign in as `nurse.spongebob` / `nurse123`. You should land on the nurse dashboard.
 
 If the database shows **Not connected**, check that MySQL is running and that `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in `source/.env` match Step 4.
+
+### Try the main workflow
+
+A quick tour that touches every role and confirms the whole system works:
+
+1. **Book:** open http://localhost:5173/book, choose Dr. Sandy Cheeks, a weekday, and an open time, and submit a request with fictional details.
+2. **Approve:** log in as `nurse.spongebob`, open **Notifications**, and approve the request. With no SMTP configured, the confirmation email appears in the backend console.
+3. **Check in:** open **Appointments**. Only today's appointments can be checked in, so use today's seeded appointments (or **New appointment** with check-in) to continue.
+4. **Examine:** log in as `dr.cheeks`, start an examination for a checked-in patient, add a diagnosis and a prescription, and finish it.
+5. **Pay:** open **Invoice** and mark the invoice as paid. The visit moves to **History** and the patient's record.
+6. **Administer:** log in as `admin` to see **Users**, **Reports**, and the **Audit Logs** entries your actions created.
 
 ### Troubleshooting
 
 | Problem | Likely cause | Fix |
 |---|---|---|
-| 1. Backend | `main` | Activate `.venv` (Step 6.2), then `python main.py` |
-| 2. Desktop | `main/desktop` | `npm run dev` |
-| 3. Website | `main/website` | `npm run dev` |
-
-Start the **backend first**, since the desktop app and website both depend on it. MySQL should already be running (it starts with your computer by default).
-
-**After pulling changes from GitHub**, check what changed and update accordingly:
-
-| If this changed | Run |
-|---|---|
-| `main/requirements.txt` | `pip install -r requirements.txt` (virtual environment active) |
-| `desktop/package.json` | `npm install` inside `main/desktop` |
-| `website/package.json` | `npm install` inside `main/website` |
-| `main/database/schema.sql` or `seed.sql` | Reload your database (see below) |
-| `main/.env.example` | Add any new variables to your own `main/.env` |
+| `RuntimeError: JWT_SECRET is missing` when the backend starts | `source/.env` is missing, in the wrong folder, or has no `JWT_SECRET` | Create `source/.env` (Step 6), then restart `uvicorn` |
+| Status page shows **Database: Not connected** | MySQL is stopped, or the `DB_*` values do not match Step 4 | Start MySQL, check `.env`, restart the backend |
+| `Access denied for user 'appointmed_user'` in the backend log | Wrong password in `.env`, or the user was never created | Repeat the `CREATE USER` and `GRANT` lines in Step 4 and match the password |
+| `ModuleNotFoundError: No module named 'backend'` | `uvicorn` was started from the wrong folder | `cd source`, then `uvicorn main:app --reload` |
+| `ModuleNotFoundError` for `bcrypt`, `jwt`, `fastapi`, and similar | The virtual environment is not active, or packages are not installed | Activate `.venv`, then `pip install -r requirements.txt` |
+| The web app says "Cannot reach the server. Check that the backend is running." | The backend is stopped, or not on port 8000 (Vite forwards `/api` to `127.0.0.1:8000`) | Start the backend, then reload the page |
+| `Port 5173 is already in use` | Another Vite server is open (the port is fixed on purpose) | Close the other terminal, then run `npm run dev` again |
+| `Duplicate entry` while loading `seed.sql` | The seed was already loaded | [Reset your database](#resetting-your-database) |
+| "Too many failed attempts" at login | Five wrong passwords for that username within 5 minutes | Wait a few minutes (or restart the backend) and use the sample passwords above |
+| The booking page shows no available times | That doctor does not work that weekday (Dr. Tentacles works Monday, Wednesday, Friday only), the times already passed or are taken, the date is outside the booking window, or online booking is switched off in Clinic Settings | Try another date or doctor, or check **Clinic Settings** as `admin` |
+| No confirmation email arrives | `SMTP_HOST` is empty, so the email is printed in the backend console | Read the console, or configure SMTP in `.env` |
+| `npm run build` fails with TypeScript errors | Strict mode is on, and unused variables and imports count as errors | Fix the lines the compiler reports |
+| PowerShell rejects `mysql ... < file.sql` | PowerShell does not support `<` | Use the `cmd /c` or `SOURCE` options in Step 5 |
 
 ### Resetting your database
 
@@ -311,12 +321,16 @@ Then repeat Step 5. Never run `seed.sql` against a shared or production database
 
 ### Staying up to date
 
-Each time you start working, after `git pull`:
+Each time you start working, run `git pull`, then check what changed:
 
-1. If `source/requirements.txt` changed, run `pip install -r requirements.txt` (with `.venv` active).
-2. If `source/frontend/package.json` changed, run `npm install` in `source/frontend`.
-3. If `source/database/schema.sql` changed, reset your database (see above) so it matches the team's.
-4. Start the backend and the frontend as in Step 7.
+| If this changed | Do this |
+|---|---|
+| `source/requirements.txt` | `pip install -r requirements.txt` (with `.venv` active) |
+| `source/frontend/package.json` or `package-lock.json` | `npm install` in `source/frontend` |
+| `source/database/schema.sql` or `seed.sql` | Reset your database (see above) so it matches the team's |
+| `source/.env.example` | Add any new variables to your own `source/.env`, then restart the backend |
+
+Then start the backend and the frontend as in Step 7.
 
 ---
 
@@ -330,30 +344,48 @@ Each time you start working, after `git pull`:
 ├── README.md
 ├── SECURITY.md
 └── source/
-    ├── .env                  # local secrets (gitignored)
-    ├── .env.example          # template for .env
-    ├── main.py               # FastAPI entry point
-    ├── requirements.txt      # Python dependencies
-    ├── assets/               # fonts, icons, and images
+    ├── .env                      # local secrets (gitignored)
+    ├── .env.example              # template for .env
+    ├── main.py                   # FastAPI entry point: CORS, error handlers, routers, status page
+    ├── requirements.txt          # Python dependencies
+    ├── assets/                   # fonts, icons, and images
+    ├── backend/
+    │   ├── core/                 # config.py, database.py, exceptions.py, security.py, mailer.py, utils.py
+    │   ├── models/               # domain.py: User/Doctor/Nurse/Admin and AppointmentWorkflow
+    │   ├── schemas/              # api.py: Pydantic request bodies
+    │   ├── repositories/         # all SQL: base, user, patient, appointment, clinical, system
+    │   ├── services/             # business rules: auth, booking, scheduling, appointment,
+    │   │                         #   billing, patient, dashboard, admin, waiting_queue
+    │   └── routes/               # auth_routes, public_routes, staff_routes, admin_routes
     ├── database/
-    │   ├── schema.sql        # tables and constraints
-    │   └── seed.sql          # fictional sample data
+    │   ├── schema.sql            # tables and constraints
+    │   └── seed.sql              # fictional sample data
     ├── documentation/
-    │   ├── DOCUMENTATION.md  # technical documentation
-    │   ├── diagrams/         # UML class diagrams
+    │   ├── DOCUMENTATION.md      # technical documentation
+    │   ├── diagrams/             # UML class diagrams
     │   ├── flowcharts/
     │   └── screenshots/
-    └── frontend/             # React + TypeScript web app (Vite)
+    └── frontend/                 # React + TypeScript web app (Vite + Tailwind)
         ├── index.html
         ├── package.json
-        ├── vite.config.ts
+        ├── vite.config.ts        # dev server on :5173, proxies /api to the backend
         ├── tailwind.config.js
+        ├── public/               # appointmed-logo.png, optional hero.jpg
         └── src/
             ├── main.tsx
-            └── app.tsx
+            ├── app.tsx           # routes, and the map from navigation items to pages
+            ├── api/              # client.ts (the only fetch call) and endpoints.ts
+            ├── components/       # shared pieces: Badge, Modal, ExamPanel, EncounterCard, ...
+            ├── config/           # Navigation.ts: side-panel items per role
+            ├── context/          # AuthContext.tsx: signed-in user
+            ├── hooks/            # usePolling.ts
+            ├── layouts/          # DashboardLayout.tsx: side panel and page frame
+            ├── pages/            # LandingPage, BookingPage, plus staff/, admin/, shared/
+            ├── types/            # index.ts: types that match the backend JSON
+            └── utils/            # format.ts: dates, money, age
 ```
 
-As the backend grows, split `main.py` into modules (models, repositories, services, routes) rather than letting one file grow large. See [Where code belongs](#where-code-belongs).
+Some older files may still sit in `source/backend/` but are no longer used by the app: `core/deps.py`, `core/permissions.py`, `repositories/booking_repository.py`, `repositories/visit_repository.py`, `schemas/clinic.py`, and `services/visit_service.py`. They come from an earlier design, will not run with the current code, and should not be built on. Delete them rather than fixing them.
 
 ---
 
@@ -363,9 +395,10 @@ Thank you for helping build AppointMed. This section explains how we plan work, 
 
 ### Before you start
 
-1. **Pick or create an issue.** Every change should start from a GitHub issue describing what is needed. Comment on it (or tell the group) that you are taking it, so two people do not do the same work.
-2. **Keep the scope small.** One issue, one branch, one pull request. Split big features into pieces a teammate can review in about 15 minutes.
-3. **Ask early.** If the requirement is unclear or touches the database design, ask the team before writing a lot of code.
+1. **Get the app running.** Finish [Initialization](#initialization) first, so you can test your changes.
+2. **Pick or create an issue.** Every change should start from a GitHub issue describing what is needed. Comment on it (or tell the group) that you are taking it, so two people do not do the same work.
+3. **Keep the scope small.** One issue, one branch, one pull request. Split big features into pieces a teammate can review in about 15 minutes.
+4. **Ask early.** If the requirement is unclear or touches the database design, ask the team before writing a lot of code.
 
 ### Branching
 
@@ -376,7 +409,7 @@ Thank you for helping build AppointMed. This section explains how we plan work, 
 | `feature/` | New functionality | `feature/appointment-booking` |
 | `fix/` | Bug fixes | `fix/slot-conflict` |
 | `docs/` | Documentation, diagrams, screenshots | `docs/uml-diagram` |
-| `refactor/` | Restructuring code without changing behavior | `refactor/split-main-routes` |
+| `refactor/` | Restructuring code without changing behavior | `refactor/remove-unused-visit-files` |
 | `test/` | Adding or improving tests | `test/booking-validation` |
 | `chore/` | Dependencies, config, tooling | `chore/update-dependencies` |
 
@@ -397,8 +430,8 @@ git status
 git diff
 
 # 5. Stage and commit
-git add source/main.py source/frontend/src/app.tsx    # add specific files, not everything
-git commit -m "Add doctor availability endpoint"
+git add source/backend/services/scheduling_service.py source/frontend/src/pages/BookingPage.tsx   # add specific files, not everything
+git commit -m "Hide fully booked days on the booking page"
 
 # 6. Push your branch and open a pull request on GitHub
 git push -u origin feature/doctor-availability
@@ -426,7 +459,7 @@ git add <the-fixed-file>
 git commit
 ```
 
-Run the app again afterward to be sure nothing broke. When two people changed the same code in different ways, talk to each other rather than guessing which version wins.
+Run the app again afterward to be sure nothing broke. When two people changed the same code in different ways, talk to each other rather than guessing which version wins. `package-lock.json` conflicts are best fixed by running `npm install` again rather than editing by hand.
 
 ### Commit messages
 
@@ -436,7 +469,7 @@ Write the subject line as a short command that says what the commit does, in 72 
 |---|---|
 | `Add conflict check when booking a slot` | `fixed stuff` |
 | `Validate phone number on booking request` | `update` |
-| `Fix nurse routing when no doctor is assigned` | `changes to main.py` |
+| `Fix nurse routing when no doctor is assigned` | `changes to appointment_service.py` |
 
 Each commit should do one thing and leave the app in a working state.
 
@@ -462,9 +495,11 @@ Closes #<issue-number>
 ## Checklist
 - [ ] The app runs and the change works as described
 - [ ] `npm run build` passes (no TypeScript errors)
-- [ ] Input is validated and errors are handled
+- [ ] Input is validated and errors are handled with clear messages
+- [ ] New endpoints check the user's role with `require_feature(...)` and stay inside the user's doctor scope
+- [ ] SQL is parameterized and lives only in a repository
 - [ ] No secrets, `.env` contents, or real personal data included
-- [ ] Documentation updated if behavior or database changed
+- [ ] Documentation updated if behavior or the database changed
 - [ ] I can explain every part of this code
 ```
 
@@ -472,42 +507,75 @@ Closes #<issue-number>
 
 - **At least one teammate** must approve before merging. You may not approve your own pull request.
 - Aim to review within **2 days**, so nobody is blocked for long.
-- Review for: does it do what the issue asks, is it readable, are errors handled, is input validated, is SQL parameterized, are roles checked on the backend, and does it follow these guidelines.
+- Review for: does it do what the issue asks, is it readable, are errors handled, is input validated, is SQL parameterized, are roles and doctor scope checked on the backend, and does it follow these guidelines.
 - Comment on the code, not the person. Explain *why* and suggest an alternative. Mark small style points as optional ("nit:").
 - Authors respond to every comment, push fixes to the same branch, and ask for another look.
 - After approval, the author merges the pull request and deletes the branch.
 
 ### Where code belongs
 
-AppointMed follows an MVC-inspired layout. The backend modules below are the target structure, so create them as features need them, rather than all at once.
+The backend is layered. A request flows downward, and each layer only calls the one below it.
 
 | Layer | Role | Where it lives |
 |---|---|---|
-| **Model** | Data shapes and domain objects (`User`, `Doctor`, `Appointment`) and Pydantic schemas for requests and responses | `source/models/` and `source/schemas/` |
-| **Repository** | The only place that talks to MySQL. Runs queries and returns objects. | `source/repositories/` |
-| **Service (Controller logic)** | Business rules: booking conflicts, who may do what, status changes | `source/services/` |
-| **Routes (Controller)** | Thin FastAPI endpoints that call services and return responses | `source/routes/` |
-| **Core** | Settings, database connection, permissions, custom exceptions, error handlers | `source/core/` |
-| **View** | What the user sees: React pages and components | `source/frontend/src/` |
+| **Routes** | Thin FastAPI endpoints. They declare who may call them with `require_feature("...")`, read a validated request body, call one service method, and return the result. | `source/backend/routes/` |
+| **Schemas** | Pydantic request bodies. Every input is validated here before it reaches a service. | `source/backend/schemas/api.py` |
+| **Services** | Business rules: booking conflicts, the status workflow, doctor scoping, transactions, audit logging, and emails. | `source/backend/services/` |
+| **Repositories** | The only place that contains SQL. Each one extends `BaseRepository` and uses parameterized queries. | `source/backend/repositories/` |
+| **Models** | Domain objects: `User` and its role subclasses, and the `AppointmentWorkflow` state machine. | `source/backend/models/domain.py` |
+| **Core** | Settings, the database pool and transactions, custom exceptions and their handlers, security (hashing, tokens, rate limiter, permission dependency), the mailer, and small utilities. | `source/backend/core/` |
+| **Frontend** | Pages, components, API calls, and shared types. | `source/frontend/src/` |
 
 Rules of thumb:
 
 - A route function should be short. It reads the request, calls a service, and returns the result.
 - Only repositories contain SQL. Only services contain business rules. Do not mix them.
-- In the frontend, put pages in `pages/`, reusable pieces in `components/`, and all calls to the backend in `api/`, with shared types in `types/`.
+- When several changes must succeed together, wrap them in `with self._db.transaction() as tx:` and build repositories from `tx`.
+- Clinical data belongs to a doctor. Use `user.scope_doctor_id` and return `NotFoundError` for anything outside it, so a nurse can never reach another doctor's records.
+- Record important actions with `AuditRepository.record(...)`. Never put passwords or medical details in it.
+- Use `to_money` for prices and totals. Money is a `Decimal`, never a float.
+- In the frontend, put pages in `pages/`, reusable pieces in `components/`, all backend calls in `api/endpoints.ts`, and shared types in `types/index.ts`.
 
-The CMSC 203 rubric awards 30 points for object-oriented design, so use these ideas where they fit naturally:
+### Common tasks
 
-| Concept | Example in AppointMed |
+**Add a backend endpoint**
+
+1. Add a request body to `schemas/api.py` if the endpoint receives data.
+2. Add the query to the right repository in `repositories/`.
+3. Add the rule to a service in `services/` (scope check, transaction, audit entry).
+4. Add the route in `routes/` with `Depends(require_feature("..."))`.
+5. Try it at http://127.0.0.1:8000/docs with valid, invalid, and empty input.
+
+**Give a role access to something new:** add the feature name to that role's `features` set in `models/domain.py`, then use the same name in `require_feature(...)`.
+
+**Add a frontend page**
+
+1. Create the page in `pages/staff/`, `pages/admin/`, or `pages/shared/`.
+2. Add an item to the role's list in `config/Navigation.ts` (the first item must stay the Dashboard).
+3. Map its `path` to the component in `pageFor()` in `app.tsx`. Until then, the page shows the placeholder.
+4. Add the API call to `api/endpoints.ts` and its types to `types/index.ts`.
+
+**Change the database structure**
+
+1. Edit `source/database/schema.sql` (and `seed.sql` if sample data must change). Do not change tables by hand in MySQL without updating the file.
+2. Update the matching repository queries and the types in `types/index.ts`.
+3. Mention it clearly in your pull request.
+4. After merging, teammates reset their database (see [Staying up to date](#staying-up-to-date)).
+
+### How the course concepts appear in the code
+
+The project counts for three courses, so use these ideas where they fit naturally, and note them in `DOCUMENTATION.md` so they are easy to point to during the presentation.
+
+| Concept | Where it lives in AppointMed |
 |---|---|
-| Encapsulation | A `Settings` or `Database` class that hides connection details behind methods |
-| Abstraction | An abstract `BaseRepository` that defines `get`, `list`, `create`, `update`, `delete` |
-| Inheritance | `Doctor`, `Nurse`, and `Admin` extending a base `User` class |
-| Polymorphism | Each role class answering `can_access(feature)` in its own way |
-| Constructors | Classes that validate their data when created |
-| Custom exceptions | `AppointmentConflictError`, `InvalidScheduleError` |
-
-Because the project also counts for ITEC 104 and ITEC 105, look for natural places to apply data structures and algorithms (for example, the check-in waiting queue ordered by `checked_in_at`, and searching and sorting records) and sound information-management practice (normalized tables, keys and constraints, and queries that match the schema in `schema.sql`). Note each of these in `DOCUMENTATION.md` so it is easy to point to during the presentation.
+| **Encapsulation** | `Settings` (a frozen dataclass that reads the environment once), `Database` (hides the connection pool, locking, and error translation), and `User` (private fields exposed through properties) |
+| **Abstraction** | `Executor` (an abstract way to run SQL), `BaseRepository` (abstract `table` and `columns`), and `User.scope_doctor_id` |
+| **Inheritance** | `Doctor`, `Nurse`, and `Admin` extend `User`. Every repository extends `BaseRepository`. Every business error extends `AppError`. |
+| **Polymorphism** | Each role answers `can_access(feature)` and `scope_doctor_id` in its own way. `Database` and `Transaction` are interchangeable `Executor`s, so a repository works inside or outside a transaction. |
+| **Constructors and factories** | `User.__init__` rejects a missing username or name. `User.from_row` builds the right subclass. `Settings.from_env` builds the settings. |
+| **Custom exceptions** | The `AppError` family: `AppointmentConflictError`, `InvalidScheduleError`, `InvalidStatusError`, `DuplicateEntryError`, `RateLimitError`, `DatabaseUnavailableError`, and others |
+| **Data structures and algorithms (ITEC 104)** | `WaitingQueue` (min-heap ordered by check-in time), `RateLimiter` (sliding window over a `deque`), `AppointmentWorkflow` (state machine with a transition table), slot generation and taken-slot sets in `SchedulingService`, and search and sorting in repositories |
+| **Information management (ITEC 105)** | 12 normalized tables with primary and foreign keys, `CHECK` constraints, a double-booking guard (a generated `active_slot` column with a unique index), transactions, parameterized queries, aggregate report queries, and an append-only audit log |
 
 ### Coding standards
 
@@ -517,17 +585,19 @@ Because the project also counts for ITEC 104 and ITEC 105, look for natural plac
 - Add type hints to function parameters and return values.
 - Give every class and public method a short docstring that says what it does.
 - Catch specific exceptions (`except MySQLError:`), never a bare `except:`.
+- Raise a subclass of `AppError` for business problems. The registered handlers turn it into `{"detail": "<plain message>"}` with the right status code.
 - Keep business logic in service classes, not in route functions.
-- Read configuration from `Settings`. Never hard-code passwords, hosts, or secrets.
+- Read configuration from `settings`. Never hard-code passwords, hosts, or secrets.
 
 **TypeScript and React (frontend)**
 
-- TypeScript strict mode is on. Avoid `any`; define a type or interface instead.
+- TypeScript strict mode is on, and unused variables and imports fail the build. Avoid `any`; define a type or interface instead.
 - Components are function components in `PascalCase`. Variables and functions are `camelCase`.
 - Type your props. Keep each component focused on one job.
-- Keep all backend calls in the `api/` folder rather than scattering `fetch` calls across components.
-- Style with Tailwind utility classes. Handle loading, empty, and error states on every screen that fetches data.
-- Check access on the backend. Hiding a button is a convenience, not security.
+- Keep all backend calls in `api/endpoints.ts` (which goes through `api/client.ts`) rather than scattering `fetch` calls across components.
+- Keep `types/index.ts` in step with the backend JSON. MySQL `DECIMAL` values arrive as text, so convert with `toNumber()` from `utils/format.ts` before doing arithmetic.
+- Style with Tailwind utility classes. Handle loading, empty, and error states on every screen that fetches data (the `usePolling` hook helps).
+- Check access on the backend. Hiding a button or a page is a convenience, not security.
 
 **SQL and database**
 
@@ -535,33 +605,28 @@ Always use parameterized queries. Never build SQL by joining user input into a s
 
 ```python
 # Good: the value is passed separately, so it cannot change the query
-cursor.execute("SELECT * FROM patients WHERE full_name LIKE %s", (f"%{term}%",))
+self._db.fetch_all("SELECT * FROM patients WHERE full_name LIKE %s", (f"%{term}%",))
 
 # Bad: vulnerable to SQL injection
-cursor.execute(f"SELECT * FROM patients WHERE full_name LIKE '%{term}%'")
+self._db.fetch_all(f"SELECT * FROM patients WHERE full_name LIKE '%{term}%'")
 ```
-
-**Changing the database structure**
-
-1. Edit `source/database/schema.sql` (and `seed.sql` if sample data must change). Do not change tables by hand in MySQL without updating the file.
-2. Mention it clearly in your pull request.
-3. After merging, teammates reset their database (see [Staying up to date](#staying-up-to-date)).
 
 **Errors and validation**
 
 - Validate every input with Pydantic before it reaches a service or the database.
-- Raise meaningful custom exceptions for business problems, and turn them into clear responses with an exception handler.
+- Raise meaningful custom exceptions for business problems and let the exception handler turn them into clear responses.
 - Show users a plain message that says what went wrong and how to fix it. Never expose stack traces, SQL, or password hashes.
 
 ```python
-class AppointmentConflictError(Exception):
+class AppointmentConflictError(ConflictError):
     """Raised when a doctor already has an active appointment at the requested time."""
 ```
 
 **API conventions**
 
-- All endpoints live under `/api`, use lowercase plural nouns (`/api/appointments`), and exchange JSON.
-- Use proper status codes: `200` OK, `201` created, `400` or `422` invalid input, `401` not signed in, `403` not allowed, `404` not found, `409` conflict (such as a double booking).
+- All endpoints live under `/api`: `/api/auth` (login and profile), `/api/public` (booking page, no login), `/api/staff` (doctors and nurses), and `/api/admin`. Use lowercase plural nouns and exchange JSON.
+- Errors always look like `{"detail": "..."}`.
+- Use proper status codes: `200` OK, `201` created, `400` or `422` invalid input, `401` not signed in, `403` not allowed, `404` not found, `409` conflict (such as a double booking), `429` too many attempts, `503` database unavailable.
 
 **Comments and naming**
 
@@ -571,7 +636,7 @@ Explain *why*, not *what*. Use descriptive names (`available_slots`, not `x`). R
 
 The project does not have automated tests yet, so test by hand, and add automated tests as the backend grows.
 
-- **Backend:** open http://127.0.0.1:8000/docs and try your endpoint with valid input, invalid input, and empty fields.
+- **Backend:** open http://127.0.0.1:8000/docs and try your endpoint with valid input, invalid input, and empty fields. Try it as a role that should be refused, too.
 - **Frontend:** use the page as each affected role would. Try the unhappy paths too: empty form, wrong values, backend turned off.
 - **Type check:** run `npm run build` in `source/frontend`. It must finish with no errors.
 - **Database:** if you touched the schema, reset your database and reload both SQL files from scratch to confirm they run cleanly.
