@@ -1,21 +1,33 @@
 import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import Logo from "../components/Logo";
-import { NAV } from "../config/navigation";
+import { NAV } from "../config/Navigation";
 import { useAuth } from "../context/AuthContext";
 import type { NavItem, Role } from "../types";
 
 const TITLE: Record<Role, string> = { doctor: "Doctor", nurse: "Nurse", admin: "Admin" };
+const DESKTOP_MIN_WIDTH = 768; // matches Tailwind's md breakpoint
 
 interface Group {
   name: string;
   items: NavItem[];
 }
 
+// Icon for the open/close button: a window with a left panel.
+function PanelIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <line x1="9" y1="4" x2="9" y2="20" />
+    </svg>
+  );
+}
+
 export default function DashboardLayout({ role }: { role: Role }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  // Open by default on desktop, closed on mobile.
+  const [open, setOpen] = useState(() => window.innerWidth >= DESKTOP_MIN_WIDTH);
 
   const items = NAV[role];
   const profile = items.find((i) => i.pin === "profile");
@@ -32,9 +44,13 @@ export default function DashboardLayout({ role }: { role: Role }) {
     else groups.push({ name, items: [item] });
   }
 
-  const username = user?.username ?? "";
-  const initial = username.charAt(0).toUpperCase();
-  const close = () => setOpen(false);
+  const fullName = user?.fullName ?? user?.username ?? "";
+  const initial = fullName.replace(/^dr\.\s*/i, "").charAt(0).toUpperCase();
+
+  // On phones the panel covers the page, so close it after choosing a page.
+  const closeOnMobile = () => {
+    if (window.innerWidth < DESKTOP_MIN_WIDTH) setOpen(false);
+  };
 
   const link = ({ isActive }: { isActive: boolean }) =>
     `block rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
@@ -46,31 +62,35 @@ export default function DashboardLayout({ role }: { role: Role }) {
       isActive ? "bg-brand-100" : "hover:bg-slate-100"
     }`;
 
+  const toggleButton =
+    "rounded-lg p-2 text-slate-600 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
+
   return (
     <div className="min-h-screen md:flex">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="m-3 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm md:hidden"
-      >
-        Menu
-      </button>
-
       <aside
-        className={`${open ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 w-64 flex-col border-r border-slate-200 bg-white p-4 md:sticky md:top-0 md:flex md:h-screen`}
+        className={`${open ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 w-64 flex-col border-r border-slate-200 bg-white p-4 md:sticky md:top-0 md:h-screen md:shrink-0`}
       >
-        {/* Brand: logo and name */}
-        <div className="px-3 pb-3">
-          <Logo size={32} />
+        {/* Brand: logo and name link to the landing page, with the close button on the right */}
+        <div className="flex items-center justify-between gap-2 px-3 pb-3">
+          <Link
+            to="/"
+            aria-label="Go to the AppointMed home page"
+            title="Go to the home page"
+            className="rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
+            <Logo size={32} />
+          </Link>
+          <button type="button" onClick={() => setOpen(false)} className={toggleButton} aria-label="Close side panel" title="Close side panel">
+            <PanelIcon />
+          </button>
         </div>
 
-        {/* Profile: circle with initial, username, and role underneath */}
+        {/* Profile: circle with initial, full name, and role underneath */}
         {profile && (
           <NavLink
             to={`/${role}/${profile.path}`}
             className={(s) => `${profileLink(s)} border-t border-slate-200`}
-            onClick={close}
+            onClick={closeOnMobile}
             aria-label="Open your profile"
           >
             <span
@@ -80,7 +100,7 @@ export default function DashboardLayout({ role }: { role: Role }) {
               {initial}
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-brand-900">{username}</span>
+              <span className="block truncate text-sm font-semibold text-brand-900">{fullName}</span>
               <span className="block text-xs text-slate-500">{TITLE[role]}</span>
             </span>
           </NavLink>
@@ -93,7 +113,7 @@ export default function DashboardLayout({ role }: { role: Role }) {
               <p className="px-3 pb-1 text-xs font-semibold text-slate-500">{group.name}</p>
               <div className="space-y-1">
                 {group.items.map((item) => (
-                  <NavLink key={item.path} to={`/${role}/${item.path}`} className={link} onClick={close}>
+                  <NavLink key={item.path} to={`/${role}/${item.path}`} className={link} onClick={closeOnMobile}>
                     {item.label}
                   </NavLink>
                 ))}
@@ -106,7 +126,7 @@ export default function DashboardLayout({ role }: { role: Role }) {
         <div className="space-y-1 border-t border-slate-200 pt-3">
           <div className="flex gap-1">
             {settings && (
-              <NavLink to={`/${role}/${settings.path}`} className={(s) => `${link(s)} flex-1`} onClick={close}>
+              <NavLink to={`/${role}/${settings.path}`} className={(s) => `${link(s)} flex-1`} onClick={closeOnMobile}>
                 {settings.label}
               </NavLink>
             )}
@@ -114,7 +134,7 @@ export default function DashboardLayout({ role }: { role: Role }) {
               <NavLink
                 to={`/${role}/${help.path}`}
                 className={(s) => `${link(s)} w-10 text-center`}
-                onClick={close}
+                onClick={closeOnMobile}
                 aria-label="Help"
                 title="Help"
               >
@@ -136,6 +156,12 @@ export default function DashboardLayout({ role }: { role: Role }) {
       </aside>
 
       <main className="min-w-0 flex-1 p-6 md:p-10">
+        {/* Shown only while the side panel is closed */}
+        {!open && (
+          <button type="button" onClick={() => setOpen(true)} className={`${toggleButton} -ml-2 mb-4 border border-slate-300 bg-white`} aria-label="Open side panel" title="Open side panel">
+            <PanelIcon />
+          </button>
+        )}
         <Outlet />
       </main>
     </div>

@@ -3,6 +3,7 @@ export const ROLES: Role[] = ["doctor", "nurse", "admin"];
 
 export interface SessionUser {
   username: string;
+  fullName: string;
   role: Role;
 }
 

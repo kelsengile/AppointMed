@@ -13,15 +13,26 @@ const AuthContext = createContext<AuthValue | null>(null);
 function load(): SessionUser | null {
   try {
     const raw = sessionStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as SessionUser) : null;
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as Partial<SessionUser> & { username: string; role: Role };
+    // Sessions saved before fullName existed fall back to the username.
+    return { username: saved.username, role: saved.role, fullName: saved.fullName ?? saved.username };
   } catch {
     return null;
   }
 }
 
-// TEMPORARY: the backend has no login endpoint yet, so the role is guessed from the
-// seed usernames and the password is NOT checked. Replace the body of login() with a
-// call to POST /api/auth/login once it exists.
+// TEMPORARY: the backend has no login endpoint yet, so the role and full name are guessed
+// from the seed usernames and the password is NOT checked. Replace the body of login() with
+// a call to POST /api/auth/login once it exists, and use users.full_name from the response.
+const FULL_NAMES: Record<string, string> = {
+  admin: "Eugene H. Krabs",
+  "dr.cheeks": "Dr. Sandy Cheeks",
+  "dr.tentacles": "Dr. Squidward Tentacles",
+  "nurse.spongebob": "SpongeBob SquarePants",
+  "nurse.patrick": "Patrick Star",
+};
+
 function guessRole(username: string): Role | null {
   const name = username.trim().toLowerCase();
   if (name.startsWith("admin")) return "admin";
@@ -36,7 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback((username: string, password: string) => {
     const role = guessRole(username);
     if (!role || !password) return null;
-    const next = { username: username.trim(), role };
+    const clean = username.trim();
+    const next: SessionUser = { username: clean, role, fullName: FULL_NAMES[clean.toLowerCase()] ?? clean };
     setUser(next);
     try {
       sessionStorage.setItem(KEY, JSON.stringify(next));
