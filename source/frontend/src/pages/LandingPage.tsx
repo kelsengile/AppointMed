@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import Logo from "../components/Logo";
 import LoginModal from "../components/LoginModal";
 
 const SERVICES = [
@@ -15,28 +16,30 @@ const DOCTORS = [
 
 export default function LandingPage() {
   const [loginOpen, setLoginOpen] = useState(false);
-  const navLink = "rounded px-2 py-1 hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white";
+  const navLink = "rounded px-3 py-1.5 text-sm hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white";
 
   return (
     <div>
       <header className="absolute inset-x-0 top-0 z-10 text-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <a href="#top" className="text-xl font-semibold">AppointMed</a>
-          <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label="Site">
+        {/* Three columns on desktop: logo (left), links (center), login (right) */}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4 md:grid md:grid-cols-[1fr_auto_1fr]">
+          <a href="#top" aria-label="AppointMed home" className="justify-self-start">
+            <Logo size={36} onDark />
+          </a>
+
+          <nav className="order-last flex w-full justify-center gap-1 md:order-none md:w-auto" aria-label="Site">
             <a href="#services" className={navLink}>Services</a>
             <a href="#doctors" className={navLink}>Doctors</a>
             <a href="#contact" className={navLink}>Contact</a>
-            <Link to="/book" className="ml-2 rounded-lg bg-white px-3 py-1.5 font-medium text-brand-700 hover:bg-brand-50">
-              Book appointment
-            </Link>
-            <button
-              type="button"
-              onClick={() => setLoginOpen(true)}
-              className="rounded-lg border border-white/70 px-3 py-1.5 font-medium hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            >
-              Staff login
-            </button>
           </nav>
+
+          <button
+            type="button"
+            onClick={() => setLoginOpen(true)}
+            className="justify-self-end rounded-lg border border-white/70 px-3 py-1.5 text-sm font-medium hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          >
+            Staff login
+          </button>
         </div>
       </header>
 
@@ -86,7 +89,8 @@ export default function LandingPage() {
       </section>
 
       <footer id="contact" className="mx-auto max-w-6xl px-6 py-10 text-sm text-slate-600">
-        <p className="font-semibold text-brand-900">AppointMed Bikini Bottom Clinic</p>
+        <Logo size={28} />
+        <p className="mt-3 font-semibold text-brand-900">AppointMed Bikini Bottom Clinic</p>
         <p>124 Conch Street, Bikini Bottom (fictional sample data)</p>
       </footer>
 

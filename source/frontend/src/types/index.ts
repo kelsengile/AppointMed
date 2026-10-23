@@ -10,5 +10,6 @@ export interface NavItem {
   path: string; // relative to /<role>/
   label: string;
   description: string; // shown on the placeholder page
-  bottom?: boolean; // true = pinned to the bottom of the side panel
+  group?: string; // header shown above this item in the side panel
+  pin?: "profile" | "settings" | "help"; // items pinned to a fixed spot instead of a group
 }

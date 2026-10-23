@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import Logo from "./Logo";
 
 export default function LoginModal({ onClose }: { onClose: () => void }) {
   const { login } = useAuth();
@@ -44,7 +45,8 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
         aria-label="Staff login"
         className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
       >
-        <h2 className="text-xl font-semibold">Staff login</h2>
+        <Logo size={40} />
+        <h2 className="mt-4 text-xl font-semibold">Staff login</h2>
         <p className="mb-4 mt-1 text-sm text-slate-600">For doctors, nurses, and administrators.</p>
         <label className="block text-sm font-medium">
           Username
