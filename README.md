@@ -21,42 +21,49 @@
 
 <br>
 
-AppointMed is a web-based clinic appointment and management system designed to streamline healthcare operations by connecting clinic staff and patients through a centralized platform. Clinic staff use a browser-based portal to manage patient records, doctor information, and appointments, while patients can conveniently request appointments through a public online booking page.
+AppointMed is a web-based clinic appointment and management system. Patients request appointments on a public booking page, and clinic staff (doctors, nurses, and administrators) use a role-based browser portal that takes each visit from request to payment. A FastAPI backend serves both, and every record lives in one shared MySQL database.
 
-With a shared MySQL database, AppointMed keeps clinic records centralized, helping staff coordinate schedules, manage appointments, and maintain organized patient information.
 
-**Features:**
 
-- **Patient Management** — Add, edit, delete, search, and view patient records.
-- **Doctor Management** — Manage doctor profiles, specialties, and availability.
-- **Appointment Management** — Book, reschedule, cancel, and track appointments.
-- **Online Appointment Booking** — Allow patients to request appointments through a responsive, public booking page.
-- **Centralized Database** — Store and manage clinic records through a shared MySQL database.
-- **Appointment Scheduling** — Check doctor availability and help prevent conflicting bookings.
-- **User Authentication** — Provide secure access to authorized clinic staff.
-- **Role-Based Access Control** — Restrict system functions according to user roles.
-- **Dashboard and Reports** — View appointment schedules, patient records, and appointment statuses.
-- **Exception Handling and Validation** — Handle invalid inputs, database errors, and scheduling conflicts.
+### Features
 
-**Developers:**
+- **Public online booking:** Patients choose a doctor, a date, and an open time slot generated from the doctor's weekly schedule. No account is needed. Requests are rate-limited, and a database constraint prevents double booking.
+- **Request review:** Nurses (or the doctor) approve or disapprove each request, and the patient is emailed the result. Approving creates the patient record (or reuses a matching one) and the appointment.
+- **Check-in queue:** Patients are served in check-in order using a min-heap `WaitingQueue`. Doctors examine one patient at a time and are notified when someone checks in.
+- **Examination and prescriptions:** Doctors record the diagnosis and notes, prescribe medicines with unit prices, assign an exam room, and can book a follow-up visit.
+- **Billing:** An invoice opens when the examination starts (consultation fee) and updates when it finishes (fee plus medicines). The doctor or nurse marks it paid, which completes the visit.
+- **Patient records and history:** Search, add, edit, and delete patients (only when they have no visits), and review every completed visit with its prescription and bill, filterable by date range.
+- **Walk-ins, rescheduling, cancelling, and rooms:** Staff can create walk-in appointments, move or cancel scheduled ones, and switch rooms between Available, Occupied, and Maintenance.
+- **Role-based access control:** Doctor, Nurse, and Admin roles are enforced on the server. A nurse works only with the data of the doctor they are assigned to.
+- **Admin tools:** Create, edit, and deactivate users, set doctors' weekly schedules, manage rooms, edit clinic settings (name, default fee, booking switch and window), view reports for a date range, and review the audit log.
+- **Profiles:** Every user can edit their name, email, and photo, and change their password.
+- **Validation and error handling:** Pydantic validates every input, and custom exceptions become plain `{"detail": "..."}` messages. SQL details are never shown to users.
 
-Ambrocio, Rhen Jemimah L.  
-Altobar, Loraine R.  
-Conel, Kelsen Gile S.  
-Ortega, Xavier Kent C.
+### Developers:
+
+**Ambrocio, Rhen Jemimah L.**  
+**Altobar, Loraine R.**  
+**Conel, Kelsen Gile S.**  
+**Ortega, Xavier Kent C.**
 
 ---
 
 ## Coursework Project
 
 **Laguna State Polytechnic University** | **College of Computer Studies**  
-**CMSC 203 – Object-Oriented Programming, ITEC 104 - Data Structures and Algorithm, ITEC 105 - Information Management**  
-**Instructor:** Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, Sir. Jencel P. Sofer
+**CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, ITEC 105 – Information Management**  
+**Instructors:** Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, Sir Jencel P. Sofer  
 **Academic Year:** 2026–2027
 
-AppointMed is developed as the final project for CMSC 203, ITEC 104, and ITEC 105, under the supervision of Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, and Sir. Jencel P. Sofer. The project demonstrates the application of object-oriented programming principles, user interface development, exception handling, database integration, and software engineering practices.
+AppointMed is developed as the final project for CMSC 203, ITEC 104, and ITEC 105, under the supervision of Ms. Roxanne Garbo, Sir Rolan C. Sotomayor, and Sir Jencel P. Sofer. It demonstrates object-oriented design, user interface development, exception handling, database integration, and software engineering practices.
 
-The system applies object-oriented design principles in its Python backend while providing a React-based web interface for clinic staff and a public appointment booking page for patients. It aims to address practical clinic management needs through centralized data storage, organized appointment scheduling, and accessible patient booking.
+| Course | Where it shows up in the project |
+|---|---|
+| **CMSC 203** (OOP) | Role classes (`Doctor`, `Nurse`, `Admin`) extending an abstract `User`, abstract repositories, encapsulated `Settings` and `Database`, and a family of custom exceptions |
+| **ITEC 104** (Data Structures and Algorithms) | A min-heap waiting queue, a sliding-window rate limiter, an appointment status state machine, and slot generation and searching |
+| **ITEC 105** (Information Management) | A 12-table normalized MySQL schema with keys, constraints, and a double-booking guard, plus transactions, parameterized queries, reports, and an audit log |
+
+The exact classes and files are listed in [CONTRIBUTING.md](CONTRIBUTING.md#where-code-belongs).
 
 ---
 

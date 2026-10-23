@@ -4,18 +4,20 @@
 
 We, the developers of AppointMed, pledge to make participation in this project a respectful, harassment-free, and professional experience for everyone, regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
-AppointMed is a coursework project for CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, and ITEC 105 – Information Management at Laguna State Polytechnic University. It is built by a small team and handles clinic-style records. We hold ourselves to a standard of respect for each other and care for any data we work with.
+AppointMed is a web-based clinic appointment and management system built as a coursework project for CMSC 203 – Object-Oriented Programming, ITEC 104 – Data Structures and Algorithm, and ITEC 105 – Information Management at Laguna State Polytechnic University. It is built by a small team and models patient, appointment, and billing records. We hold ourselves to a standard of respect for each other and care for any data we work with.
 
 ## Our Standards
 
 **Behaviors that contribute to a positive environment:**
 
 - Being respectful and considerate in code reviews, issues, pull requests, and chats.
-- Giving and accepting constructive feedback gracefully.
+- Giving and accepting constructive feedback gracefully. Review the code, not the person, and explain the *why* behind a suggestion.
+- Reviewing teammates' pull requests promptly (within 2 days, as set out in [CONTRIBUTING.md](CONTRIBUTING.md)), so nobody is left blocked.
 - Focusing on what is best for the team and the project.
-- Taking responsibility for mistakes, learning from them, and helping teammates do the same.
+- Taking responsibility for mistakes, learning from them, and helping teammates do the same. Mistakes, including an accidentally committed secret, should be reported early and are treated as a chance to fix things, not to assign blame.
 - Crediting others for their work and ideas.
 - Asking questions when unsure, and helping teammates understand the code they write.
+- Using AI-assisted tools openly and responsibly, and being able to explain every part of the code you submit.
 
 **Unacceptable behaviors:**
 
@@ -24,16 +26,19 @@ AppointMed is a coursework project for CMSC 203 – Object-Oriented Programming,
 - Sexualized language or imagery, and unwelcome advances.
 - Trolling, deliberate intimidation, or sustained disruption of discussions.
 - Publishing others' private information (addresses, personal contact details, credentials) without permission.
-- Plagiarism or presenting someone else's work as your own.
+- Plagiarism or presenting someone else's work as your own, including submitting code you did not write and cannot explain.
+- Merging or approving changes without actually reviewing them, or pressuring teammates to do so.
 - Other conduct that would reasonably be considered inappropriate in a professional or academic setting.
 
 ## Responsible Handling of Data
 
-Because AppointMed models patient and appointment records, contributors must also:
+Because AppointMed models patient, appointment, and billing records, contributors must also:
 
-- Use only fictional or anonymized data in the repository, screenshots, documentation, and demonstrations.
+- Use only fictional or anonymized data in the repository, screenshots, documentation, and demonstrations. The sample data in `seed.sql` is made up (staff from SpongeBob SquarePants and cartoon patients), and anything you add to it must be too. Do not use the details of real friends, family, or patients, even "just for testing."
 - Never commit real personal, medical, or contact information of any person.
-- Never share database credentials or `.env` contents in issues, pull requests, or chats.
+- Never commit or share database credentials, `JWT_SECRET`, SMTP passwords, or `.env` contents in the repository, issues, pull requests, or chats.
+- Keep the sample logins to your own computer. Never reuse them, or any password you use elsewhere, on a shared or public setup.
+- Report security problems privately, following [SECURITY.md](SECURITY.md), rather than in public issues or chats.
 
 ## Scope
 
