@@ -1,50 +1,48 @@
-"""Sends email. Without SMTP settings, messages are printed to the backend terminal."""
+"""Outgoing email. Sends through SMTP when configured, otherwise writes the email to the log."""
+
+from __future__ import annotations
 
 import logging
 import smtplib
 import threading
 from email.message import EmailMessage
 
-from backend.core.config import Settings, settings
+from .config import Settings, settings
 
-log = logging.getLogger("uvicorn.error")
+logger = logging.getLogger("appointmed")
 
 
 class Mailer:
-    """Sends plain-text email in a background thread so requests are never slowed down."""
+    """Sends short plain-text emails without blocking the request."""
 
-    def __init__(self, config: Settings) -> None:
+    def __init__(self, config: Settings = settings) -> None:
         self._config = config
 
     def send(self, to: str | None, subject: str, body: str) -> None:
-        """Queue one email. Does nothing if there is no recipient."""
+        """Queue an email. Silently skips when there is no address."""
         if not to:
             return
         threading.Thread(target=self._deliver, args=(to, subject, body), daemon=True).start()
 
     def _deliver(self, to: str, subject: str, body: str) -> None:
-        cfg = self._config
-        if not cfg.smtp_host:
-            log.info("[email not sent, SMTP_HOST is empty]\nTo: %s\nSubject: %s\n\n%s", to, subject, body)
+        """Do the actual sending. Failures are logged and never break the request."""
+        if not self._config.smtp_enabled:
+            logger.info("EMAIL (SMTP not configured, not sent)\nTo: %s\nSubject: %s\n\n%s", to, subject, body)
             return
         message = EmailMessage()
-        message["From"] = cfg.smtp_from
+        message["From"] = self._config.smtp_from
         message["To"] = to
         message["Subject"] = subject
         message.set_content(body)
         try:
-            if cfg.smtp_port == 465:
-                server: smtplib.SMTP = smtplib.SMTP_SSL(cfg.smtp_host, cfg.smtp_port, timeout=10)
-            else:
-                server = smtplib.SMTP(cfg.smtp_host, cfg.smtp_port, timeout=10)
-                if cfg.smtp_use_tls:
+            with smtplib.SMTP(self._config.smtp_host, self._config.smtp_port, timeout=10) as server:
+                if self._config.smtp_tls:
                     server.starttls()
-            with server:
-                if cfg.smtp_user:
-                    server.login(cfg.smtp_user, cfg.smtp_password)
+                if self._config.smtp_user:
+                    server.login(self._config.smtp_user, self._config.smtp_password)
                 server.send_message(message)
-        except (smtplib.SMTPException, OSError):
-            log.exception("Could not send email to %s", to)
+        except (smtplib.SMTPException, OSError) as exc:
+            logger.error("Could not send email to %s: %s", to, exc)
 
 
-mailer = Mailer(settings)
+mailer = Mailer()
