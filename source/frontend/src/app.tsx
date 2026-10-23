@@ -6,16 +6,52 @@ import DashboardLayout from "./layouts/DashboardLayout";
 import BookingPage from "./pages/BookingPage";
 import LandingPage from "./pages/LandingPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
+import AuditPage from "./pages/admin/AuditPage";
+import ClinicSettingsPage from "./pages/admin/ClinicSettingsPage";
+import ReportsPage from "./pages/admin/ReportsPage";
+import RoomsPage from "./pages/admin/RoomsPage";
+import UsersPage from "./pages/admin/UsersPage";
+import HelpPage from "./pages/shared/HelpPage";
+import ProfilePage from "./pages/shared/ProfilePage";
+import SettingsPage from "./pages/shared/SettingsPage";
 import AppointmentsPage from "./pages/staff/AppointmentsPage";
+import DashboardPage from "./pages/staff/DashboardPage";
 import HistoryPage from "./pages/staff/HistoryPage";
 import InvoicePage from "./pages/staff/InvoicePage";
 import NotificationsPage from "./pages/staff/NotificationsPage";
 import PatientsPage from "./pages/staff/PatientsPage";
+import PrescriptionsPage from "./pages/staff/PrescriptionsPage";
 import { ROLES, type NavItem, type Role } from "./types";
 
-// Doctors and nurses share the clinical pages. Every other page is still a placeholder.
+// Maps a navigation item (see config/Navigation.ts) to the page that fills it.
 function pageFor(role: Role, item: NavItem) {
-  if (role !== "admin") {
+  // Pages every role has.
+  switch (item.path) {
+    case "dashboard":
+      return role === "admin" ? <AdminDashboardPage /> : <DashboardPage />;
+    case "profile":
+      return <ProfilePage />;
+    case "settings":
+      return <SettingsPage />;
+    case "help":
+      return <HelpPage />;
+  }
+  if (role === "admin") {
+    switch (item.path) {
+      case "users":
+        return <UsersPage />;
+      case "rooms":
+        return <RoomsPage />;
+      case "clinic":
+        return <ClinicSettingsPage />;
+      case "reports":
+        return <ReportsPage />;
+      case "audits":
+        return <AuditPage />;
+    }
+  } else {
+    // Doctors and nurses share the clinical pages.
     switch (item.path) {
       case "appointments":
         return <AppointmentsPage />;
@@ -27,6 +63,8 @@ function pageFor(role: Role, item: NavItem) {
         return <HistoryPage />;
       case "invoice":
         return <InvoicePage />;
+      case "prescriptions":
+        return <PrescriptionsPage />;
     }
   }
   return <PlaceholderPage item={item} />;

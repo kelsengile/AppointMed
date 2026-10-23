@@ -34,7 +34,7 @@ export default function DashboardLayout({ role }: { role: Role }) {
   const settings = items.find((i) => i.pin === "settings");
   const help = items.find((i) => i.pin === "help");
 
-  // Group the unpinned items by their `group` header, keeping the order from navigation.ts.
+  // Group the unpinned items by their `group` header, keeping the order from Navigation.ts.
   const groups: Group[] = [];
   for (const item of items) {
     if (item.pin) continue;
@@ -85,7 +85,7 @@ export default function DashboardLayout({ role }: { role: Role }) {
           </button>
         </div>
 
-        {/* Profile: circle with initial, full name, and role underneath */}
+        {/* Profile: picture (or initial), full name, and role underneath */}
         {profile && (
           <NavLink
             to={`/${role}/${profile.path}`}
@@ -93,12 +93,16 @@ export default function DashboardLayout({ role }: { role: Role }) {
             onClick={closeOnMobile}
             aria-label="Open your profile"
           >
-            <span
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-600 text-base font-semibold text-white"
-              aria-hidden="true"
-            >
-              {initial}
-            </span>
+            {user?.avatar ? (
+              <img src={user.avatar} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+            ) : (
+              <span
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-600 text-base font-semibold text-white"
+                aria-hidden="true"
+              >
+                {initial}
+              </span>
+            )}
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold text-brand-900">{fullName}</span>
               <span className="block text-xs text-slate-500">{TITLE[role]}</span>
