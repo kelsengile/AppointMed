@@ -1,3 +1,4 @@
+// Formatting helpers shared by every page. Dates from the API are ISO strings without a time zone.
 export const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 /** Local date as YYYY-MM-DD (what <input type="date"> and the API use). */
@@ -5,6 +6,24 @@ export function isoDate(d: Date): string {
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${month}-${day}`;
+}
+
+/** Local date and time as YYYY-MM-DDTHH:mm (what <input type="datetime-local"> uses). */
+export function isoDateTimeLocal(d: Date): string {
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${isoDate(d)}T${hours}:${minutes}`;
+}
+
+/** Turns an API timestamp ("2026-10-23T09:00:00") into a datetime-local value ("2026-10-23T09:00"). */
+export function toInputDateTime(value: string | null | undefined): string {
+  return value ? value.slice(0, 16) : "";
+}
+
+/** MySQL DECIMAL columns arrive as text, so always convert before doing arithmetic. */
+export function toNumber(value: number | string | null | undefined): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function parse(value: string): Date {
@@ -28,7 +47,7 @@ export function formatDateTime(value: string | null | undefined): string {
 }
 
 export function formatMoney(value: number | string | null | undefined): string {
-  return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(Number(value ?? 0));
+  return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(toNumber(value));
 }
 
 export function ageFrom(birthdate: string | null | undefined): string {

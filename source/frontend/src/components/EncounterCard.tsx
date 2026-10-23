@@ -1,5 +1,5 @@
 import type { Encounter } from "../types";
-import { formatDate, formatDateTime, formatMoney } from "../utils/format";
+import { formatDate, formatDateTime, formatMoney, toNumber } from "../utils/format";
 
 // A finished (paid) visit: diagnosis, prescription list, and the bill.
 export default function EncounterCard({ encounter: e, showName = true }: { encounter: Encounter; showName?: boolean }) {
@@ -35,7 +35,7 @@ export default function EncounterCard({ encounter: e, showName = true }: { encou
                   <td className="py-1 pr-3">{i.dosage ?? "-"}</td>
                   <td className="py-1 pr-3">{i.quantity}</td>
                   <td className="py-1 pr-3">{i.instructions ?? "-"}</td>
-                  <td className="py-1 text-right">{formatMoney(i.quantity * i.unit_price)}</td>
+                  <td className="py-1 text-right">{formatMoney(i.quantity * toNumber(i.unit_price))}</td>
                 </tr>
               ))}
             </tbody>

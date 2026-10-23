@@ -1,39 +1,71 @@
+// Appointment requests: approve (creates the patient and appointment, emails them) or disapprove (emails the reason).
 import { useState } from "react";
 import { staffApi } from "../../api/endpoints";
+import Alert from "../../components/Alert";
 import Badge from "../../components/Badge";
+import { inputClass, primaryButton, secondaryButton, statusTone } from "../../components/ui";
 import { usePolling } from "../../hooks/usePolling";
-import { ageFrom, formatDate, formatDateTime } from "../../utils/format";
+import type { NotificationItem } from "../../types";
+import { ageFrom, formatDate, formatDateTime, toInputDateTime } from "../../utils/format";
 
 const FILTERS = ["Pending", "Converted", "Dismissed", "all"] as const;
 type Filter = (typeof FILTERS)[number];
-const tone = { Pending: "amber", Converted: "green", Dismissed: "red" } as const;
+const LABEL = { Pending: "Pending", Converted: "Approved", Dismissed: "Disapproved" } as const;
 
-// Appointment requests: approve (creates the patient + appointment, emails them) or disapprove (emails them).
 export default function NotificationsPage() {
   const [filter, setFilter] = useState<Filter>("Pending");
   const { data, error, loading, reload } = usePolling(() => staffApi.notifications(filter), 15000, [filter]);
+  const rooms = usePolling(() => staffApi.rooms(), 0);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [approving, setApproving] = useState<number | null>(null);
   const [rejecting, setRejecting] = useState<number | null>(null);
+  const [when, setWhen] = useState("");
+  const [room, setRoom] = useState("");
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [actionError, setActionError] = useState("");
 
-  async function act(id: number, run: () => Promise<{ emailed: boolean }>, done: string) {
+  async function act(id: number, run: () => Promise<unknown>, done: string) {
     setBusyId(id);
     setActionError("");
     setMessage("");
     try {
-      const result = await run();
-      setMessage(`${done}${result.emailed ? " The patient was emailed." : " The patient has no email on file."}`);
+      await run();
+      setMessage(done);
+      setApproving(null);
       setRejecting(null);
       setNote("");
-      await reload();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Something went wrong.");
-      await reload();
     } finally {
+      await reload();
       setBusyId(null);
     }
+  }
+
+  function startApproval(n: NotificationItem) {
+    setRejecting(null);
+    setApproving(n.id);
+    setWhen(toInputDateTime(n.preferred_datetime));
+    setRoom("");
+  }
+
+  function confirmApproval(n: NotificationItem) {
+    if (!when) {
+      setActionError("Choose a date and time for the appointment.");
+      return;
+    }
+    const mailed = n.email ? ` A confirmation was emailed to ${n.email}.` : " The patient has no email on file.";
+    void act(n.id, () => staffApi.approve(n.id, { scheduled_time: when, room_id: room ? Number(room) : null }), `Request approved and added to appointments.${mailed}`);
+  }
+
+  function confirmDisapproval(n: NotificationItem) {
+    if (note.trim().length < 3) {
+      setActionError("Enter a short reason for the patient (at least 3 characters).");
+      return;
+    }
+    const mailed = n.email ? ` The reason was emailed to ${n.email}.` : " The patient has no email on file.";
+    void act(n.id, () => staffApi.dismiss(n.id, note.trim()), `Request disapproved.${mailed}`);
   }
 
   return (
@@ -50,13 +82,13 @@ export default function NotificationsPage() {
             onClick={() => setFilter(f)}
             className={`rounded-lg px-3 py-1.5 text-sm ${filter === f ? "bg-brand-600 text-white" : "border border-slate-300 bg-white hover:bg-slate-50"}`}
           >
-            {f === "all" ? "All" : f === "Converted" ? "Approved" : f === "Dismissed" ? "Disapproved" : f}
+            {f === "all" ? "All" : LABEL[f]}
           </button>
         ))}
       </div>
 
-      {message && <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{message}</p>}
-      {(actionError || error) && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">{actionError || error}</p>}
+      {message && <Alert kind="success" onClose={() => setMessage("")}>{message}</Alert>}
+      {(actionError || error) && <Alert kind="error">{actionError || error}</Alert>}
       {loading && !data && <p className="mt-6 text-slate-500">Loading...</p>}
       {data && data.length === 0 && <p className="mt-6 text-slate-500">Nothing here.</p>}
 
@@ -70,7 +102,7 @@ export default function NotificationsPage() {
                   {[n.sex, ageFrom(n.birthdate), n.birthdate ? `born ${formatDate(n.birthdate)}` : ""].filter(Boolean).join(" - ")}
                 </p>
               </div>
-              <Badge tone={tone[n.status]}>{n.status === "Converted" ? "Approved" : n.status === "Dismissed" ? "Disapproved" : n.status}</Badge>
+              <Badge tone={statusTone(n.status)}>{LABEL[n.status]}</Badge>
             </div>
             <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
               <div><dt className="inline font-medium">Requested time: </dt><dd className="inline">{formatDateTime(n.preferred_datetime)}</dd></div>
@@ -82,18 +114,19 @@ export default function NotificationsPage() {
               {n.decision_note && <div className="sm:col-span-2"><dt className="inline font-medium">Reason given: </dt><dd className="inline">{n.decision_note}</dd></div>}
             </dl>
 
-            {n.status === "Pending" && rejecting !== n.id && (
+            {n.status === "Pending" && n.slot_taken && (
+              <Alert kind="warning">That time is already booked for this doctor. Choose another time before approving.</Alert>
+            )}
+
+            {n.status === "Pending" && approving !== n.id && rejecting !== n.id && (
               <div className="mt-4 flex gap-2">
-                <button
-                  disabled={busyId === n.id}
-                  onClick={() => act(n.id, () => staffApi.approve(n.id), "Request approved and added to appointments.")}
-                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-                >
+                <button disabled={busyId === n.id} onClick={() => startApproval(n)} className={primaryButton}>
                   Approve
                 </button>
                 <button
                   disabled={busyId === n.id}
                   onClick={() => {
+                    setApproving(null);
                     setRejecting(n.id);
                     setNote("");
                   }}
@@ -104,12 +137,44 @@ export default function NotificationsPage() {
               </div>
             )}
 
+            {n.status === "Pending" && approving === n.id && (
+              <div className="mt-4 space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm font-medium">
+                    Appointment time (change it if needed)
+                    <input type="datetime-local" className={`${inputClass} mt-1`} value={when} onChange={(e) => setWhen(e.target.value)} />
+                  </label>
+                  <label className="block text-sm font-medium">
+                    Exam room (optional)
+                    <select className={`${inputClass} mt-1`} value={room} onChange={(e) => setRoom(e.target.value)}>
+                      <option value="">No room yet</option>
+                      {rooms.data
+                        ?.filter((r) => r.status !== "Maintenance")
+                        .map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.room_name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="flex gap-2">
+                  <button disabled={busyId === n.id} onClick={() => confirmApproval(n)} className={primaryButton}>
+                    Confirm approval
+                  </button>
+                  <button onClick={() => setApproving(null)} className={secondaryButton}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             {n.status === "Pending" && rejecting === n.id && (
               <div className="mt-4 space-y-2">
                 <label className="block text-sm font-medium">
-                  Reason for the patient (included in the email, optional)
+                  Reason for the patient (included in the email)
                   <input
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                    className={`${inputClass} mt-1`}
                     value={note}
                     maxLength={255}
                     onChange={(e) => setNote(e.target.value)}
@@ -119,7 +184,7 @@ export default function NotificationsPage() {
                 <div className="flex gap-2">
                   <button
                     disabled={busyId === n.id}
-                    onClick={() => act(n.id, () => staffApi.dismiss(n.id, note.trim() || null), "Request disapproved.")}
+                    onClick={() => confirmDisapproval(n)}
                     className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
                   >
                     Confirm disapproval

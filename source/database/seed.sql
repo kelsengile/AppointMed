@@ -1,9 +1,9 @@
 -- ============================================================
 -- AppointMed sample data (development and testing only)
--- Location in repo: main/database/seed.sql
+-- Location in repo: source/database/seed.sql
 --
 -- Load ONCE, after schema.sql:
---     mysql -u root -p appointmed < main/database/seed.sql
+--     mysql -u root -p appointmed < source/database/seed.sql
 -- To start over, see "Resetting your database" in CONTRIBUTING.md.
 --
 -- Everything here is FICTIONAL. Staff are SpongeBob SquarePants
@@ -38,7 +38,6 @@ USE appointmed;
 
 -- ------------------------------------------------------------
 -- USERS (doctors first, because nurses reference them)
--- Password hashes are unchanged, so the passwords above still work.
 -- ------------------------------------------------------------
 INSERT INTO users (id, username, password_hash, full_name, role, email, specialization, assigned_doctor_id) VALUES
 (1, 'admin',           '$2b$12$TxWNxJbDxJvnG8UUASINZ.L1X23uGUsn7NaUwSdUV9ag3.E4CcgT6', 'Eugene H. Krabs',       'admin',  'mr.krabs@example.com',     NULL,               NULL),
@@ -136,23 +135,25 @@ INSERT INTO examinations (id, appointment_id, patient_id, doctor_id, diagnosis, 
 (3, 4, 5, 2, 'Type 2 diabetes, stable', 'Fasting glucose acceptable. Continue current diet. Next review in 3 months.', 'Sent to History',     NULL, NOW() - INTERVAL 30 MINUTE);
 
 -- ------------------------------------------------------------
--- PRESCRIPTIONS AND ITEMS
+-- PRESCRIPTIONS AND ITEMS (unit prices are billed on the invoice)
 -- ------------------------------------------------------------
 INSERT INTO prescriptions (id, examination_id, patient_id, doctor_id, notes, issued_at) VALUES
 (1, 1, 1, 2, 'Monitor blood pressure at home each morning.', NOW() - INTERVAL 7 DAY),
 (2, 2, 2, 3, 'Return if symptoms worsen.',                    NOW() - INTERVAL 3 DAY);
 
-INSERT INTO prescription_items (prescription_id, medicine_name, dosage, quantity, instructions) VALUES
-(1, 'Amlodipine',     '5 mg',  30, 'Take one tablet every morning'),
-(1, 'Losartan',       '50 mg', 30, 'Take one tablet every evening'),
-(2, 'Cetirizine',     '5 mg',  10, 'Take once daily at bedtime for 10 days');
+INSERT INTO prescription_items (prescription_id, medicine_name, dosage, quantity, unit_price, instructions) VALUES
+(1, 'Amlodipine',     '5 mg',  30, 8.00,  'Take one tablet every morning'),
+(1, 'Losartan',       '50 mg', 30, 10.00, 'Take one tablet every evening'),
+(2, 'Cetirizine',     '5 mg',  10, 5.00,  'Take once daily at bedtime for 10 days');
 
 -- ------------------------------------------------------------
 -- INVOICES (appointment 4 is intentionally NOT billed yet)
+--   #1: 500.00 fee + 540.00 medicines (30 x 8 + 30 x 10) = 1040.00, paid
+--   #2: 450.00 fee +  50.00 medicines (10 x 5)           =  500.00, unpaid
 -- ------------------------------------------------------------
-INSERT INTO invoices (id, patient_id, appointment_id, issued_by, amount, status, issued_at, paid_at) VALUES
-(1, 1, 1, 4, 500.00, 'Paid',   NOW() - INTERVAL 7 DAY, NOW() - INTERVAL 7 DAY),
-(2, 2, 2, 5, 450.00, 'Unpaid', NOW() - INTERVAL 3 DAY, NULL);
+INSERT INTO invoices (id, patient_id, appointment_id, issued_by, consultation_fee, medicines_total, amount, status, issued_at, paid_at, paid_by) VALUES
+(1, 1, 1, 4, 500.00, 540.00, 1040.00, 'Paid',   NOW() - INTERVAL 7 DAY, NOW() - INTERVAL 7 DAY, 4),
+(2, 2, 2, 5, 450.00,  50.00,  500.00, 'Unpaid', NOW() - INTERVAL 3 DAY, NULL, NULL);
 
 -- ------------------------------------------------------------
 -- CLINIC SETTINGS (managed by the admin)
@@ -160,7 +161,7 @@ INSERT INTO invoices (id, patient_id, appointment_id, issued_by, amount, status,
 INSERT INTO clinic_settings (setting_key, setting_value, description, updated_by) VALUES
 ('clinic_name',            'AppointMed Bikini Bottom Clinic', 'Name shown on the website and printed invoices', 1),
 ('clinic_address',         '124 Conch Street, Bikini Bottom', 'Clinic address (fictional)',                     1),
-('consultation_fee',       '500.00',                          'Default fee used when a nurse issues an invoice', 1),
+('consultation_fee',       '500.00',                          'Default fee used when an examination starts',    1),
 ('default_slot_minutes',   '30',                              'Default length of one appointment slot',         1),
 ('online_booking_enabled', 'true',                            'Turns the public booking website on or off',     1),
 ('booking_window_days',    '30',                              'How many days ahead patients can book online',   1);

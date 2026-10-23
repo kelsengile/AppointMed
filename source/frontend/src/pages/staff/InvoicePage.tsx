@@ -1,40 +1,66 @@
+// Session bills: consultation fee + prescribed medicines. The doctor or the nurse marks them paid.
+// Examined sessions that never got an invoice are listed at the top so they can be billed.
 import { useState } from "react";
 import { staffApi } from "../../api/endpoints";
+import Alert from "../../components/Alert";
 import Badge from "../../components/Badge";
+import { primaryButton, statusTone } from "../../components/ui";
 import { usePolling } from "../../hooks/usePolling";
-import { formatDate, formatDateTime, formatMoney } from "../../utils/format";
+import { formatDate, formatDateTime, formatMoney, toNumber } from "../../utils/format";
 
-const FILTERS = ["Unpaid", "Paid", "all"] as const;
+const FILTERS = ["Unpaid", "Paid", "Cancelled", "all"] as const;
 type Filter = (typeof FILTERS)[number];
 
-// Session bills: consultation fee + prescribed medicines. The doctor or the nurse marks them paid.
 export default function InvoicePage() {
   const [filter, setFilter] = useState<Filter>("Unpaid");
   const { data, error, loading, reload } = usePolling(() => staffApi.invoices(filter), 10000, [filter]);
+  const unbilled = usePolling(() => staffApi.unbilled(), 10000);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
   const [message, setMessage] = useState("");
 
-  async function pay(id: number, name: string) {
-    if (!window.confirm(`Mark ${name}'s invoice as paid? The visit moves to History.`)) return;
+  async function act(id: number, run: () => Promise<unknown>, done: string) {
     setBusyId(id);
     setActionError("");
     setMessage("");
     try {
-      await staffApi.pay(id);
-      setMessage(`${name}'s invoice is paid. The visit was added to History and the patient's record.`);
+      await run();
+      setMessage(done);
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Could not mark the invoice as paid.");
+      setActionError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
-      await reload();
+      await Promise.all([reload(), unbilled.reload()]);
       setBusyId(null);
     }
+  }
+
+  function pay(id: number, name: string) {
+    if (!window.confirm(`Mark ${name}'s invoice as paid? The visit moves to History.`)) return;
+    void act(id, () => staffApi.pay(id), `${name}'s invoice is paid. The visit was added to History and the patient's record.`);
   }
 
   return (
     <section>
       <h1 className="text-2xl font-semibold">Invoice</h1>
       <p className="mt-1 text-slate-600">Mark an invoice paid once the patient has paid. Payment is only possible after the examination is finished.</p>
+
+      {unbilled.data && unbilled.data.length > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <h2 className="font-semibold text-amber-900">Sessions without an invoice</h2>
+          <ul className="mt-2 space-y-2">
+            {unbilled.data.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span>
+                  {a.full_name} - {formatDateTime(a.scheduled_time)}
+                </span>
+                <button className={primaryButton} disabled={busyId === a.id} onClick={() => act(a.id, () => staffApi.bill(a.id), `Invoice created for ${a.full_name}.`)}>
+                  Create invoice
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Invoice status">
         {FILTERS.map((f) => (
@@ -50,8 +76,8 @@ export default function InvoicePage() {
         ))}
       </div>
 
-      {message && <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{message}</p>}
-      {(actionError || error) && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">{actionError || error}</p>}
+      {message && <Alert kind="success" onClose={() => setMessage("")}>{message}</Alert>}
+      {(actionError || error) && <Alert kind="error">{actionError || error}</Alert>}
       {loading && !data && <p className="mt-6 text-slate-500">Loading...</p>}
       {data && data.length === 0 && <p className="mt-6 text-slate-500">No invoices.</p>}
 
@@ -65,7 +91,7 @@ export default function InvoicePage() {
                   <h2 className="font-semibold">{inv.patient_name}</h2>
                   <p className="text-sm text-slate-500">Visit {formatDateTime(inv.scheduled_time)} - Invoice #{inv.id}</p>
                 </div>
-                <Badge tone={inv.status === "Paid" ? "green" : inv.status === "Unpaid" ? "amber" : "red"}>{inv.status}</Badge>
+                <Badge tone={statusTone(inv.status)}>{inv.status}</Badge>
               </div>
 
               <table className="mt-3 w-full text-left text-sm">
@@ -79,7 +105,7 @@ export default function InvoicePage() {
                       <td className="py-1 text-slate-700">
                         {i.medicine_name} {i.dosage && `(${i.dosage})`} x {i.quantity}
                       </td>
-                      <td className="py-1 text-right">{formatMoney(i.quantity * i.unit_price)}</td>
+                      <td className="py-1 text-right">{formatMoney(i.quantity * toNumber(i.unit_price))}</td>
                     </tr>
                   ))}
                   <tr className="border-t border-slate-200 font-semibold">
@@ -91,11 +117,7 @@ export default function InvoicePage() {
 
               {inv.status === "Unpaid" && (
                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button
-                    disabled={busyId === inv.id || inv.appointment_status !== "Examined"}
-                    onClick={() => pay(inv.id, inv.patient_name)}
-                    className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-                  >
+                  <button disabled={busyId === inv.id || inv.appointment_status !== "Examined"} onClick={() => pay(inv.id, inv.patient_name)} className={primaryButton}>
                     Mark as paid
                   </button>
                   {examining && <span className="text-sm text-slate-500">The examination is still in progress. The total updates when the doctor finishes.</span>}
