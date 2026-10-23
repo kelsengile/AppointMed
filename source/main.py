@@ -6,71 +6,18 @@ Run from the `source` folder:
 Then open http://127.0.0.1:8000 (status page) or http://127.0.0.1:8000/docs (API docs).
 """
 
-import os
 from datetime import datetime, timezone
-from pathlib import Path
 
-import mysql.connector
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from mysql.connector import Error as MySQLError
 
-APP_NAME = "AppointMed"
-APP_VERSION = "0.1.0"
-
-load_dotenv(Path(__file__).resolve().parent / ".env")
-
-
-class Settings:
-    """Reads configuration from environment variables (loaded from .env)."""
-
-    def __init__(self) -> None:
-        self.app_env = os.getenv("APP_ENV", "development")
-        self.db_host = os.getenv("DB_HOST", "localhost")
-        self.db_port = int(os.getenv("DB_PORT", "3306"))
-        self.db_name = os.getenv("DB_NAME", "appointmed")
-        self.db_user = os.getenv("DB_USER", "appointmed_user")
-        self.db_password = os.getenv("DB_PASSWORD", "")
-        origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
-        self.cors_origins = [o.strip() for o in origins.split(",") if o.strip()]
-
-
-class Database:
-    """Thin wrapper around MySQL Connector/Python."""
-
-    def __init__(self, settings: Settings) -> None:
-        self._settings = settings
-
-    def connect(self):
-        return mysql.connector.connect(
-            host=self._settings.db_host,
-            port=self._settings.db_port,
-            database=self._settings.db_name,
-            user=self._settings.db_user,
-            password=self._settings.db_password,
-            connection_timeout=3,
-        )
-
-    def is_reachable(self) -> bool:
-        """True if the app can connect and run a trivial query."""
-        try:
-            connection = self.connect()
-            try:
-                cursor = connection.cursor()
-                cursor.execute("SELECT 1")
-                cursor.fetchone()
-                cursor.close()
-            finally:
-                connection.close()
-            return True
-        except MySQLError:
-            return False
-
-
-settings = Settings()
-database = Database(settings)
+from backend.core.config import APP_NAME, APP_VERSION, settings
+from backend.core.database import database
+from backend.core.exceptions import register_exception_handlers
+from backend.routes.auth_routes import router as auth_router
+from backend.routes.public_routes import router as public_router
+from backend.routes.staff_routes import router as staff_router
 
 app = FastAPI(title=f"{APP_NAME} API", version=APP_VERSION)
 
@@ -80,6 +27,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+register_exception_handlers(app)
+app.include_router(auth_router)
+app.include_router(public_router)
+app.include_router(staff_router)
 
 
 @app.get("/api/health")
