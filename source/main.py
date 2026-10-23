@@ -6,6 +6,7 @@ Run from the `source` folder:
 Then open http://127.0.0.1:8000 (status page) or http://127.0.0.1:8000/docs (API docs).
 """
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import FastAPI
@@ -15,9 +16,12 @@ from fastapi.responses import HTMLResponse
 from backend.core.config import APP_NAME, APP_VERSION, settings
 from backend.core.database import database
 from backend.core.exceptions import register_exception_handlers
+from backend.routes.admin_routes import router as admin_router
 from backend.routes.auth_routes import router as auth_router
 from backend.routes.public_routes import router as public_router
 from backend.routes.staff_routes import router as staff_router
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 app = FastAPI(title=f"{APP_NAME} API", version=APP_VERSION)
 
@@ -32,6 +36,7 @@ register_exception_handlers(app)
 app.include_router(auth_router)
 app.include_router(public_router)
 app.include_router(staff_router)
+app.include_router(admin_router)
 
 
 @app.get("/api/health")
@@ -78,7 +83,7 @@ STATUS_PAGE = """<!DOCTYPE html>
 <body>
   <main>
     <h1>AppointMed is running</h1>
-    <p>The backend responded. This page is a placeholder for the public booking website.</p>
+    <p>The backend responded. The web app runs at http://localhost:5173 during development.</p>
     <ul>
       <li><span>API</span><span id="api" class="bad">Checking...</span></li>
       <li><span>Database</span><span id="db" class="bad">Checking...</span></li>

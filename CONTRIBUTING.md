@@ -189,8 +189,9 @@ Appointment dates in the seed are relative to the day you load it, so "today" al
 Copy the template and fill in your values in a new source/.env file:
 
 ```
-# AppointMed local configuration. This file is gitignored: never commit it.
-# Copy values from .env.example and change the placeholders.
+
+# AppointMed local configuration. Copy this file to .env (same folder) and change the placeholders.
+# .env is gitignored: never commit it.
 
 APP_ENV=development
 
@@ -200,11 +201,21 @@ DB_NAME=appointmed
 DB_USER=appointmed_user
 DB_PASSWORD=change_this_password
 
-# Used later for login tokens. Generate one with: python -c "import secrets; print(secrets.token_hex(32))"
+# Signs login tokens. Generate one with: python -c "import secrets; print(secrets.token_hex(32))"
 JWT_SECRET=change_this_secret
+# Minutes a login stays valid (default 480 = 8 hours)
+JWT_EXPIRE_MINUTES=480
 
 # Comma-separated list of origins allowed to call the API from a browser
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
+# OPTIONAL email. Leave SMTP_HOST empty and emails are written to the backend console instead.
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=no-reply@appointmed.example
+SMTP_TLS=true
 
 ```
 
