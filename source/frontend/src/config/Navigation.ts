@@ -12,22 +12,22 @@ const pinned: NavItem[] = [
 
 const doctor: NavItem[] = [
   { path: "dashboard", label: "Dashboard", description: "Today's queue and a summary of your day.", group: "Overview" },
-  { path: "appointments", label: "Appointments", description: "Your scheduled, checked-in, and consulting appointments.", group: "Consultations" },
+  { path: "appointments", label: "Appointments", description: "Your exam room, waiting queue, and today's agenda.", group: "Consultations" },
   { path: "notifications", label: "Notifications", description: "Appointment requests routed to you.", group: "Consultations" },
   { path: "patients", label: "Patients", description: "Search and open patient records.", group: "Records" },
   { path: "history", label: "History", description: "Completed encounters.", group: "Records" },
-  { path: "invoice", label: "Invoice", description: "Invoices for your sessions (view only).", group: "Records" },
-  { path: "prescriptions", label: "Prescriptions", description: "Write and review prescriptions.", group: "Records" },
+  { path: "invoice", label: "Invoice", description: "Invoices for your sessions. Mark them paid when the patient pays.", group: "Records" },
+  { path: "prescriptions", label: "Prescriptions", description: "Prescriptions are written during an examination (Appointments) and listed in History.", group: "Records" },
   ...pinned,
 ];
 
 const nurse: NavItem[] = [
   { path: "dashboard", label: "Dashboard", description: "Pending requests, today's queue, and unbilled sessions.", group: "Overview" },
-  { path: "appointments", label: "Appointments", description: "All appointments for your doctor.", group: "Consultations" },
-  { path: "notifications", label: "Notifications", description: "Convert appointment requests to appointments, or dismiss them.", group: "Consultations" },
+  { path: "appointments", label: "Appointments", description: "Check patients in and manage your doctor's agenda.", group: "Consultations" },
+  { path: "notifications", label: "Notifications", description: "Approve appointment requests or disapprove them.", group: "Consultations" },
   { path: "patients", label: "Patients", description: "Search and open patient records.", group: "Records" },
   { path: "history", label: "History", description: "Completed encounters.", group: "Records" },
-  { path: "invoice", label: "Invoice", description: "Bill finished sessions and mark invoices paid.", group: "Records" },
+  { path: "invoice", label: "Invoice", description: "Collect payment for finished sessions and mark invoices paid.", group: "Records" },
   ...pinned,
 ];
 

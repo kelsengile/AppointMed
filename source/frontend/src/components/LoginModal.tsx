@@ -9,6 +9,7 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const first = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -18,18 +19,21 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     if (!username.trim() || !password) {
       setError("Enter your username and password.");
       return;
     }
-    const role = login(username, password);
-    if (!role) {
-      setError("Account not recognized. Staff usernames start with dr., nurse., or admin.");
-      return;
+    setBusy(true);
+    setError("");
+    try {
+      const role = await login(username, password);
+      navigate(`/${role}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not log in.");
+      setBusy(false);
     }
-    navigate(`/${role}`);
   }
 
   const field =
@@ -56,13 +60,17 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
           Password
           <input type="password" className={field} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
         </label>
-        {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+        {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-slate-700 hover:bg-slate-100">
             Cancel
           </button>
-          <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2">
-            Log in
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-lg bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60"
+          >
+            {busy ? "Logging in..." : "Log in"}
           </button>
         </div>
       </form>
