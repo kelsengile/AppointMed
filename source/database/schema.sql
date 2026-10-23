@@ -35,6 +35,7 @@
 -- ============================================================
 
 SET NAMES utf8mb4;
+CREATE DATABASE appointmed;
 USE appointmed;
 
 -- ============================================================
@@ -289,3 +290,4 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     INDEX idx_audit_created (created_at),
     INDEX idx_audit_user (user_id)
 ) ENGINE=InnoDB;
+
