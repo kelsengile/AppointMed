@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import Logo from "../components/Logo";
 import LoginModal from "../components/LoginModal";
+import { useAuth } from "../context/AuthContext";
 
 const SERVICES = [
   { name: "General Medicine", text: "Checkups, illness, and long-term condition care for adults." },
@@ -15,13 +16,16 @@ const DOCTORS = [
 ];
 
 export default function LandingPage() {
+  const { user } = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
   const navLink = "rounded px-3 py-1.5 text-sm hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white";
+  const accountButton =
+    "justify-self-end rounded-lg border border-white/70 px-3 py-1.5 text-sm font-medium hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white";
 
   return (
     <div>
       <header className="absolute inset-x-0 top-0 z-10 text-white">
-        {/* Three columns on desktop: logo (left), links (center), login (right) */}
+        {/* Three columns on desktop: logo (left), links (center), login or dashboard (right) */}
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4 md:grid md:grid-cols-[1fr_auto_1fr]">
           <a href="#top" aria-label="AppointMed home" className="justify-self-start">
             <Logo size={36} onDark />
@@ -33,13 +37,15 @@ export default function LandingPage() {
             <a href="#contact" className={navLink}>Contact</a>
           </nav>
 
-          <button
-            type="button"
-            onClick={() => setLoginOpen(true)}
-            className="justify-self-end rounded-lg border border-white/70 px-3 py-1.5 text-sm font-medium hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          >
-            Staff login
-          </button>
+          {user ? (
+            <Link to={`/${user.role}`} className={accountButton}>
+              Dashboard
+            </Link>
+          ) : (
+            <button type="button" onClick={() => setLoginOpen(true)} className={accountButton}>
+              Staff login
+            </button>
+          )}
         </div>
       </header>
 
