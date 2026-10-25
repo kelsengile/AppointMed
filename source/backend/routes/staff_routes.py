@@ -58,6 +58,11 @@ def appointments(day: str = "today", q: str | None = None, user: User = Depends(
     return appointment_service.list_appointments(user, day, q)
 
 
+@router.get("/calendar")
+def calendar(date_from: date, date_to: date, user: User = Depends(require_feature("appointments"))) -> dict:
+    return appointment_service.calendar(user, date_from, date_to)
+
+
 @router.post("/appointments", status_code=201)
 def create_appointment(body: AppointmentCreate, user: User = Depends(require_feature("appointments"))) -> dict:
     return appointment_service.create_appointment(user, body)

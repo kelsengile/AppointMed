@@ -22,7 +22,7 @@ from backend.repositories.appointment_repository import AppointmentRepository, N
 from backend.repositories.clinical_repository import ExaminationRepository, InvoiceRepository, PrescriptionRepository
 from backend.repositories.patient_repository import PatientRepository
 from backend.repositories.system_repository import AuditRepository, RoomRepository, SettingsRepository
-from backend.repositories.user_repository import UserRepository
+from backend.repositories.user_repository import ScheduleRepository, UserRepository
 from backend.schemas.api import AppointmentCreate, ExamFinish
 
 
@@ -175,6 +175,20 @@ class AppointmentService:
     def list_appointments(self, user: User, day: str, term: str | None) -> list[Row]:
         return AppointmentRepository(self._db).list_for_doctor(user.scope_doctor_id, self._parse_when(day), blank_to_none(term))
 
+    def calendar(self, user: User, start: date, end: date) -> dict[str, Any]:
+        """Which weekdays the doctor works, and which days already have bookings (for the agenda calendar)."""
+        if start > end or (end - start).days > 62:
+            raise ValidationFailedError("Choose a range of two months or less.")
+        doctor_id = user.scope_doctor_id
+        blocks = ScheduleRepository(self._db).blocks_for_doctor(doctor_id)
+        busy = AppointmentRepository(self._db).booked_days(doctor_id, start, end) | NotificationRepository(
+            self._db
+        ).pending_days(doctor_id, start, end)
+        return {
+            "working_weekdays": sorted({b["weekday"] for b in blocks}),
+            "busy_days": sorted(d.isoformat() for d in busy),
+        }
+
     def create_appointment(self, user: User, data: AppointmentCreate) -> Row:
         """Create a walk-in or phone appointment for the user's doctor."""
         doctor_id = user.scope_doctor_id
@@ -220,12 +234,14 @@ class AppointmentService:
         return AppointmentRepository(self._db).get_item(new_id)  # type: ignore[return-value]
 
     def check_in(self, user: User, appointment_id: int) -> Row:
-        """Move a scheduled appointment into the waiting queue."""
+        """Move a scheduled appointment into the waiting queue. A room must be chosen first."""
         doctor_id = user.scope_doctor_id
         with self._db.transaction() as tx:
             appointments = AppointmentRepository(tx)
             appt = self._load(appointments, doctor_id, appointment_id)
             AppointmentWorkflow.ensure(appt["status"], "Checked-in")
+            if not appt["room_id"]:
+                raise ValidationFailedError("Choose an exam room before checking the patient in.")
             now = tx.server_now()
             if appt["scheduled_time"].date() > now.date():
                 raise ValidationFailedError("Only today's appointments can be checked in.")

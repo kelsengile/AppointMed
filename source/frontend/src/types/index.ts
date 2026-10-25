@@ -144,6 +144,12 @@ export interface AppointmentCreatePayload {
   check_in_now: boolean;
 }
 
+export interface CalendarData {
+  working_weekdays: number[]; // 1 = Monday ... 7 = Sunday
+  busy_days: string[]; // YYYY-MM-DD
+}
+
+
 export type RoomStatus = "Available" | "Occupied" | "Maintenance";
 
 export interface RoomItem {

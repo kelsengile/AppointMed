@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { staffApi } from "../../api/endpoints";
+import AgendaCalendar from "../../components/AgendaCalendar";
 import Alert from "../../components/Alert";
 import Badge from "../../components/Badge";
 import ExamPanel from "../../components/ExamPanel";
@@ -172,10 +173,11 @@ export default function AppointmentsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="text-sm font-medium">
+          {/* A div, not a label: a label around a button can fire the button twice. */}
+          <div className="text-sm font-medium">
             Agenda for
-            <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} className="ml-2 rounded-lg border border-slate-300 px-3 py-1.5" />
-          </label>
+            <AgendaCalendar value={day} onChange={setDay} />
+          </div>
           <button type="button" className={primaryButton} onClick={() => setWalkIn(true)}>
             New appointment
           </button>
@@ -288,14 +290,16 @@ export default function AppointmentsPage() {
                       </option>
                     ))}
                 </select>
+                {/* Check-in needs a room. The room dropdown above saves the room as soon as one is picked. */}
                 <button
                   className={primaryButton}
-                  disabled={busyId === a.id || later}
-                  title={later ? "Only today's appointments can be checked in" : undefined}
+                  disabled={busyId === a.id || later || !a.room_id}
+                  title={later ? "Only today's appointments can be checked in" : !a.room_id ? "Choose a room first" : undefined}
                   onClick={() => run(a.id, () => staffApi.checkIn(a.id), `${a.full_name} was added to the queue.`)}
                 >
                   Check in
                 </button>
+                {!a.room_id && !later && <span className="text-xs text-amber-700">Choose a room to check in</span>}
                 <button className={secondaryButton} disabled={busyId === a.id} onClick={() => setMoving(a)}>
                   Reschedule
                 </button>
