@@ -100,6 +100,16 @@ class AppointmentRepository(BaseRepository):
         )
         return {r["taken"] for r in rows}
 
+    def booked_days(self, doctor_id: int, start: date, end: date) -> set[date]:
+        """Days in a range that have a scheduled or checked-in appointment."""
+        rows = self._db.fetch_all(
+            "SELECT DISTINCT DATE(scheduled_time) AS day FROM appointments "
+            "WHERE doctor_id = %s AND status IN ('Scheduled', 'Checked-in') "
+            "AND DATE(scheduled_time) BETWEEN %s AND %s",
+            (doctor_id, start, end),
+        )
+        return {r["day"] for r in rows}
+
     def status_counts_today(self, doctor_id: int) -> list[Row]:
         return self._db.fetch_all(
             "SELECT status, COUNT(*) AS n FROM appointments WHERE doctor_id = %s AND DATE(scheduled_time) = CURDATE() GROUP BY status",
@@ -146,3 +156,13 @@ class NotificationRepository(BaseRepository):
     def count_pending(self, doctor_id: int) -> int:
         row = self._db.fetch_one("SELECT COUNT(*) AS n FROM notifications WHERE doctor_id = %s AND status = 'Pending'", (doctor_id,))
         return int(row["n"]) if row else 0
+
+    def pending_days(self, doctor_id: int, start: date, end: date) -> set[date]:
+        """Days in a range that have a pending booking request."""
+        rows = self._db.fetch_all(
+            "SELECT DISTINCT DATE(preferred_datetime) AS day FROM notifications "
+            "WHERE doctor_id = %s AND status = 'Pending' AND preferred_datetime IS NOT NULL "
+            "AND DATE(preferred_datetime) BETWEEN %s AND %s",
+            (doctor_id, start, end),
+        )
+        return {r["day"] for r in rows}
