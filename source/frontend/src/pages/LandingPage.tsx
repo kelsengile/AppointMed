@@ -55,7 +55,7 @@ export default function LandingPage() {
         className="relative grid min-h-[34rem] items-end bg-brand-700 bg-cover bg-center px-6 pb-16 pt-32 text-white"
         style={{
           backgroundImage:
-            "linear-gradient(to top, rgba(18,48,47,.85), rgba(18,48,47,.35)), url('/hero.jpg'), linear-gradient(135deg, #0d6459, #14917f)",
+            "linear-gradient(to top, rgba(5,49,110,.85), rgba(5,49,110,.35)), url('/hero.jpg'), linear-gradient(135deg, #06408F, #2468CF)",
         }}
       >
         <div className="mx-auto w-full max-w-6xl">

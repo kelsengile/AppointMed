@@ -50,7 +50,7 @@ class PatientService:
             raise ConflictError("A patient with this name and birthdate already exists.")
         new_id = self._patients.create({**self._columns(data), "doctor_id": doctor_id})
         AuditRepository(self._db).record(user.id, "CREATE_PATIENT", "patients", new_id, "Added a patient record")
-        return self._patients.search(doctor_id, data.full_name)[0] if False else self._load(user, new_id)
+        return self._load(user, new_id)
 
     def update(self, user: User, patient_id: int, data: PatientIn) -> Row:
         self._load(user, patient_id)
