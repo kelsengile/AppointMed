@@ -345,7 +345,7 @@ Then start the backend and the frontend as in Step 7.
 ├── SECURITY.md
 └── source/
     ├── .env                      # local secrets (gitignored)
-    ├── .env.example              # template for .env
+    ├── .env.example              # template for .env 
     ├── main.py                   # FastAPI entry point: CORS, error handlers, routers, status page
     ├── requirements.txt          # Python dependencies
     ├── assets/                   # fonts, icons, and images
@@ -384,10 +384,6 @@ Then start the backend and the frontend as in Step 7.
             ├── types/            # index.ts: types that match the backend JSON
             └── utils/            # format.ts: dates, money, age
 ```
-
-Some older files may still sit in `source/backend/` but are no longer used by the app: `core/deps.py`, `core/permissions.py`, `repositories/booking_repository.py`, `repositories/visit_repository.py`, `schemas/clinic.py`, and `services/visit_service.py`. They come from an earlier design, will not run with the current code, and should not be built on. Delete them rather than fixing them.
-
----
 
 ## Contributing
 
