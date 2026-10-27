@@ -4,12 +4,14 @@ import { adminApi } from "../../api/endpoints";
 import Alert from "../../components/Alert";
 import Badge from "../../components/Badge";
 import Modal from "../../components/Modal";
+import PasswordRequirements from "../../components/PasswordRequirements";
 import ScheduleEditor from "../../components/ScheduleEditor";
 import { inputClass, primaryButton, secondaryButton } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { usePolling } from "../../hooks/usePolling";
 import type { DoctorRef, Role, UserCreatePayload, UserRecord } from "../../types";
 import { formatDateTime } from "../../utils/format";
+import { passwordProblem } from "../../utils/password";
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const USERNAME = /^[A-Za-z0-9._-]{3,50}$/;
@@ -37,7 +39,8 @@ function UserForm({ editing, doctors, onClose, onSaved }: { editing: UserRecord 
     e.preventDefault();
     if (!editing) {
       if (!USERNAME.test(username.trim())) return setError("Username: 3 to 50 letters, numbers, dots, dashes or underscores.");
-      if (password.length < 8 || password.length > 72) return setError("The password must have 8 to 72 characters.");
+      const problem = passwordProblem(password);
+      if (problem) return setError(problem);
     }
     if (fullName.trim().length < 2) return setError("Enter the full name.");
     if (email.trim() && !EMAIL.test(email.trim())) return setError("Enter a valid email address.");
@@ -75,10 +78,13 @@ function UserForm({ editing, doctors, onClose, onSaved }: { editing: UserRecord 
               Username
               <input className={`${inputClass} mt-1`} autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} />
             </label>
-            <label className="block text-sm font-medium">
-              Password (8 to 72 characters)
-              <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={password} onChange={(e) => setPassword(e.target.value)} />
-            </label>
+            <div>
+              <label className="block text-sm font-medium">
+                Password
+                <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={password} onChange={(e) => setPassword(e.target.value)} />
+              </label>
+              <PasswordRequirements password={password} />
+            </div>
             <label className="block text-sm font-medium">
               Role
               <select className={`${inputClass} mt-1`} value={role} onChange={(e) => setRole(e.target.value as Role)}>
@@ -140,7 +146,8 @@ function PasswordForm({ target, onClose, onSaved }: { target: UserRecord; onClos
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (password.length < 8 || password.length > 72) return setError("The password must have 8 to 72 characters.");
+    const problem = passwordProblem(password);
+    if (problem) return setError(problem);
     if (password !== confirm) return setError("The passwords do not match.");
     setBusy(true);
     setError("");
@@ -156,10 +163,13 @@ function PasswordForm({ target, onClose, onSaved }: { target: UserRecord; onClos
   return (
     <Modal title={`Reset password: ${target.username}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
-        <label className="block text-sm font-medium">
-          New password
-          <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={password} onChange={(e) => setPassword(e.target.value)} />
-        </label>
+        <div>
+          <label className="block text-sm font-medium">
+            New password
+            <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          <PasswordRequirements password={password} />
+        </div>
         <label className="block text-sm font-medium">
           Confirm new password
           <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
