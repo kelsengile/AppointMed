@@ -7,6 +7,7 @@ import type {
   BookingPayload,
   BookingReceipt,
   Catalog,
+  CalendarData,
   DoctorRef,
   Encounter,
   ExamPayload,
@@ -112,6 +113,9 @@ export const staffApi = {
   unbilled: () => request<AppointmentItem[]>("/api/staff/invoices/unbilled"),
   pay: (id: number) => request<Ok>(`/api/staff/invoices/${id}/pay`, { method: "POST" }),
   prescriptions: (q: string) => request<PrescriptionRecord[]>(`/api/staff/prescriptions${qs({ q })}`),
+
+  calendar: (dateFrom: string, dateTo: string) =>
+    request<CalendarData>(`/api/staff/calendar${qs({ date_from: dateFrom, date_to: dateTo })}`),
 };
 
 export const adminApi = {

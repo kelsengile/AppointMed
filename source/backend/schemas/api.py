@@ -1,5 +1,6 @@
 """Pydantic request bodies. Every input is validated here before it reaches a service."""
 
+import re
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Literal
@@ -19,11 +20,27 @@ class Schema(BaseModel):
 
 def _check_optional_email(value: str | None) -> str | None:
     """Allow empty, otherwise require something that looks like an email address."""
-    import re
-
     if value and not re.match(EMAIL_PATTERN, value):
         raise ValueError("Enter a valid email address.")
     return value or None
+
+
+def _check_password_strength(value: str) -> str:
+    """A new password needs 8+ characters, upper and lower case letters, a number, and a special character."""
+    missing: list[str] = []
+    if len(value) < 8:
+        missing.append("at least 8 characters")
+    if not re.search(r"[A-Z]", value):
+        missing.append("an uppercase letter")
+    if not re.search(r"[a-z]", value):
+        missing.append("a lowercase letter")
+    if not re.search(r"[0-9]", value):
+        missing.append("a number")
+    if not re.search(r"[^A-Za-z0-9\s]", value):
+        missing.append("a special character such as ! ? @ *")
+    if missing:
+        raise ValueError("The password needs " + ", ".join(missing) + ".")
+    return value
 
 
 # ---------- auth and profile ----------
@@ -49,6 +66,11 @@ class AvatarUpload(Schema):
 class PasswordChange(Schema):
     current_password: str = Field(min_length=1, max_length=200)
     new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strong(cls, value: str) -> str:
+        return _check_password_strength(value)
 
 
 # ---------- public booking ----------
@@ -169,6 +191,11 @@ class UserCreate(Schema):
     def email_ok(cls, value: str | None) -> str | None:
         return _check_optional_email(value)
 
+    @field_validator("password")
+    @classmethod
+    def password_strong(cls, value: str) -> str:
+        return _check_password_strength(value)
+
 
 class UserUpdate(Schema):
     full_name: str = Field(min_length=2, max_length=100)
@@ -184,6 +211,11 @@ class UserUpdate(Schema):
 
 class PasswordReset(Schema):
     new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strong(cls, value: str) -> str:
+        return _check_password_strength(value)
 
 
 class ActiveToggle(Schema):
