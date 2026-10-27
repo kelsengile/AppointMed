@@ -1,8 +1,10 @@
-// Change your own password. The backend checks the current password and enforces 8 to 72 characters.
+// Change your own password. The backend checks the current password and enforces the password rules.
 import { useState, type FormEvent } from "react";
 import { authApi } from "../../api/endpoints";
 import Alert from "../../components/Alert";
+import PasswordRequirements from "../../components/PasswordRequirements";
 import { inputClass, primaryButton } from "../../components/ui";
+import { passwordProblem } from "../../utils/password";
 
 export default function SettingsPage() {
   const [current, setCurrent] = useState("");
@@ -17,8 +19,8 @@ export default function SettingsPage() {
     setError("");
     setMessage("");
     if (!current) return setError("Enter your current password.");
-    if (next.length < 8) return setError("The new password must have at least 8 characters.");
-    if (next.length > 72) return setError("The new password can have at most 72 characters.");
+    const problem = passwordProblem(next);
+    if (problem) return setError(problem);
     if (next !== confirm) return setError("The new passwords do not match.");
     if (next === current) return setError("Choose a password that is different from the current one.");
     setBusy(true);
@@ -44,15 +46,17 @@ export default function SettingsPage() {
           Current password
           <input type="password" autoComplete="current-password" className={`${inputClass} mt-1`} value={current} onChange={(e) => setCurrent(e.target.value)} />
         </label>
-        <label className="block text-sm font-medium">
-          New password
-          <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={next} onChange={(e) => setNext(e.target.value)} />
-        </label>
+        <div>
+          <label className="block text-sm font-medium">
+            New password
+            <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={next} onChange={(e) => setNext(e.target.value)} />
+          </label>
+          <PasswordRequirements password={next} />
+        </div>
         <label className="block text-sm font-medium">
           Confirm new password
           <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </label>
-        <p className="text-xs text-slate-500">Use at least 8 characters. A longer phrase is safer than a short, complicated one.</p>
         {error && <Alert kind="error">{error}</Alert>}
         {message && <Alert kind="success">{message}</Alert>}
         <button type="submit" disabled={busy} className={primaryButton}>
