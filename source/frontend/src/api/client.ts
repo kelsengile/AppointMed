@@ -77,3 +77,31 @@ export async function request<T>(path: string, options: { method?: string; body?
   }
   return data as T;
 }
+
+/** Downloads a file (such as the database backup). The token is sent, so a plain link cannot be used. */
+export async function download(path: string): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let response: Response;
+  try {
+    response = await fetch(path, { headers });
+  } catch {
+    throw new ApiError("Cannot reach the server. Check that the backend is running.", 0);
+  }
+
+  if (!response.ok) {
+    let data: unknown = null;
+    try {
+      data = JSON.parse(await response.text());
+    } catch {
+      data = null;
+    }
+    if (response.status === 401 && token) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    throw new ApiError(messageFrom(data, `Request failed (${response.status}).`), response.status);
+  }
+
+  const match = /filename="?([^";]+)"?/i.exec(response.headers.get("Content-Disposition") ?? "");
+  return { blob: await response.blob(), filename: match?.[1] ?? "appointmed-backup.sql" };
+}
