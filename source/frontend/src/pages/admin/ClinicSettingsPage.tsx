@@ -6,20 +6,23 @@ import Alert from "../../components/Alert";
 import { inputClass, primaryButton } from "../../components/ui";
 import type { SettingRow } from "../../types";
 import { formatDateTime } from "../../utils/format";
+import { cleanAddress, cleanClinicName, cleanInt, cleanMoney, isMoney } from "../../utils/input";
 
 interface FieldDef {
   key: string;
   label: string;
   help: string;
   kind: "text" | "number" | "toggle";
+  clean?: (v: string) => string; // removes characters the field must never contain
+  maxLength?: number;
 }
 
 const FIELDS: FieldDef[] = [
-  { key: "clinic_name", label: "Clinic name", help: "Shown on the website and printed invoices.", kind: "text" },
-  { key: "clinic_address", label: "Clinic address", help: "Shown on the website.", kind: "text" },
-  { key: "consultation_fee", label: "Default consultation fee (PHP)", help: "Used when an examination starts. The doctor can change it per visit.", kind: "number" },
-  { key: "default_slot_minutes", label: "Default slot length (minutes)", help: "5 to 120.", kind: "number" },
-  { key: "booking_window_days", label: "Online booking window (days)", help: "How far ahead patients can book. 1 to 365.", kind: "number" },
+  { key: "clinic_name", label: "Clinic name", help: "Shown on the website and printed invoices.", kind: "text", clean: cleanClinicName, maxLength: 100 },
+  { key: "clinic_address", label: "Clinic address", help: "Shown on the website.", kind: "text", clean: cleanAddress, maxLength: 255 },
+  { key: "consultation_fee", label: "Default consultation fee (PHP)", help: "Used when an examination starts. The doctor can change it per visit.", kind: "number", clean: (v) => cleanMoney(v), maxLength: 10 },
+  { key: "default_slot_minutes", label: "Default slot length (minutes)", help: "5 to 120.", kind: "number", clean: (v) => cleanInt(v, 3), maxLength: 3 },
+  { key: "booking_window_days", label: "Online booking window (days)", help: "How far ahead patients can book. 1 to 365.", kind: "number", clean: (v) => cleanInt(v, 3), maxLength: 3 },
   { key: "online_booking_enabled", label: "Online booking", help: "Turns the public booking page on or off.", kind: "toggle" },
 ];
 
@@ -33,7 +36,7 @@ function problem(key: string, raw: string): string {
     case "clinic_address":
       return value && value.length <= 255 ? "" : "The clinic address is required (255 characters at most).";
     case "consultation_fee":
-      return value !== "" && Number.isFinite(n) && n >= 0 && n <= 1_000_000 ? "" : "The consultation fee must be between 0 and 1,000,000.";
+      return isMoney(value) ? "" : "The consultation fee must be an amount between 0 and 1,000,000 (two decimals at most).";
     case "default_slot_minutes":
       return /^\d+$/.test(value) && n >= 5 && n <= 120 ? "" : "The slot length must be a whole number from 5 to 120.";
     case "booking_window_days":
@@ -122,10 +125,12 @@ export default function ClinicSettingsPage() {
                   {f.label}
                   <input
                     className={`${inputClass} mt-1`}
-                    type={f.kind === "number" ? "number" : "text"}
-                    step={f.key === "consultation_fee" ? "0.01" : undefined}
+                    type="text"
+                    inputMode={f.kind === "number" ? (f.key === "consultation_fee" ? "decimal" : "numeric") : undefined}
+                    autoComplete="off"
+                    maxLength={f.maxLength}
                     value={values[f.key] ?? ""}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                    onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: f.clean ? f.clean(e.target.value) : e.target.value }))}
                   />
                 </label>
               )}

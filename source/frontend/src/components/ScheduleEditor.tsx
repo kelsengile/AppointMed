@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { adminApi } from "../api/endpoints";
 import type { ScheduleBlock, UserRecord } from "../types";
 import { WEEKDAY_NAMES } from "../utils/format";
+import { INT_PROPS, cleanInt } from "../utils/input";
 import Alert from "./Alert";
 import Modal from "./Modal";
 import { inputClass, primaryButton, secondaryButton } from "./ui";
@@ -20,9 +21,9 @@ function toMinutes(value: string): number {
 function check(blocks: ScheduleBlock[]): string {
   for (const b of blocks) {
     if (!b.start_time || !b.end_time) return "Fill in the start and end time of every block.";
+    if (!Number.isInteger(b.slot_minutes) || b.slot_minutes < 5 || b.slot_minutes > 120) return "A slot must be 5 to 120 minutes.";
     if (toMinutes(b.end_time) <= toMinutes(b.start_time)) return "Each block must end after it starts.";
     if (toMinutes(b.end_time) - toMinutes(b.start_time) < b.slot_minutes) return "A block must be at least one slot long.";
-    if (!Number.isInteger(b.slot_minutes) || b.slot_minutes < 5 || b.slot_minutes > 120) return "A slot must be 5 to 120 minutes.";
   }
   const sorted = [...blocks].sort((a, b) => a.weekday - b.weekday || toMinutes(a.start_time) - toMinutes(b.start_time));
   for (let i = 1; i < sorted.length; i += 1) {
@@ -70,6 +71,7 @@ export default function ScheduleEditor({ doctor, onClose, onSaved }: { doctor: U
       end_time: r.end_time,
       slot_minutes: Number(r.slot_minutes),
     }));
+    if (blocks.length > 70) return setError("A schedule can have at most 70 blocks.");
     const problem = check(blocks);
     if (problem) {
       setError(problem);
@@ -112,7 +114,14 @@ export default function ScheduleEditor({ doctor, onClose, onSaved }: { doctor: U
                     <span className="text-sm text-slate-500">to</span>
                     <input type="time" aria-label={`${name} end`} className={`${inputClass} w-32`} value={r.end_time} onChange={(e) => update(r.key, { end_time: e.target.value })} />
                     <label className="flex items-center gap-1 text-sm">
-                      <input type="number" min={5} max={120} aria-label={`${name} slot minutes`} className={`${inputClass} w-20`} value={r.slot_minutes} onChange={(e) => update(r.key, { slot_minutes: Number(e.target.value) })} />
+                      <input
+                        {...INT_PROPS}
+                        maxLength={3}
+                        aria-label={`${name} slot minutes`}
+                        className={`${inputClass} w-20`}
+                        value={r.slot_minutes ? String(r.slot_minutes) : ""}
+                        onChange={(e) => update(r.key, { slot_minutes: Number(cleanInt(e.target.value, 3)) })}
+                      />
                       min slots
                     </label>
                     <button type="button" onClick={() => setRows((prev) => (prev ? prev.filter((x) => x.key !== r.key) : prev))} className="rounded-lg px-2 py-1 text-sm text-red-700 hover:bg-red-50">

@@ -146,14 +146,14 @@ INSERT INTO prescription_items (prescription_id, medicine_name, dosage, quantity
 (1, 'Losartan',       '50 mg', 30, 10.00, 'Take one tablet every evening'),
 (2, 'Cetirizine',     '5 mg',  10, 5.00,  'Take once daily at bedtime for 10 days');
 
--- ------------------------------------------------------------
 -- INVOICES (appointment 4 is intentionally NOT billed yet)
---   #1: 500.00 fee + 540.00 medicines (30 x 8 + 30 x 10) = 1040.00, paid
---   #2: 450.00 fee +  50.00 medicines (10 x 5)           =  500.00, unpaid
--- ------------------------------------------------------------
+--   #1: 500.00 + 540.00 = 1040.00, paid     (appointment 1, Completed)
+--   #2: 450.00 +  50.00 =  500.00, paid     (appointment 2, Completed)
+--   #3: 500.00 +   0.00 =  500.00, unpaid   (appointment 6, Consulting: created when the exam started)
 INSERT INTO invoices (id, patient_id, appointment_id, issued_by, consultation_fee, medicines_total, amount, status, issued_at, paid_at, paid_by) VALUES
-(1, 1, 1, 4, 500.00, 540.00, 1040.00, 'Paid',   NOW() - INTERVAL 7 DAY, NOW() - INTERVAL 7 DAY, 4),
-(2, 2, 2, 5, 450.00,  50.00,  500.00, 'Unpaid', NOW() - INTERVAL 3 DAY, NULL, NULL);
+(1, 1, 1, 4, 500.00, 540.00, 1040.00, 'Paid',   NOW() - INTERVAL 7 DAY,    NOW() - INTERVAL 7 DAY, 4),
+(2, 2, 2, 5, 450.00,  50.00,  500.00, 'Paid',   NOW() - INTERVAL 3 DAY,    NOW() - INTERVAL 3 DAY, 5),
+(3, 3, 6, 2, 500.00,   0.00,  500.00, 'Unpaid', NOW() - INTERVAL 20 MINUTE, NULL, NULL);
 
 -- ------------------------------------------------------------
 -- CLINIC SETTINGS (managed by the admin)
