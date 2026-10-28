@@ -256,7 +256,6 @@ CREATE TABLE IF NOT EXISTS invoices (
     CONSTRAINT fk_invoices_issued_by   FOREIGN KEY (issued_by)      REFERENCES users(id),
     CONSTRAINT fk_invoices_paid_by     FOREIGN KEY (paid_by)        REFERENCES users(id),
     CONSTRAINT chk_invoices_amount CHECK (amount >= 0),
-    CONSTRAINT chk_invoices_amount CHECK (amount >= 0),
     CONSTRAINT chk_invoices_parts  CHECK (consultation_fee >= 0 AND medicines_total >= 0),
     CONSTRAINT chk_invoices_total  CHECK (amount = consultation_fee + medicines_total),
     INDEX idx_invoices_status (status)
