@@ -15,6 +15,8 @@ from backend.repositories.system_repository import AuditRepository
 from backend.repositories.user_repository import UserRepository
 
 _MAX_AVATAR_BYTES = 300_000
+# Checked when the username does not exist, so the response time does not reveal which usernames are real.
+_DUMMY_HASH = hash_password("appointmed-not-a-real-password")
 
 
 def _detect_mime(raw: bytes) -> str | None:
@@ -43,15 +45,17 @@ class AuthService:
         if login_limiter.is_blocked(key):
             raise RateLimitError("Too many failed attempts. Try again in a few minutes.")
         row = self._users.get_by_username(name)
-        if row is None or not verify_password(password, row["password_hash"]):
+        password_ok = verify_password(password, row["password_hash"] if row else _DUMMY_HASH)
+        if row is None or not password_ok:
             login_limiter.record(key)
             self._audit.record(None, "LOGIN_FAILED", "users", row["id"] if row else None, f"Failed login for '{trim(name, 40)}'")
             raise AuthenticationError("Incorrect username or password.")
         if not row["is_active"]:
             raise AuthenticationError("This account is deactivated. Contact an administrator.")
         login_limiter.reset(key)
-        self._users.touch_login(row["id"])
-        self._audit.record(row["id"], "LOGIN", "users", row["id"], f"{row['role'].title()} signed in")
+        with self._db.transaction() as tx:
+            UserRepository(tx).touch_login(row["id"])
+            AuditRepository(tx).record(row["id"], "LOGIN", "users", row["id"], f"{row['role'].title()} signed in")
         return {
             "access_token": create_token(row["id"], row["role"]),
             "user": {"id": row["id"], "username": row["username"], "full_name": row["full_name"], "role": row["role"]},
@@ -69,8 +73,9 @@ class AuthService:
 
     def update_profile(self, user_id: int, full_name: str, email: str | None) -> dict[str, Any]:
         """Change the user's own name and email."""
-        self._users.update(user_id, {"full_name": full_name, "email": blank_to_none(email)})
-        self._audit.record(user_id, "UPDATE_PROFILE", "users", user_id, "Updated own profile")
+        with self._db.transaction() as tx:
+            UserRepository(tx).update(user_id, {"full_name": full_name, "email": blank_to_none(email)})
+            AuditRepository(tx).record(user_id, "UPDATE_PROFILE", "users", user_id, "Updated own profile")
         return self.profile(user_id)
 
     def set_avatar(self, user_id: int, image: str) -> dict[str, Any]:
@@ -100,5 +105,6 @@ class AuthService:
             raise ValidationFailedError("Your current password is not correct.")
         if current == new:
             raise ValidationFailedError("Choose a password that is different from the current one.")
-        self._users.set_password(user_id, hash_password(new))
-        self._audit.record(user_id, "CHANGE_PASSWORD", "users", user_id, "Changed own password")
+        with self._db.transaction() as tx:
+            UserRepository(tx).set_password(user_id, hash_password(new))
+            AuditRepository(tx).record(user_id, "CHANGE_PASSWORD", "users", user_id, "Changed own password")

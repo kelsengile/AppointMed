@@ -8,9 +8,9 @@ import { usePolling } from "../../hooks/usePolling";
 import type { Role } from "../../types";
 import { formatDateTime } from "../../utils/format";
 import { resizeImage } from "../../utils/image";
+import { cleanEmail, cleanName, isEmail, isName } from "../../utils/input";
 
 const ROLE_LABEL: Record<Role, string> = { doctor: "Doctor", nurse: "Nurse", admin: "Administrator" };
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export default function ProfilePage() {
   const { updateSession } = useAuth();
@@ -34,8 +34,8 @@ export default function ProfilePage() {
     e.preventDefault();
     setFormError("");
     setMessage("");
-    if (fullName.trim().length < 2) return setFormError("Enter your full name.");
-    if (email.trim() && !EMAIL.test(email.trim())) return setFormError("Enter a valid email address.");
+    if (!isName(fullName.trim())) return setFormError("Enter your full name (letters only, at least 2).");
+    if (email.trim() && !isEmail(email.trim())) return setFormError("Enter a valid email address.");
     setBusy(true);
     try {
       const updated = await authApi.updateMe(fullName.trim(), email.trim() || null);
@@ -127,11 +127,11 @@ export default function ProfilePage() {
             <h2 className="font-semibold">Edit details</h2>
             <label className="block text-sm font-medium">
               Full name
-              <input className={`${inputClass} mt-1`} maxLength={100} value={fullName} onChange={(e) => setFullName(e.target.value)} />
+              <input className={`${inputClass} mt-1`} maxLength={100} autoComplete="off" value={fullName} onChange={(e) => setFullName(cleanName(e.target.value))} />
             </label>
             <label className="block text-sm font-medium">
               Email
-              <input type="email" className={`${inputClass} mt-1`} maxLength={100} value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input type="email" className={`${inputClass} mt-1`} maxLength={100} value={email} onChange={(e) => setEmail(cleanEmail(e.target.value))} />
             </label>
             <dl className="grid gap-1 text-sm text-slate-600 sm:grid-cols-2">
               <div><dt className="inline font-medium">Username: </dt><dd className="inline">{profile.username}</dd></div>

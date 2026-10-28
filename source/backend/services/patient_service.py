@@ -45,8 +45,7 @@ class PatientService:
 
     def create(self, user: User, data: PatientIn) -> Row:
         doctor_id = user.scope_doctor_id
-        existing = self._patients.find_match(data.full_name, data.birthdate)
-        if existing:
+        if self._patients.find_match(data.full_name, data.birthdate):
             raise ConflictError("A patient with this name and birthdate already exists.")
         new_id = self._patients.create({**self._columns(data), "doctor_id": doctor_id})
         AuditRepository(self._db).record(user.id, "CREATE_PATIENT", "patients", new_id, "Added a patient record")
@@ -54,6 +53,9 @@ class PatientService:
 
     def update(self, user: User, patient_id: int, data: PatientIn) -> Row:
         self._load(user, patient_id)
+        other = self._patients.find_match(data.full_name, data.birthdate)
+        if other and other["id"] != patient_id:
+            raise ConflictError("Another patient with this name and birthdate already exists.")
         self._patients.update(patient_id, self._columns(data))
         AuditRepository(self._db).record(user.id, "UPDATE_PATIENT", "patients", patient_id, "Edited a patient record")
         return self._load(user, patient_id)
@@ -65,4 +67,3 @@ class PatientService:
             raise ConflictError("This patient has appointments on record, so the record cannot be deleted.")
         self._patients.delete(patient_id)
         AuditRepository(self._db).record(user.id, "DELETE_PATIENT", "patients", patient_id, "Deleted a patient record")
-        

@@ -11,10 +11,9 @@ import { useAuth } from "../../context/AuthContext";
 import { usePolling } from "../../hooks/usePolling";
 import type { DoctorRef, Role, UserCreatePayload, UserRecord } from "../../types";
 import { formatDateTime } from "../../utils/format";
-import { passwordProblem } from "../../utils/password";
+import { cleanEmail, cleanName, cleanSpecialization, cleanUsername, isEmail, isName, isUsername } from "../../utils/input";
+import { PASSWORD_MAX, passwordProblem } from "../../utils/password";
 
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const USERNAME = /^[A-Za-z0-9._-]{3,50}$/;
 const ROLES: Role[] = ["doctor", "nurse", "admin"];
 
 type ModalState =
@@ -38,12 +37,12 @@ function UserForm({ editing, doctors, onClose, onSaved }: { editing: UserRecord 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!editing) {
-      if (!USERNAME.test(username.trim())) return setError("Username: 3 to 50 letters, numbers, dots, dashes or underscores.");
+      if (!isUsername(username.trim())) return setError("Username: 3 to 50 letters, numbers, dots, dashes or underscores.");
       const problem = passwordProblem(password);
       if (problem) return setError(problem);
     }
-    if (fullName.trim().length < 2) return setError("Enter the full name.");
-    if (email.trim() && !EMAIL.test(email.trim())) return setError("Enter a valid email address.");
+    if (!isName(fullName.trim())) return setError("Enter the full name (letters only, at least 2).");
+    if (email.trim() && !isEmail(email.trim())) return setError("Enter a valid email address.");
     if (role === "nurse" && !assigned) return setError("Choose the doctor this nurse supports.");
 
     const common = {
@@ -76,12 +75,12 @@ function UserForm({ editing, doctors, onClose, onSaved }: { editing: UserRecord 
           <>
             <label className="block text-sm font-medium">
               Username
-              <input className={`${inputClass} mt-1`} autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} />
+              <input className={`${inputClass} mt-1`} maxLength={50} autoComplete="off" value={username} onChange={(e) => setUsername(cleanUsername(e.target.value))} />
             </label>
             <div>
               <label className="block text-sm font-medium">
                 Password
-                <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={password} onChange={(e) => setPassword(e.target.value)} />
+                <input type="password" maxLength={PASSWORD_MAX} autoComplete="new-password" className={`${inputClass} mt-1`} value={password} onChange={(e) => setPassword(e.target.value)} />
               </label>
               <PasswordRequirements password={password} />
             </div>
@@ -99,16 +98,16 @@ function UserForm({ editing, doctors, onClose, onSaved }: { editing: UserRecord 
         )}
         <label className="block text-sm font-medium">
           Full name
-          <input className={`${inputClass} mt-1`} maxLength={100} value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <input className={`${inputClass} mt-1`} maxLength={100} autoComplete="off" value={fullName} onChange={(e) => setFullName(cleanName(e.target.value))} />
         </label>
         <label className="block text-sm font-medium">
           Email (optional)
-          <input type="email" className={`${inputClass} mt-1`} maxLength={100} value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input type="email" className={`${inputClass} mt-1`} maxLength={100} value={email} onChange={(e) => setEmail(cleanEmail(e.target.value))} />
         </label>
         {role === "doctor" && (
           <label className="block text-sm font-medium">
             Specialization
-            <input className={`${inputClass} mt-1`} maxLength={100} value={specialization} onChange={(e) => setSpecialization(e.target.value)} />
+            <input className={`${inputClass} mt-1`} maxLength={100} value={specialization} onChange={(e) => setSpecialization(cleanSpecialization(e.target.value))} />
           </label>
         )}
         {role === "nurse" && (
@@ -166,13 +165,13 @@ function PasswordForm({ target, onClose, onSaved }: { target: UserRecord; onClos
         <div>
           <label className="block text-sm font-medium">
             New password
-            <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input type="password" maxLength={PASSWORD_MAX} autoComplete="new-password" className={`${inputClass} mt-1`} value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
           <PasswordRequirements password={password} />
         </div>
         <label className="block text-sm font-medium">
           Confirm new password
-          <input type="password" autoComplete="new-password" className={`${inputClass} mt-1`} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <input type="password" maxLength={PASSWORD_MAX} autoComplete="new-password" className={`${inputClass} mt-1`} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </label>
         {error && <Alert kind="error">{error}</Alert>}
         <div className="flex justify-end gap-2">
@@ -234,7 +233,7 @@ export default function UsersPage() {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3">
-        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or username" aria-label="Search users" className={`${inputClass} max-w-xs`} />
+        <input type="search" maxLength={100} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or username" aria-label="Search users" className={`${inputClass} max-w-xs`} />
         <select aria-label="Filter by role" className={`${inputClass} w-40`} value={role} onChange={(e) => setRole(e.target.value)}>
           <option value="">All roles</option>
           {ROLES.map((r) => (

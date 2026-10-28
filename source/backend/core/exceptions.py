@@ -111,7 +111,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         parts: list[str] = []
         for error in exc.errors():
             location = ".".join(str(p) for p in error.get("loc", ()) if p not in ("body", "query", "path"))
-            message = str(error.get("msg", "Invalid value"))
+            message = str(error.get("msg", "Invalid value")).removeprefix("Value error, ")
             parts.append(f"{location}: {message}" if location else message)
         return JSONResponse(status_code=422, content={"detail": "; ".join(parts) or "Invalid input."})
 

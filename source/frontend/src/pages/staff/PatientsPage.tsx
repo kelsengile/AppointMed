@@ -8,9 +8,7 @@ import { dangerButton, inputClass, primaryButton, secondaryButton } from "../../
 import { usePolling } from "../../hooks/usePolling";
 import type { Encounter, PatientItem, PatientPayload, Sex } from "../../types";
 import { ageFrom, formatDate, isoDate } from "../../utils/format";
-
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const PHONE = /^[0-9+()\-\s]{7,20}$/;
+import { MIN_BIRTHDATE, cleanAddress, cleanEmail, cleanName, cleanPhone, cleanText, isEmail, isName, isPhone } from "../../utils/input";
 
 // Add / edit form. `patient` is null when adding.
 function PatientForm({ patient, onClose, onSaved }: { patient: PatientItem | null; onClose: () => void; onSaved: (id: number, message: string) => void }) {
@@ -23,13 +21,15 @@ function PatientForm({ patient, onClose, onSaved }: { patient: PatientItem | nul
   const [condition, setCondition] = useState(patient?.condition_summary ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const today = isoDate(new Date());
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (fullName.trim().length < 2) return setError("Enter the patient's full name.");
-    if (birthdate && birthdate > isoDate(new Date())) return setError("Birthdate cannot be in the future.");
-    if (contact.trim() && !PHONE.test(contact.trim())) return setError("Enter a valid contact number.");
-    if (email.trim() && !EMAIL.test(email.trim())) return setError("Enter a valid email address.");
+    if (!isName(fullName.trim())) return setError("Enter the patient's full name (letters only, at least 2).");
+    if (birthdate && (birthdate > today || birthdate < MIN_BIRTHDATE)) return setError("Enter a valid birthdate.");
+    if (contact.trim() && !isPhone(contact.trim())) return setError("Enter a valid contact number (7 to 15 digits).");
+    if (email.trim() && !isEmail(email.trim())) return setError("Enter a valid email address.");
+    if (address.trim() && address.trim().length < 3) return setError("The address is too short.");
     const payload: PatientPayload = {
       full_name: fullName.trim(),
       birthdate: birthdate || null,
@@ -55,12 +55,12 @@ function PatientForm({ patient, onClose, onSaved }: { patient: PatientItem | nul
       <form onSubmit={submit} className="space-y-3">
         <label className="block text-sm font-medium">
           Full name
-          <input className={`${inputClass} mt-1`} maxLength={100} value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <input className={`${inputClass} mt-1`} maxLength={100} autoComplete="off" value={fullName} onChange={(e) => setFullName(cleanName(e.target.value))} />
         </label>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm font-medium">
             Birthdate
-            <input type="date" className={`${inputClass} mt-1`} max={isoDate(new Date())} value={birthdate} onChange={(e) => setBirthdate(e.target.value)} />
+            <input type="date" className={`${inputClass} mt-1`} min={MIN_BIRTHDATE} max={today} value={birthdate} onChange={(e) => setBirthdate(e.target.value)} />
           </label>
           <label className="block text-sm font-medium">
             Sex
@@ -73,20 +73,20 @@ function PatientForm({ patient, onClose, onSaved }: { patient: PatientItem | nul
           </label>
           <label className="block text-sm font-medium">
             Contact number
-            <input type="tel" className={`${inputClass} mt-1`} maxLength={20} value={contact} onChange={(e) => setContact(e.target.value)} />
+            <input type="tel" inputMode="tel" className={`${inputClass} mt-1`} maxLength={20} value={contact} onChange={(e) => setContact(cleanPhone(e.target.value))} />
           </label>
           <label className="block text-sm font-medium">
             Email
-            <input type="email" className={`${inputClass} mt-1`} maxLength={100} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input type="email" className={`${inputClass} mt-1`} maxLength={100} value={email} onChange={(e) => setEmail(cleanEmail(e.target.value))} />
           </label>
         </div>
         <label className="block text-sm font-medium">
           Address
-          <input className={`${inputClass} mt-1`} maxLength={255} value={address} onChange={(e) => setAddress(e.target.value)} />
+          <input className={`${inputClass} mt-1`} maxLength={255} value={address} onChange={(e) => setAddress(cleanAddress(e.target.value))} />
         </label>
         <label className="block text-sm font-medium">
           Condition summary
-          <input className={`${inputClass} mt-1`} maxLength={255} value={condition} onChange={(e) => setCondition(e.target.value)} />
+          <input className={`${inputClass} mt-1`} maxLength={255} value={condition} onChange={(e) => setCondition(cleanText(e.target.value, 255))} />
         </label>
         {error && <Alert kind="error">{error}</Alert>}
         <div className="flex justify-end gap-2">
@@ -139,6 +139,7 @@ export default function PatientsPage() {
       </div>
       <input
         type="search"
+        maxLength={100}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search by name, contact or email"

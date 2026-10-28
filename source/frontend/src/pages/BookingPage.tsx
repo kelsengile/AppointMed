@@ -4,11 +4,31 @@ import { publicApi } from "../api/endpoints";
 import Logo from "../components/Logo";
 import type { BookingReceipt, Catalog, Sex } from "../types";
 import { formatDate, formatTime, isoDate, weekdayList } from "../utils/format";
+import { MIN_BIRTHDATE, cleanAddress, cleanEmail, cleanName, cleanPhone, cleanText, isEmail, isName, isPhone } from "../utils/input";
 
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const PHONE = /^[0-9+()\-\s]{7,20}$/;
 const input =
   "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30";
+
+interface Person {
+  full_name: string;
+  birthdate: string;
+  sex: Sex | "";
+  contact_number: string;
+  email: string;
+  address: string;
+  reason: string;
+}
+
+// Each field removes the characters it must never contain while the visitor types or pastes.
+const CLEAN: Record<keyof Person, (v: string) => string> = {
+  full_name: cleanName,
+  birthdate: (v) => v,
+  sex: (v) => v,
+  contact_number: cleanPhone,
+  email: cleanEmail,
+  address: cleanAddress,
+  reason: (v) => cleanText(v, 255),
+};
 
 function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
   return (
@@ -24,7 +44,7 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 export default function BookingPage() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [person, setPerson] = useState({ full_name: "", birthdate: "", sex: "" as Sex | "", contact_number: "", email: "", address: "", reason: "" });
+  const [person, setPerson] = useState<Person>({ full_name: "", birthdate: "", sex: "", contact_number: "", email: "", address: "", reason: "" });
   const [specialization, setSpecialization] = useState("");
   const [doctorId, setDoctorId] = useState("");
   const [day, setDay] = useState("");
@@ -43,11 +63,16 @@ export default function BookingPage() {
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Could not load the doctors."));
   }, []);
 
-  // Load open times whenever the doctor or the date changes.
+  const today = new Date();
+  const maxDay = new Date();
+  maxDay.setDate(maxDay.getDate() + (catalog?.window_days ?? 30));
+  const dayInRange = !!day && day >= isoDate(today) && day <= isoDate(maxDay);
+
+  // Load open times whenever the doctor or the date changes (only for a date inside the booking window).
   useEffect(() => {
     setSlot("");
     setSlots([]);
-    if (!doctorId || !day) return;
+    if (!doctorId || !dayInRange) return;
     let cancelled = false;
     setSlotsLoading(true);
     publicApi
@@ -58,7 +83,8 @@ export default function BookingPage() {
     return () => {
       cancelled = true;
     };
-  }, [doctorId, day]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctorId, day, dayInRange]);
 
   const specializations = useMemo(
     () => Array.from(new Set((catalog?.doctors ?? []).map((d) => d.specialization).filter((s): s is string => !!s))).sort(),
@@ -67,26 +93,23 @@ export default function BookingPage() {
   const doctors = (catalog?.doctors ?? []).filter((d) => !specialization || d.specialization === specialization);
   const chosen = catalog?.doctors.find((d) => String(d.id) === doctorId);
 
-  const today = new Date();
-  const maxDay = new Date();
-  maxDay.setDate(maxDay.getDate() + (catalog?.window_days ?? 30));
-
-  function setField(key: keyof typeof person, value: string) {
-    setPerson((prev) => ({ ...prev, [key]: value }));
+  function setField(key: keyof Person, value: string) {
+    setPerson((prev) => ({ ...prev, [key]: CLEAN[key](value) }) as Person);
   }
 
   function validate(): Record<string, string> {
     const e: Record<string, string> = {};
-    if (person.full_name.trim().length < 2) e.full_name = "Enter your full name.";
+    if (!isName(person.full_name.trim())) e.full_name = "Enter your full name (letters only).";
     if (!person.birthdate) e.birthdate = "Enter your birthdate.";
-    else if (person.birthdate > isoDate(today)) e.birthdate = "Birthdate cannot be in the future.";
+    else if (person.birthdate > isoDate(today) || person.birthdate < MIN_BIRTHDATE) e.birthdate = "Enter a valid birthdate.";
     if (!person.sex) e.sex = "Choose one.";
-    if (!PHONE.test(person.contact_number.trim())) e.contact_number = "Enter a valid contact number.";
-    if (!EMAIL.test(person.email.trim())) e.email = "Enter a valid email. Your confirmation is sent here.";
+    if (!isPhone(person.contact_number.trim())) e.contact_number = "Enter a valid contact number (7 to 15 digits).";
+    if (!isEmail(person.email.trim())) e.email = "Enter a valid email. Your confirmation is sent here.";
     if (person.address.trim().length < 3) e.address = "Enter your address.";
     if (person.reason.trim().length < 3) e.reason = "Tell us the reason for your visit.";
     if (!doctorId) e.doctor = "Choose a doctor.";
     if (!day) e.day = "Choose a date.";
+    else if (!dayInRange) e.day = "Choose a date within the booking window.";
     else if (doctorId && !slot) e.slot = "Choose an available time.";
     return e;
   }
@@ -114,7 +137,7 @@ export default function BookingPage() {
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Could not send your request.");
       // The slot may have just been taken: refresh the list.
-      if (doctorId && day) publicApi.slots(Number(doctorId), day).then((r) => setSlots(r.slots)).catch(() => undefined);
+      if (doctorId && dayInRange) publicApi.slots(Number(doctorId), day).then((r) => setSlots(r.slots)).catch(() => undefined);
       setSlot("");
     } finally {
       setBusy(false);
@@ -168,11 +191,11 @@ export default function BookingPage() {
           <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
             <h2 className="font-semibold">1. Your details</h2>
             <Field label="Full name" error={errors.full_name}>
-              <input className={input} value={person.full_name} onChange={(e) => setField("full_name", e.target.value)} autoComplete="name" />
+              <input className={input} maxLength={100} value={person.full_name} onChange={(e) => setField("full_name", e.target.value)} autoComplete="name" />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Birthdate" error={errors.birthdate}>
-                <input type="date" className={input} max={isoDate(today)} value={person.birthdate} onChange={(e) => setField("birthdate", e.target.value)} autoComplete="bday" />
+                <input type="date" className={input} min={MIN_BIRTHDATE} max={isoDate(today)} value={person.birthdate} onChange={(e) => setField("birthdate", e.target.value)} autoComplete="bday" />
               </Field>
               <Field label="Sex" error={errors.sex}>
                 <select className={input} value={person.sex} onChange={(e) => setField("sex", e.target.value)}>
@@ -183,14 +206,14 @@ export default function BookingPage() {
                 </select>
               </Field>
               <Field label="Contact number" error={errors.contact_number}>
-                <input type="tel" className={input} value={person.contact_number} onChange={(e) => setField("contact_number", e.target.value)} autoComplete="tel" />
+                <input type="tel" inputMode="tel" className={input} maxLength={20} value={person.contact_number} onChange={(e) => setField("contact_number", e.target.value)} autoComplete="tel" />
               </Field>
               <Field label="Email" error={errors.email}>
-                <input type="email" className={input} value={person.email} onChange={(e) => setField("email", e.target.value)} autoComplete="email" />
+                <input type="email" className={input} maxLength={100} value={person.email} onChange={(e) => setField("email", e.target.value)} autoComplete="email" />
               </Field>
             </div>
             <Field label="Address" error={errors.address}>
-              <input className={input} value={person.address} onChange={(e) => setField("address", e.target.value)} autoComplete="street-address" />
+              <input className={input} maxLength={255} value={person.address} onChange={(e) => setField("address", e.target.value)} autoComplete="street-address" />
             </Field>
             <Field label="Reason for visit" error={errors.reason}>
               <textarea className={input} rows={2} maxLength={255} value={person.reason} onChange={(e) => setField("reason", e.target.value)} />
@@ -233,7 +256,7 @@ export default function BookingPage() {
               <input type="date" className={input} min={isoDate(today)} max={isoDate(maxDay)} value={day} onChange={(e) => setDay(e.target.value)} />
             </Field>
 
-            {doctorId && day && (
+            {doctorId && dayInRange && (
               <div>
                 <p className="text-sm font-medium">Available times</p>
                 {slotsLoading && <p className="mt-1 text-sm text-slate-500">Loading times...</p>}
