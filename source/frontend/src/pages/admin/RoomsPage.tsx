@@ -8,6 +8,7 @@ import { dangerButton, inputClass, primaryButton, secondaryButton, statusTone } 
 import { usePolling } from "../../hooks/usePolling";
 import type { RoomItem, RoomStatus } from "../../types";
 import { formatDateTime } from "../../utils/format";
+import { cleanRoomName } from "../../utils/input";
 
 const STATUSES: RoomStatus[] = ["Available", "Occupied", "Maintenance"];
 
@@ -38,7 +39,7 @@ function RoomForm({ room, onClose, onSaved }: { room: RoomItem | null; onClose: 
       <form onSubmit={submit} className="space-y-3">
         <label className="block text-sm font-medium">
           Room name
-          <input className={`${inputClass} mt-1`} maxLength={50} value={name} onChange={(e) => setName(e.target.value)} />
+          <input className={`${inputClass} mt-1`} maxLength={50} value={name} onChange={(e) => setName(cleanRoomName(e.target.value))} autoComplete="off" />
         </label>
         <label className="block text-sm font-medium">
           Status

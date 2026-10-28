@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from backend.core.database import Database, database
-from backend.core.exceptions import AppError, InvalidScheduleError, NotFoundError, ValidationFailedError
+from backend.core.exceptions import AppError, InvalidScheduleError, NotFoundError
 from backend.core.utils import floor_minute
 from backend.repositories.appointment_repository import NotificationRepository
 from backend.repositories.system_repository import AuditRepository, SettingsRepository
@@ -69,10 +69,10 @@ class BookingService:
             doctor = UserRepository(tx).get(request.doctor_id)
             if doctor is None or doctor["role"] != "doctor" or not doctor["is_active"]:
                 raise NotFoundError("Doctor not found.")
+            # Lock the doctor's row so two visitors cannot both pass the "slot is open" check for the same time.
+            tx.fetch_one("SELECT id FROM users WHERE id = %s FOR UPDATE", (request.doctor_id,))
             SchedulingService(tx).ensure_bookable(request.doctor_id, when)
             nurses = UserRepository(tx).nurses_for_doctor(request.doctor_id)
-            if not request.email:
-                raise ValidationFailedError("An email address is required.")
             new_id = NotificationRepository(tx).create(
                 {
                     "doctor_id": request.doctor_id,
