@@ -214,10 +214,10 @@ JWT_EXPIRE_MINUTES=480
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # OPTIONAL email. Leave SMTP_HOST empty and emails are written to the backend console instead.
-SMTP_HOST=
+SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=
-SMTP_PASSWORD=
+SMTP_USER=no-reply@appointmed.example
+SMTP_PASSWORD=app password
 SMTP_FROM=no-reply@appointmed.example
 SMTP_TLS=true
 ```
