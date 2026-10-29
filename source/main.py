@@ -64,9 +64,9 @@ STATUS_PAGE = """<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AppointMed</title>
   <style>
-    :root { --bg:#f6f8f8; --fg:#12302f; --muted:#5b6f6e; --card:#ffffff; --line:#d5e0df; --ok:#0f7b6c; --bad:#b3402f; }
+    :root { --bg:#f5f8fc; --fg:#05316E; --muted:#5a6b85; --card:#ffffff; --line:#d6e0ee; --ok:#0B52B5; --bad:#b3402f; }
     @media (prefers-color-scheme: dark) {
-      :root { --bg:#0e1a1a; --fg:#e4f0ef; --muted:#93aaa8; --card:#152524; --line:#27403e; --ok:#4cc3b0; --bad:#ec8a77; }
+      :root { --bg:#0a1628; --fg:#e6eef9; --muted:#94a8c4; --card:#11213b; --line:#27406a; --ok:#6fa3ee; --bad:#ec8a77; }
     }
     * { box-sizing: border-box; }
     body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px;

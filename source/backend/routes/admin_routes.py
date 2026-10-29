@@ -1,4 +1,4 @@
-"""Administrator endpoints (users, rooms, settings, reports, audit logs)."""
+"""Administrator endpoints (users, rooms, settings, reports, audit logs, database tools)."""
 
 from datetime import date
 
@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from backend.core.security import require_feature
 from backend.models.domain import User
+from backend.routes.database_routes import router as database_router
 from backend.schemas.api import (
     ActiveToggle,
     PasswordReset,
@@ -19,6 +20,7 @@ from backend.services.admin_service import AdminService
 from backend.services.dashboard_service import DashboardService
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+router.include_router(database_router)  # /api/admin/database/...
 admin_service = AdminService()
 dashboard_service = DashboardService()
 

@@ -75,25 +75,27 @@ class AdminService:
 
     def set_active(self, admin: User, user_id: int, active: bool) -> Row:
         """Deactivate instead of deleting, so history stays intact. Admins cannot lock themselves out."""
-        users = UserRepository(self._db)
-        row = users.get(user_id)
-        if row is None:
-            raise NotFoundError("User not found.")
-        if user_id == admin.id and not active:
-            raise PermissionDeniedError("You cannot deactivate your own account.")
-        users.update(user_id, {"is_active": 1 if active else 0})
-        AuditRepository(self._db).record(
-            admin.id, "ACTIVATE_USER" if active else "DEACTIVATE_USER", "users", user_id, f"Account {row['username']}"
-        )
-        return users.get_detail(user_id)  # type: ignore[return-value]
+        with self._db.transaction() as tx:
+            users = UserRepository(tx)
+            row = users.get(user_id)
+            if row is None:
+                raise NotFoundError("User not found.")
+            if user_id == admin.id and not active:
+                raise PermissionDeniedError("You cannot deactivate your own account.")
+            users.update(user_id, {"is_active": 1 if active else 0})
+            AuditRepository(tx).record(
+                admin.id, "ACTIVATE_USER" if active else "DEACTIVATE_USER", "users", user_id, f"Account {row['username']}"
+            )
+        return UserRepository(self._db).get_detail(user_id)  # type: ignore[return-value]
 
     def reset_password(self, admin: User, user_id: int, new_password: str) -> None:
-        users = UserRepository(self._db)
-        row = users.get(user_id)
-        if row is None:
-            raise NotFoundError("User not found.")
-        users.set_password(user_id, hash_password(new_password))
-        AuditRepository(self._db).record(admin.id, "RESET_PASSWORD", "users", user_id, f"Reset password for {row['username']}")
+        with self._db.transaction() as tx:
+            users = UserRepository(tx)
+            row = users.get(user_id)
+            if row is None:
+                raise NotFoundError("User not found.")
+            users.set_password(user_id, hash_password(new_password))
+            AuditRepository(tx).record(admin.id, "RESET_PASSWORD", "users", user_id, f"Reset password for {row['username']}")
 
     # ------------------------------------------------------------ schedules
     def get_schedule(self, doctor_id: int) -> list[Row]:
@@ -136,33 +138,36 @@ class AdminService:
         return RoomRepository(self._db).list_with_occupant()
 
     def create_room(self, admin: User, name: str, status: str) -> list[Row]:
-        try:
-            new_id = RoomRepository(self._db).create({"room_name": name, "status": status, "updated_by": admin.id})
-        except DuplicateEntryError as exc:
-            raise ConflictError("A room with that name already exists.") from exc
-        AuditRepository(self._db).record(admin.id, "CREATE_ROOM", "rooms", new_id, name)
+        with self._db.transaction() as tx:
+            try:
+                new_id = RoomRepository(tx).create({"room_name": name, "status": status, "updated_by": admin.id})
+            except DuplicateEntryError as exc:
+                raise ConflictError("A room with that name already exists.") from exc
+            AuditRepository(tx).record(admin.id, "CREATE_ROOM", "rooms", new_id, name)
         return self.list_rooms()
 
     def update_room(self, admin: User, room_id: int, name: str, status: str) -> list[Row]:
-        rooms = RoomRepository(self._db)
-        if rooms.get(room_id) is None:
-            raise NotFoundError("Room not found.")
-        try:
-            rooms.update(room_id, {"room_name": name, "status": status, "updated_by": admin.id})
-        except DuplicateEntryError as exc:
-            raise ConflictError("A room with that name already exists.") from exc
-        AuditRepository(self._db).record(admin.id, "UPDATE_ROOM", "rooms", room_id, f"{name} ({status})")
+        with self._db.transaction() as tx:
+            rooms = RoomRepository(tx)
+            if rooms.get(room_id) is None:
+                raise NotFoundError("Room not found.")
+            try:
+                rooms.update(room_id, {"room_name": name, "status": status, "updated_by": admin.id})
+            except DuplicateEntryError as exc:
+                raise ConflictError("A room with that name already exists.") from exc
+            AuditRepository(tx).record(admin.id, "UPDATE_ROOM", "rooms", room_id, f"{name} ({status})")
         return self.list_rooms()
 
     def delete_room(self, admin: User, room_id: int) -> list[Row]:
-        rooms = RoomRepository(self._db)
-        room = rooms.get(room_id)
-        if room is None:
-            raise NotFoundError("Room not found.")
-        if rooms.in_use(room_id):
-            raise ConflictError("This room appears in appointment history. Set it to Maintenance instead of deleting it.")
-        rooms.delete(room_id)
-        AuditRepository(self._db).record(admin.id, "DELETE_ROOM", "rooms", room_id, room["room_name"])
+        with self._db.transaction() as tx:
+            rooms = RoomRepository(tx)
+            room = rooms.get(room_id)
+            if room is None:
+                raise NotFoundError("Room not found.")
+            if rooms.in_use(room_id):
+                raise ConflictError("This room appears in appointment history. Set it to Maintenance instead of deleting it.")
+            rooms.delete(room_id)
+            AuditRepository(tx).record(admin.id, "DELETE_ROOM", "rooms", room_id, room["room_name"])
         return self.list_rooms()
 
     # ------------------------------------------------------------ settings
@@ -184,7 +189,8 @@ class AdminService:
             return str(fee)
         if key in ("default_slot_minutes", "booking_window_days"):
             low, high = (5, 120) if key == "default_slot_minutes" else (1, 365)
-            if not value.isdigit() or not low <= int(value) <= high:
+            # isascii() stops characters such as "²" that pass isdigit() but crash int().
+            if not (value.isascii() and value.isdigit()) or not low <= int(value) <= high:
                 raise ValidationFailedError(f"{key.replace('_', ' ').title()} must be a whole number from {low} to {high}.")
             return str(int(value))
         if key == "online_booking_enabled":

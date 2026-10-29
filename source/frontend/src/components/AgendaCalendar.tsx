@@ -5,13 +5,11 @@ import { usePolling } from "../hooks/usePolling";
 import { formatDate, isoDate } from "../utils/format";
 
 const HEADERS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const firstOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
 
 export default function AgendaCalendar({ value, onChange }: { value: string; onChange: (day: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [month, setMonth] = useState(() => {
-    const d = new Date(`${value}T00:00:00`);
-    return new Date(d.getFullYear(), d.getMonth(), 1);
-  });
+  const [month, setMonth] = useState(() => firstOfMonth(new Date(`${value}T00:00:00`)));
   const box = useRef<HTMLDivElement>(null);
 
   // 6 weeks starting on the Monday on or before the 1st, so every month fits the same grid.
@@ -88,7 +86,15 @@ export default function AgendaCalendar({ value, onChange }: { value: string; onC
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
             <span className="flex items-center gap-1"><i className="h-3 w-3 rounded bg-red-100" /> Doctor off</span>
             <span className="flex items-center gap-1"><i className="h-3 w-3 rounded bg-amber-200" /> Booked / pending</span>
-            <button type="button" className="ml-auto font-medium text-brand-700 hover:underline" onClick={() => { onChange(today); setMonth(new Date()); setOpen(false); }}>
+            <button
+              type="button"
+              className="ml-auto font-medium text-brand-700 hover:underline"
+              onClick={() => {
+                onChange(today);
+                setMonth(firstOfMonth(new Date())); // the grid math needs the 1st of the month
+                setOpen(false);
+              }}
+            >
               Today
             </button>
           </div>

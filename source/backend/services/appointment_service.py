@@ -3,7 +3,8 @@ approve/dismiss -> check in -> start exam -> finish exam -> (billing service) pa
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from backend.core.database import Database, Executor, Row, database
@@ -25,6 +26,8 @@ from backend.repositories.system_repository import AuditRepository, RoomReposito
 from backend.repositories.user_repository import ScheduleRepository, UserRepository
 from backend.schemas.api import AppointmentCreate, ExamFinish
 
+MAX_INVOICE = Decimal("99999999.99")  # fits DECIMAL(10,2)
+
 
 class AppointmentService:
     """Business rules for notifications and appointments. Works on the user's doctor scope."""
@@ -41,6 +44,11 @@ class AppointmentService:
         if row is None or row["doctor_id"] != doctor_id:
             raise NotFoundError("Appointment not found.")
         return row
+
+    @staticmethod
+    def _lock_doctor(tx: Executor, doctor_id: int) -> None:
+        """Serialize work for one doctor (for example 'one examination at a time')."""
+        tx.fetch_one("SELECT id FROM users WHERE id = %s FOR UPDATE", (doctor_id,))
 
     @staticmethod
     def _check_room(tx: Executor, room_id: int | None) -> None:
@@ -110,6 +118,8 @@ class AppointmentService:
             if chosen is None:
                 raise ValidationFailedError("Choose a date and time for this appointment.")
             when = floor_minute(chosen)
+            if when < floor_minute(tx.server_now()):
+                raise InvalidScheduleError("That time has already passed. Choose a later time.")
             self._check_room(tx, room_id)
             if appointments.conflict_exists(doctor_id, when):
                 raise AppointmentConflictError()
@@ -140,7 +150,9 @@ class AppointmentService:
                 )
             except DuplicateEntryError as exc:
                 raise AppointmentConflictError() from exc
-            notifications.resolve(notification_id, "Converted", None, user.id)
+            # The conditional update decides a race between two people approving at once: the loser rolls back.
+            if notifications.resolve(notification_id, "Converted", None, user.id) == 0:
+                raise ConflictError("This request was already handled.")
             AuditRepository(tx).record(user.id, "APPROVE_REQUEST", "notifications", notification_id, f"Created appointment #{new_id}")
             clinic = SettingsRepository(tx).as_dict().get("clinic_name", "the clinic")
             doctor_name = UserRepository(tx).get(doctor_id)["full_name"]  # type: ignore[index]
@@ -254,6 +266,7 @@ class AppointmentService:
         """Doctor starts the examination: occupy a room and create the invoice (consultation fee only)."""
         doctor_id = user.scope_doctor_id
         with self._db.transaction() as tx:
+            self._lock_doctor(tx, doctor_id)  # two simultaneous starts can no longer both pass the check below
             appointments = AppointmentRepository(tx)
             appt = self._load(appointments, doctor_id, appointment_id)
             AppointmentWorkflow.ensure(appt["status"], "Consulting")
@@ -296,6 +309,18 @@ class AppointmentService:
     def finish_exam(self, user: User, appointment_id: int, data: ExamFinish) -> Row:
         """Save the examination, prescription and invoice totals; optionally book a follow-up."""
         doctor_id = user.scope_doctor_id
+        items = [
+            {
+                "medicine_name": i.medicine_name, "dosage": blank_to_none(i.dosage), "quantity": i.quantity,
+                "unit_price": to_money(i.unit_price), "instructions": blank_to_none(i.instructions),
+            }
+            for i in data.items
+        ]
+        medicines = sum((i["unit_price"] * i["quantity"] for i in items), to_money(0))
+        fee = to_money(data.consultation_fee)
+        if fee + medicines > MAX_INVOICE:
+            raise ValidationFailedError("The invoice total is too large. Check the quantities and prices.")
+
         with self._db.transaction() as tx:
             appointments = AppointmentRepository(tx)
             appt = self._load(appointments, doctor_id, appointment_id)
@@ -330,13 +355,9 @@ class AppointmentService:
                     "follow_up_appointment_id": follow_up_id,
                 }
             )
-            items = [
-                {
-                    "medicine_name": i.medicine_name, "dosage": blank_to_none(i.dosage), "quantity": i.quantity,
-                    "unit_price": to_money(i.unit_price), "instructions": blank_to_none(i.instructions),
-                }
-                for i in data.items
-            ]
+            # Keep the short "latest condition" on the patient record in step with the newest diagnosis.
+            PatientRepository(tx).update(patient_id, {"condition_summary": trim(" ".join(data.diagnosis.split()), 255)})
+
             if items or blank_to_none(data.prescription_notes):
                 prescriptions = PrescriptionRepository(tx)
                 rx_id = prescriptions.create(
@@ -347,8 +368,6 @@ class AppointmentService:
                 )
                 prescriptions.add_items(rx_id, items)
 
-            medicines = sum((i["unit_price"] * i["quantity"] for i in items), to_money(0))
-            fee = to_money(data.consultation_fee)
             invoices = InvoiceRepository(tx)
             invoice = invoices.get_by_appointment(appointment_id)
             if invoice is None:
@@ -418,8 +437,9 @@ class AppointmentService:
 
     def set_room_status(self, user: User, room_id: int, status: str) -> None:
         """Nurses and doctors can flip a room between Available, Occupied and Maintenance."""
-        rooms = RoomRepository(self._db)
-        if rooms.get(room_id) is None:
-            raise NotFoundError("Room not found.")
-        rooms.update(room_id, {"status": status, "updated_by": user.id})
-        AuditRepository(self._db).record(user.id, "UPDATE_ROOM_STATUS", "rooms", room_id, f"Status set to {status}")
+        with self._db.transaction() as tx:
+            rooms = RoomRepository(tx)
+            if rooms.get(room_id) is None:
+                raise NotFoundError("Room not found.")
+            rooms.update(room_id, {"status": status, "updated_by": user.id})
+            AuditRepository(tx).record(user.id, "UPDATE_ROOM_STATUS", "rooms", room_id, f"Status set to {status}")

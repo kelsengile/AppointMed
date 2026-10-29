@@ -40,6 +40,7 @@ const admin: NavItem[] = [
   { path: "clinic", label: "Clinic Settings", description: "Clinic name, fee, and online booking switch.", group: "System" },
   { path: "reports", label: "Reports", description: "Appointments and billing summaries.", group: "System" },
   { path: "audits", label: "Audit Logs", description: "Who did what, and when.", group: "System" },
+  { path: "database", label: "Database", description: "Browse and edit tables, run SQL, and download a backup.", group: "System" },
   ...pinned,
 ];
 

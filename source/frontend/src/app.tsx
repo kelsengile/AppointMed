@@ -9,6 +9,7 @@ import PlaceholderPage from "./pages/PlaceholderPage";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
 import AuditPage from "./pages/admin/AuditPage";
 import ClinicSettingsPage from "./pages/admin/ClinicSettingsPage";
+import DatabasePage from "./pages/admin/DatabasePage";
 import ReportsPage from "./pages/admin/ReportsPage";
 import RoomsPage from "./pages/admin/RoomsPage";
 import UsersPage from "./pages/admin/UsersPage";
@@ -49,6 +50,8 @@ function pageFor(role: Role, item: NavItem) {
         return <ReportsPage />;
       case "audits":
         return <AuditPage />;
+      case "database":
+        return <DatabasePage />;
     }
   } else {
     // Doctors and nurses share the clinical pages.

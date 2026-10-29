@@ -96,10 +96,10 @@ class Nurse(User):
 
 
 class Admin(User):
-    """Manages users, rooms, settings, reports, and audit logs. Does not take part in appointments."""
+    """Manages users, rooms, settings, reports, audit logs, and the database. Does not take part in appointments."""
 
     role = "admin"
-    features = frozenset({"admin_dashboard", "users", "rooms", "settings", "reports", "audit"})
+    features = frozenset({"admin_dashboard", "users", "rooms", "settings", "reports", "audit", "database"})
 
     @property
     def scope_doctor_id(self) -> int:
