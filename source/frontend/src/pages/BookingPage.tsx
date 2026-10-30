@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { publicApi } from "../api/endpoints";
+import BookingCalendar from "../components/BookingCalendar";
 import Logo from "../components/Logo";
 import type { BookingReceipt, Catalog, Sex } from "../types";
 import { formatDate, formatTime, isoDate, weekdayList } from "../utils/format";
@@ -202,7 +203,6 @@ export default function BookingPage() {
                   <option value="">Select...</option>
                   <option>Male</option>
                   <option>Female</option>
-                  <option>Other</option>
                 </select>
               </Field>
               <Field label="Contact number" error={errors.contact_number}>
@@ -230,6 +230,7 @@ export default function BookingPage() {
                   onChange={(e) => {
                     setSpecialization(e.target.value);
                     setDoctorId("");
+                    setDay("");
                   }}
                 >
                   <option value="">Any</option>
@@ -239,7 +240,14 @@ export default function BookingPage() {
                 </select>
               </Field>
               <Field label="Doctor" error={errors.doctor}>
-                <select className={input} value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
+                <select
+                  className={input}
+                  value={doctorId}
+                  onChange={(e) => {
+                    setDoctorId(e.target.value);
+                    setDay(""); // every doctor has a different calendar
+                  }}
+                >
                   <option value="">Select a doctor...</option>
                   {doctors.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -252,9 +260,19 @@ export default function BookingPage() {
             </div>
             {chosen && <p className="text-sm text-slate-500">{chosen.full_name} sees patients on {weekdayList(chosen.weekdays)}.</p>}
 
-            <Field label="Date" error={errors.day}>
-              <input type="date" className={input} min={isoDate(today)} max={isoDate(maxDay)} value={day} onChange={(e) => setDay(e.target.value)} />
-            </Field>
+            {/* A div, not a label: a label around a button can fire the button twice. */}
+            <div className="text-sm font-medium">
+              Date
+              <BookingCalendar
+                value={day}
+                onChange={setDay}
+                doctorId={doctorId}
+                minDay={isoDate(today)}
+                maxDay={isoDate(maxDay)}
+                hasError={!!errors.day}
+              />
+              {errors.day && <span className="mt-1 block text-sm font-normal text-red-700">{errors.day}</span>}
+            </div>
 
             {doctorId && dayInRange && (
               <div>
