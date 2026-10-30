@@ -1,5 +1,6 @@
 // Date picker for the public booking page. It follows the chosen doctor's schedule.
-// Red = the doctor does not work that weekday. Amber = fully booked. Both (and past days) cannot be chosen.
+// Red = the doctor is unavailable (not working that weekday, or marked the day off). Amber = fully booked.
+// Both (and past days) cannot be chosen.
 import { useEffect, useRef, useState } from "react";
 import { publicApi } from "../api/endpoints";
 import { usePolling } from "../hooks/usePolling";
@@ -96,7 +97,7 @@ export default function BookingCalendar({ value, onChange, doctorId, minDay, max
                   key={key}
                   type="button"
                   disabled={disabled}
-                  title={isOff ? "Doctor is not available this day" : isFull ? "Fully booked" : undefined}
+                  title={isOff ? "Doctor is unavailable this day" : isFull ? "Fully booked" : undefined}
                   onClick={() => {
                     onChange(key);
                     setOpen(false);
@@ -112,7 +113,7 @@ export default function BookingCalendar({ value, onChange, doctorId, minDay, max
           </div>
           {info.error && <p className="mt-2 text-xs text-red-700" role="alert">{info.error}</p>}
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
-            <span className="flex items-center gap-1"><i className="h-3 w-3 rounded bg-red-100" /> Doctor off</span>
+            <span className="flex items-center gap-1"><i className="h-3 w-3 rounded bg-red-100" /> Doctor unavailable</span>
             <span className="flex items-center gap-1"><i className="h-3 w-3 rounded bg-amber-200" /> Fully booked</span>
             <button
               type="button"

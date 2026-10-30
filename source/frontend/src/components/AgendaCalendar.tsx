@@ -1,4 +1,5 @@
-// Date picker for the agenda. Red = doctor does not work that day. Yellow = bookings or pending requests.
+// Date picker for the agenda. Red = not a working day. Violet = not available (doctor marked the day off).
+// Yellow = bookings or pending requests. Past dates and not-available days are faded and cannot be chosen.
 // Doctors (only) get a "Manage days off" mode to mark a date unavailable or available again.
 // The reason for a day off is shown under the calendar when you hover, focus, or select that day.
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -177,22 +178,27 @@ export default function AgendaCalendar({
               const isBusy = busy.has(key);
               const isOff = !!info.data && !working.has(d.getDay() || 7);
               const tone = isDayOff
-                ? "bg-red-200 text-red-900 font-medium"
+                ? "bg-violet-200 text-violet-900 font-medium"
                 : isBusy
                   ? "bg-amber-200 text-amber-900"
                   : isOff
                     ? "bg-red-100 text-red-700"
                     : "hover:bg-slate-100";
-              const pastInManage = manage && key < today; // days off can only be set from today on
+              const isPast = key < today; // finished/past dates are faded and cannot be chosen
+              // Not-available days are faded and locked, except in "Manage days off" so the doctor can undo them.
+              // aria-disabled (not disabled) keeps the hover, so the reason still shows under the calendar.
+              const lockedOff = isDayOff && !manage;
               return (
                 <button
                   key={key}
                   type="button"
-                  disabled={pastInManage}
+                  disabled={isPast}
+                  aria-disabled={lockedOff || undefined}
                   onMouseEnter={() => setHover(key)}
                   onFocus={() => setHover(key)}
                   onBlur={() => setHover(null)}
                   onClick={() => {
+                    if (lockedOff) return;
                     if (manage) {
                       setTarget(key);
                       return;
@@ -200,9 +206,9 @@ export default function AgendaCalendar({
                     onChange(key);
                     setOpen(false);
                   }}
-                  className={`h-9 rounded-lg text-sm disabled:cursor-not-allowed disabled:opacity-30 ${tone} ${d.getMonth() !== month.getMonth() ? "opacity-40" : ""} ${
-                    key === value ? "ring-2 ring-brand-600 font-semibold" : key === today ? "border border-brand-500" : ""
-                  }`}
+                  className={`h-9 rounded-lg text-sm disabled:cursor-not-allowed disabled:opacity-30 ${tone} ${
+                    lockedOff ? "cursor-not-allowed opacity-30" : d.getMonth() !== month.getMonth() ? "opacity-40" : ""
+                  } ${key === value ? "ring-2 ring-brand-600 font-semibold" : key === today ? "border border-brand-500" : ""}`}
                 >
                   {d.getDate()}
                 </button>
@@ -212,20 +218,20 @@ export default function AgendaCalendar({
 
           {/* Visible on touch screens too, unlike a hover tooltip. */}
           {shownIsOff && (
-            <p className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-900" role="status">
-              <span className="font-medium">{formatDate(shownDay)}: unavailable.</span> {shownReason ? `Reason: ${shownReason}` : "No reason given."}
+            <p className="mt-2 rounded-lg bg-violet-50 p-2 text-xs text-violet-900" role="status">
+              <span className="font-medium">{formatDate(shownDay)}: not available.</span> {shownReason ? `Reason: ${shownReason}` : "No reason given."}
             </p>
           )}
 
           {manage && (
             <p className="mt-2 rounded-lg bg-sky-50 p-2 text-xs text-sky-900">
-              Click a day to mark it unavailable. Click a dark red day to make it available again.
+              Click a day to mark it unavailable. Click a violet day to make it available again.
             </p>
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
             <span className="flex items-center gap-1"><i className="h-3 w-3 rounded bg-red-100" /> Not a working day</span>
-            <span className="flex items-center gap-1"><i className="h-3 w-3 rounded bg-red-200" /> Day off</span>
+            <span className="flex items-center gap-1"><i className="h-3 w-3 rounded bg-violet-200" /> Not available</span>
             <span className="flex items-center gap-1"><i className="h-3 w-3 rounded bg-amber-200" /> Booked / pending</span>
             <button
               type="button"
