@@ -144,9 +144,21 @@ export interface AppointmentCreatePayload {
   check_in_now: boolean;
 }
 
+export interface DayOff {
+  day: string; // YYYY-MM-DD
+  reason: string | null;
+}
+
 export interface CalendarData {
   working_weekdays: number[]; // 1 = Monday ... 7 = Sunday
   busy_days: string[]; // YYYY-MM-DD
+  off_days: DayOff[]; // days the doctor marked as unavailable
+}
+
+export interface BookingCalendarData {
+  working_weekdays: number[]; // 1 = Monday ... 7 = Sunday
+  full_days: string[]; // YYYY-MM-DD, working days with no open time left
+  off_days: string[]; // YYYY-MM-DD, days the doctor is unavailable
 }
 
 

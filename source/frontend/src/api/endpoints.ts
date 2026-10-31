@@ -5,6 +5,7 @@ import type {
   AppointmentItem,
   AuditPage,
   BookingPayload,
+  BookingCalendarData,
   BookingReceipt,
   Catalog,
   CalendarData,
@@ -60,6 +61,8 @@ export const publicApi = {
   catalog: () => request<Catalog>("/api/public/catalog"),
   slots: (doctorId: number, day: string) =>
     request<{ slots: string[] }>(`/api/public/slots${qs({ doctor_id: doctorId, day })}`),
+  calendar: (doctorId: number, dateFrom: string, dateTo: string) =>
+    request<BookingCalendarData>(`/api/public/calendar${qs({ doctor_id: doctorId, date_from: dateFrom, date_to: dateTo })}`),
   book: (payload: BookingPayload) => request<BookingReceipt>("/api/public/bookings", { method: "POST", body: payload }),
 };
 
@@ -114,8 +117,12 @@ export const staffApi = {
   pay: (id: number) => request<Ok>(`/api/staff/invoices/${id}/pay`, { method: "POST" }),
   prescriptions: (q: string) => request<PrescriptionRecord[]>(`/api/staff/prescriptions${qs({ q })}`),
 
+  // Calendar, Day Off
   calendar: (dateFrom: string, dateTo: string) =>
     request<CalendarData>(`/api/staff/calendar${qs({ date_from: dateFrom, date_to: dateTo })}`),
+  setDayOff: (day: string, reason: string | null) =>
+    request<Ok>("/api/staff/days-off", { method: "POST", body: { day, reason } }),
+  clearDayOff: (day: string) => request<Ok>(`/api/staff/days-off/${day}`, { method: "DELETE" }),
 };
 
 export const adminApi = {

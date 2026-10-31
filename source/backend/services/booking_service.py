@@ -10,7 +10,7 @@ from backend.core.exceptions import AppError, InvalidScheduleError, NotFoundErro
 from backend.core.utils import floor_minute
 from backend.repositories.appointment_repository import NotificationRepository
 from backend.repositories.system_repository import AuditRepository, SettingsRepository
-from backend.repositories.user_repository import UserRepository
+from backend.repositories.user_repository import DayOffRepository, ScheduleRepository, UserRepository
 from backend.schemas.api import BookingRequest
 
 from .scheduling_service import SchedulingService
@@ -59,6 +59,31 @@ class BookingService:
         self._ensure_day_allowed(day, self._settings())
         found = SchedulingService(self._db).available_slots(doctor_id, day)
         return {"slots": [s.isoformat(timespec="seconds") for s in found]}
+
+    def calendar(self, doctor_id: int, start: date, end: date) -> dict[str, Any]:
+        """Working weekdays, days the doctor marked unavailable, and working days with no open time left."""
+        settings = self._settings()
+        if not self._is_open(settings):
+            raise AppError("Online booking is currently closed. Please call the clinic.")
+        if start > end or (end - start).days > 62:
+            raise ValidationFailedError("Choose a range of two months or less.")
+        doctor = UserRepository(self._db).get(doctor_id)
+        if doctor is None or doctor["role"] != "doctor" or not doctor["is_active"]:
+            raise NotFoundError("Doctor not found.")
+
+        working = sorted({b["weekday"] for b in ScheduleRepository(self._db).blocks_for_doctor(doctor_id)})
+        off = {r["off_date"] for r in DayOffRepository(self._db).in_range(doctor_id, start, end)}
+        scheduling = SchedulingService(self._db)
+        today = self._db.server_now().date()
+        last = min(end, today + timedelta(days=self._window(settings)))
+        full: list[str] = []
+        day = max(start, today)
+        while day <= last:
+            if day.isoweekday() in working and day not in off and not scheduling.available_slots(doctor_id, day):
+                full.append(day.isoformat())
+            day += timedelta(days=1)
+        # Reasons are never sent to the public page, only the dates.
+        return {"working_weekdays": working, "full_days": full, "off_days": sorted(d.isoformat() for d in off)}
 
     def book(self, request: BookingRequest) -> dict[str, Any]:
         """Store a booking request for the doctor and one of their nurses."""

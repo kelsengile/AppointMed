@@ -25,6 +25,12 @@ def slots(doctor_id: int, day: date) -> dict:
     return service.slots(doctor_id, day)
 
 
+@router.get("/calendar")
+def calendar(doctor_id: int, date_from: date, date_to: date) -> dict:
+    """Working weekdays and fully booked days for the booking calendar."""
+    return service.calendar(doctor_id, date_from, date_to)
+
+
 @router.post("/bookings", status_code=201)
 def book(body: BookingRequest, request: Request) -> dict:
     """Submit an appointment request. Limited per visitor to discourage spam."""

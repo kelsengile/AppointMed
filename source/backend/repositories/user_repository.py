@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from backend.core.database import Row
@@ -146,4 +146,26 @@ class ScheduleRepository(BaseRepository):
             self.create({"doctor_id": doctor_id, **block})
 
 
-__all__ = ["UserRepository", "ScheduleRepository", "placeholders"]
+class DayOffRepository(BaseRepository):
+    """Single dates when a doctor is unavailable (on top of the weekly schedule)."""
+
+    table = "doctor_days_off"
+    columns = ("doctor_id", "off_date", "reason")
+
+    def in_range(self, doctor_id: int, start: date, end: date) -> list[Row]:
+        """Days off between two dates (inclusive), with their reasons."""
+        return self._db.fetch_all(
+            "SELECT off_date, reason FROM doctor_days_off WHERE doctor_id = %s AND off_date BETWEEN %s AND %s ORDER BY off_date",
+            (doctor_id, start, end),
+        )
+
+    def is_off(self, doctor_id: int, day: date) -> bool:
+        row = self._db.fetch_one("SELECT 1 AS hit FROM doctor_days_off WHERE doctor_id = %s AND off_date = %s LIMIT 1", (doctor_id, day))
+        return row is not None
+
+    def remove(self, doctor_id: int, day: date) -> int:
+        """Delete one day off. Returns rows removed (0 if it was not marked)."""
+        return self._db.update("DELETE FROM doctor_days_off WHERE doctor_id = %s AND off_date = %s", (doctor_id, day))
+
+
+__all__ = ["UserRepository", "ScheduleRepository", "DayOffRepository", "placeholders"]
