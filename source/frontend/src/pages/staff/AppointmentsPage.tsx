@@ -13,7 +13,7 @@ import { cardClass, dangerButton, inputClass, primaryButton, secondaryButton, st
 import { useAuth } from "../../context/AuthContext";
 import { usePolling } from "../../hooks/usePolling";
 import type { AppointmentItem, RoomStatus } from "../../types";
-import { ageFrom, formatTime, isoDate, toInputDateTime } from "../../utils/format";
+import { ageFrom, formatDate, formatTime, isoDate, toInputDateTime } from "../../utils/format";
 
 const ROOM_STATUSES: RoomStatus[] = ["Available", "Occupied", "Maintenance"];
 
@@ -94,6 +94,8 @@ export default function AppointmentsPage() {
   const board = usePolling(() => staffApi.dashboard(), 8000); // queue + exam room, whatever their date
   const agenda = usePolling(() => staffApi.appointments(day), 8000, [day]);
   const rooms = usePolling(() => staffApi.rooms(), 15000);
+  const dayInfo = usePolling(() => staffApi.calendar(day, day), 0, [day]);
+  const dayOff = dayInfo.data?.off_days.find((d) => d.day === day);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [roomBusy, setRoomBusy] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
@@ -176,7 +178,7 @@ export default function AppointmentsPage() {
           {/* A div, not a label: a label around a button can fire the button twice. */}
           <div className="text-sm font-medium">
             Agenda for
-            <AgendaCalendar value={day} onChange={setDay} />
+            <AgendaCalendar value={day} onChange={setDay} onChanged={() => void dayInfo.reload()} />
           </div>
           <button type="button" className={primaryButton} onClick={() => setWalkIn(true)}>
             New appointment
@@ -187,6 +189,12 @@ export default function AppointmentsPage() {
       {notice && <Alert onClose={() => setNotice("")}>{notice}</Alert>}
       {success && <Alert kind="success" onClose={() => setSuccess("")}>{success}</Alert>}
       {errorText && <Alert kind="error">{errorText}</Alert>}
+      {dayOff && (
+        <Alert kind="warning">
+          The doctor is unavailable on {formatDate(day)}
+          {dayOff.reason ? `. Reason: ${dayOff.reason}` : "."}
+        </Alert>
+      )}
       {board.loading && !board.data && <p className="mt-6 text-slate-500">Loading...</p>}
 
       <Section title="Under examination" count={consulting ? 1 : 0}>
