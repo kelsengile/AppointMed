@@ -23,7 +23,7 @@ from backend.repositories.appointment_repository import AppointmentRepository, N
 from backend.repositories.clinical_repository import ExaminationRepository, InvoiceRepository, PrescriptionRepository
 from backend.repositories.patient_repository import PatientRepository
 from backend.repositories.system_repository import AuditRepository, RoomRepository, SettingsRepository
-from backend.repositories.user_repository import ScheduleRepository, UserRepository
+from backend.repositories.user_repository import DayOffRepository, ScheduleRepository, UserRepository
 from backend.schemas.api import AppointmentCreate, ExamFinish
 
 MAX_INVOICE = Decimal("99999999.99")  # fits DECIMAL(10,2)
@@ -98,6 +98,12 @@ class AppointmentService:
         except ValueError as exc:
             raise ValidationFailedError("Invalid day filter.") from exc
 
+    @staticmethod
+    def _ensure_working(tx: Executor, doctor_id: int, when: datetime) -> None:
+        """Refuse a time on a day the doctor marked as unavailable."""
+        if DayOffRepository(tx).is_off(doctor_id, when.date()):
+            raise InvalidScheduleError("The doctor is not available on that day.")
+
     # ------------------------------------------------------------ notifications
     def list_notifications(self, user: User, status: str | None) -> list[Row]:
         if status and status not in ("Pending", "Converted", "Dismissed"):
@@ -120,6 +126,7 @@ class AppointmentService:
             when = floor_minute(chosen)
             if when < floor_minute(tx.server_now()):
                 raise InvalidScheduleError("That time has already passed. Choose a later time.")
+            self._ensure_working(tx, doctor_id, when)   # <-- new
             self._check_room(tx, room_id)
             if appointments.conflict_exists(doctor_id, when):
                 raise AppointmentConflictError()
@@ -188,7 +195,7 @@ class AppointmentService:
         return AppointmentRepository(self._db).list_for_doctor(user.scope_doctor_id, self._parse_when(day), blank_to_none(term))
 
     def calendar(self, user: User, start: date, end: date) -> dict[str, Any]:
-        """Which weekdays the doctor works, and which days already have bookings (for the agenda calendar)."""
+        """Working weekdays, busy days and the doctor's days off (for the agenda calendar)."""
         if start > end or (end - start).days > 62:
             raise ValidationFailedError("Choose a range of two months or less.")
         doctor_id = user.scope_doctor_id
@@ -196,10 +203,45 @@ class AppointmentService:
         busy = AppointmentRepository(self._db).booked_days(doctor_id, start, end) | NotificationRepository(
             self._db
         ).pending_days(doctor_id, start, end)
+        off = DayOffRepository(self._db).in_range(doctor_id, start, end)
         return {
             "working_weekdays": sorted({b["weekday"] for b in blocks}),
             "busy_days": sorted(d.isoformat() for d in busy),
+            "off_days": [{"day": r["off_date"].isoformat(), "reason": r["reason"]} for r in off],
         }
+
+    def set_day_off(self, user: User, day: date, reason: str | None) -> dict[str, bool]:
+        """Doctor marks a date as unavailable. Refused while the day still has open appointments or requests."""
+        doctor_id = user.scope_doctor_id
+        with self._db.transaction() as tx:
+            self._lock_doctor(tx, doctor_id)
+            today = tx.server_now().date()
+            if day < today:
+                raise InvalidScheduleError("Choose today or a later date.")
+            if (day - today).days > 365:
+                raise InvalidScheduleError("Choose a date within the next year.")
+            days_off = DayOffRepository(tx)
+            if days_off.is_off(doctor_id, day):
+                raise ConflictError("That day is already marked as unavailable.")
+            open_appointments = AppointmentRepository(tx).active_count_on(doctor_id, day)
+            pending = NotificationRepository(tx).pending_count_on(doctor_id, day)
+            if open_appointments or pending:
+                raise ConflictError(
+                    f"That day still has {open_appointments} open appointment(s) and {pending} pending request(s). "
+                    "Reschedule, cancel or disapprove them first."
+                )
+            days_off.create({"doctor_id": doctor_id, "off_date": day, "reason": blank_to_none(reason)})
+            AuditRepository(tx).record(user.id, "SET_DAY_OFF", "doctor_days_off", None, f"Unavailable on {day.isoformat()}")
+        return {"ok": True}
+
+    def clear_day_off(self, user: User, day: date) -> dict[str, bool]:
+        """Doctor makes a date available again."""
+        doctor_id = user.scope_doctor_id
+        with self._db.transaction() as tx:
+            if DayOffRepository(tx).remove(doctor_id, day) == 0:
+                raise NotFoundError("That day is not marked as unavailable.")
+            AuditRepository(tx).record(user.id, "CLEAR_DAY_OFF", "doctor_days_off", None, f"Available again on {day.isoformat()}")
+        return {"ok": True}
 
     def create_appointment(self, user: User, data: AppointmentCreate) -> Row:
         """Create a walk-in or phone appointment for the user's doctor."""
@@ -226,6 +268,7 @@ class AppointmentService:
             when = floor_minute(data.scheduled_time or now)
             if when.date() < now.date():
                 raise InvalidScheduleError("Choose today or a later date.")
+            self._ensure_working(tx, doctor_id, when)   # <-- new
             if data.check_in_now and when.date() != now.date():
                 raise ValidationFailedError("Only today's appointments can be checked in.")
             if appointments.conflict_exists(doctor_id, when):
@@ -333,6 +376,7 @@ class AppointmentService:
                 when = floor_minute(data.follow_up_time)
                 if when <= now:
                     raise InvalidScheduleError("The follow-up must be in the future.")
+                self._ensure_working(tx, doctor_id, when)   # <-- new
                 if appointments.conflict_exists(doctor_id, when):
                     raise AppointmentConflictError("The follow-up time is already booked.")
                 nurses = UserRepository(tx).nurses_for_doctor(doctor_id)
@@ -410,6 +454,7 @@ class AppointmentService:
             when = floor_minute(new_time)
             if when <= tx.server_now():
                 raise InvalidScheduleError("Choose a time in the future.")
+            self._ensure_working(tx, doctor_id, when)   # <-- new
             if appointments.conflict_exists(doctor_id, when, appointment_id):
                 raise AppointmentConflictError()
             try:

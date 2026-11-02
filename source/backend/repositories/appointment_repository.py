@@ -110,6 +110,15 @@ class AppointmentRepository(BaseRepository):
         )
         return {r["day"] for r in rows}
 
+    def active_count_on(self, doctor_id: int, day: date) -> int:
+        """Appointments on a day that are still open (not finished or cancelled)."""
+        row = self._db.fetch_one(
+            "SELECT COUNT(*) AS n FROM appointments WHERE doctor_id = %s AND DATE(scheduled_time) = %s "
+            "AND status IN ('Scheduled', 'Checked-in', 'Consulting')",
+            (doctor_id, day),
+        )
+        return int(row["n"]) if row else 0
+
     def status_counts_today(self, doctor_id: int) -> list[Row]:
         return self._db.fetch_all(
             "SELECT status, COUNT(*) AS n FROM appointments WHERE doctor_id = %s AND DATE(scheduled_time) = CURDATE() GROUP BY status",
@@ -166,3 +175,12 @@ class NotificationRepository(BaseRepository):
             (doctor_id, start, end),
         )
         return {r["day"] for r in rows}
+
+    def pending_count_on(self, doctor_id: int, day: date) -> int:
+        """Pending booking requests that want a time on this day."""
+        row = self._db.fetch_one(
+            "SELECT COUNT(*) AS n FROM notifications WHERE doctor_id = %s AND status = 'Pending' "
+            "AND preferred_datetime IS NOT NULL AND DATE(preferred_datetime) = %s",
+            (doctor_id, day),
+        )
+        return int(row["n"]) if row else 0

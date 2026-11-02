@@ -75,7 +75,7 @@ class Doctor(User):
     """Sees their own patients, runs examinations, and writes prescriptions."""
 
     role = "doctor"
-    features = frozenset(_CLINICAL | {"prescriptions", "exam"})
+    features = frozenset(_CLINICAL | {"prescriptions", "exam", "schedule"})
 
     @property
     def scope_doctor_id(self) -> int:
