@@ -4,3 +4,4 @@ pydantic>=2.8
 mysql-connector-python>=9.0
 python-dotenv>=1.0
 bcrypt>=4.2
+PyJWT>=2.8
