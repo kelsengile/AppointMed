@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from backend.core.database import Database, database
-from backend.core.exceptions import AppError, InvalidScheduleError, NotFoundError, ValidationFailedError
+from backend.core.exceptions import AppError, InvalidScheduleError, NotFoundError
 from backend.core.utils import floor_minute
 from backend.repositories.appointment_repository import NotificationRepository
 from backend.repositories.system_repository import AuditRepository, SettingsRepository
