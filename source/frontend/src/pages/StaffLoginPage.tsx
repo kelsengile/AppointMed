@@ -78,7 +78,7 @@ export default function StaffLoginPage() {
         {/* Left panel: blurred photo and logo, overlapping the form panel. */}
         <div
           aria-hidden
-          className="glass-panel glass-panel--left relative z-10 order-first mx-auto -mb-7 flex min-h-[240px] w-full max-w-md items-center justify-center overflow-hidden py-10 sm:min-h-[300px] sm:py-12 lg:order-none lg:mx-0 lg:-mr-8 lg:mb-0 lg:h-[88vh] lg:min-h-[620px] lg:max-h-[960px] lg:w-[492px] lg:max-w-none lg:flex-none lg:py-0"
+          className="glass-panel glass-panel--left relative z-10 order-first -mb-7 flex min-h-[240px] w-full items-center justify-center overflow-hidden py-10 sm:min-h-[300px] sm:py-12 lg:order-none lg:-mr-8 lg:mb-0 lg:min-h-0 lg:w-[492px] lg:flex-none lg:self-stretch lg:py-0"
         >
           <img
             src="/staff-login-bg.jpg"
@@ -94,7 +94,8 @@ export default function StaffLoginPage() {
         </div>
 
         {/* Right panel: the sign-in form. */}
-        <form onSubmit={submit} className="glass-panel glass-panel--form flex-1 px-6 pb-8 pt-16 sm:px-12 sm:pt-20 lg:px-14 lg:pt-20 xl:px-28 xl:pt-24 2xl:px-[135px]">
+        <form onSubmit={submit} className="glass-panel glass-panel--form flex-1 px-6 pb-8 pt-16 sm:px-12 sm:pt-20 lg:min-h-[min(88vh,960px)] lg:px-14 lg:pt-20 xl:px-28 xl:pt-24 2xl:px-[135px]"
+>
           <h1 className="text-5xl font-bold leading-tight tracking-tight text-[#053067] md:text-6xl xl:text-7xl 2xl:text-8xl 2xl:leading-[144px]">
             STAFF LOGIN
           </h1>
