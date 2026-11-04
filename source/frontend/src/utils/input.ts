@@ -28,8 +28,20 @@ export function cleanMoney(v: string, maxInt = 7): string {
 }
 
 /** Digits, spaces, ( ) - and a + only as the first character. */
-export const cleanPhone = (v: string) =>
-  tidy(v.replace(/[^0-9+()\-\s]/g, "").replace(/(?!^)\+/g, "")).slice(0, 20);
+/** Digits (15 at most), spaces, ( ) - and a + only as the first character. */
+export function cleanPhone(v: string): string {
+  const kept = tidy(v.replace(/[^0-9+()\-\s]/g, "").replace(/(?!^)\+/g, ""));
+  let digits = 0;
+  let out = "";
+  for (const ch of kept) {
+    if (/\d/.test(ch)) {
+      if (digits >= 15) continue; // ignore the 16th digit onward
+      digits += 1;
+    }
+    out += ch;
+  }
+  return out.slice(0, 20);
+}
 
 export const MIN_BIRTHDATE = "1900-01-01";
 
