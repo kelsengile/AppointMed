@@ -41,3 +41,9 @@ export interface DbQueryResult {
   truncated: boolean;
   affected: number | null;
 }
+
+export interface DbImportResult {
+  ok: boolean;
+  tables: number;
+  rows: number;
+}
