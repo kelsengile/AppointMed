@@ -19,6 +19,7 @@ export default function StaffLoginPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showRecoveryHint, setShowRecoveryHint] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   // The backdrop re-renders the front page; keep it out of the tab order (aria-hidden + inert).
   const backdropRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -123,17 +124,28 @@ export default function StaffLoginPage() {
 
           <label className={`mt-5 sm:mt-6 xl:mt-8 ${label}`} htmlFor="staff-password">
             Password
-            <input
-              id="staff-password"
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              aria-invalid={error ? true : undefined}
-              className="glass-input mt-2 block h-14 w-full px-5 text-lg sm:h-16 sm:text-xl xl:mt-3 xl:h-20 xl:text-2xl 2xl:h-[108px]"
-            />
+            <div className="relative mt-2 xl:mt-3">
+              <input
+                id="staff-password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={error ? true : undefined}
+                className="glass-input block h-14 w-full px-5 pr-24 text-lg sm:h-16 sm:text-xl xl:h-20 xl:text-2xl 2xl:h-[108px]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-pressed={showPassword}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-sm font-medium text-[#053067] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#053067] sm:text-base"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
           </label>
 
           {error && (
