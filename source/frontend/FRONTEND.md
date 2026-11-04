@@ -105,7 +105,7 @@ Because the browser only ever talks to port 5173, there are no cross-origin requ
 | `postcss.config.js` | Enables Tailwind and Autoprefixer |
 | `tsconfig.json` | Strict TypeScript, `jsx: react-jsx`, bundler module resolution, `noEmit` |
 | `src/vite-env.d.ts` | Vite client types |
-| `public/` | Static files: `appointmed-logo.png` and an optional `hero.jpg` for the landing page |
+| `public/` | Static files: `appointmed-logo.png`, `staff-login-logo.png` and `staff-login-bg.jpg` for `/staff-login`, and an optional `hero.jpg` for the landing page |
 
 ## 4. Folder Structure
 
@@ -118,14 +118,14 @@ source/frontend/src/
 ├── api/
 │   ├── client.ts             # the only fetch call; token handling; ApiError
 │   └── endpoints.ts          # every backend call, grouped as authApi/publicApi/staffApi/adminApi
-├── components/               # Alert, Badge, EncounterCard, ExamPanel, LoginModal, Logo, Modal,
+├── components/               # Alert, Badge, EncounterCard, ExamPanel, Logo, Modal,
 │                             #   ProtectedRoute, ScheduleEditor, StatCard, WalkInModal, ui.ts
 ├── config/Navigation.ts      # side-panel items for each role
 ├── context/AuthContext.tsx   # signed-in user, login, logout, updateSession
 ├── hooks/usePolling.ts       # load now and on an interval
 ├── layouts/DashboardLayout.tsx
 ├── pages/
-│   ├── LandingPage.tsx, BookingPage.tsx, PlaceholderPage.tsx
+│   ├── LandingPage.tsx, BookingPage.tsx, PlaceholderPage.tsx, StaffLoginPage.tsx
 │   ├── staff/                # Dashboard, Appointments, Notifications, Patients, History, Invoice, Prescriptions
 │   ├── admin/                # AdminDashboard, Users, Rooms, ClinicSettings, Reports, Audit
 │   └── shared/               # Profile, Settings, Help
@@ -154,6 +154,7 @@ pages  ->  components, hooks, context, config  ->  api  ->  types, utils
 |---|---|---|
 | `/` | `LandingPage` | No |
 | `/book` | `BookingPage` | No |
+| `/staff-login` | `StaffLoginPage` | No |
 | `/doctor`, `/nurse`, `/admin` | `ProtectedRoute role=...` wrapping `DashboardLayout` | Yes |
 | `/<role>` (index) | Redirects to the role's first navigation item (the Dashboard) | Yes |
 | `/<role>/<item.path>` | The page chosen by `pageFor(role, item)` | Yes |
@@ -217,7 +218,7 @@ Behaviors worth knowing:
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant M as LoginModal
+    participant M as StaffLoginPage
     participant A as AuthContext
     participant API as /api/auth/login
     U->>M: types username and password
@@ -329,7 +330,6 @@ The page frame for every staff screen.
 | `Logo` | Logo image and name | `size`, `showName`, `onDark` (white text on dark backgrounds) |
 | `StatCard` | A number with a label | Becomes a router `Link` when `to` is given |
 | `ProtectedRoute` | Role guard | See [5.4](#54-protectedroute) |
-| `LoginModal` | Staff login form | Focuses the first field, closes on Escape, rejects empty fields, shows API errors, navigates to `/<role>` |
 | `EncounterCard` | One completed visit | Diagnosis, notes, a medicines table, and the bill line `consultation + medicines = total (paid date)`. `showName` switches the heading between patient name and visit date |
 | `ExamPanel` | The doctor's examination form | See [10.1](#101-exampanel) |
 | `WalkInModal` | New walk-in or phone appointment | See [10.2](#102-walkinmodal) |
@@ -372,13 +372,27 @@ Shown on the Appointments page while a patient is under examination (doctor only
 
 | Section | Content |
 |---|---|
-| Header | Logo, anchor links (Services, Doctors, Contact), and **Staff login** (opens `LoginModal`) or **Dashboard** when already signed in |
+| Header | Logo, anchor links (Services, Doctors, Contact), and **Staff login** (links to `/staff-login`) or **Dashboard** when already signed in |
 | Hero | Headline, a short pitch, and a **Book an appointment** button to `/book`. Background is the gradient, and `public/hero.jpg` is layered on top if present |
 | Services | General Medicine, Pediatrics, Prescriptions |
 | Doctors | Dr. Sandy Cheeks and Dr. Squidward Tentacles with their days |
 | Footer | Clinic name and address (fictional) |
 
 The services and doctors are **static arrays in the file**, not loaded from the API (see [21](#21-known-limitations-and-notes)).
+
+**`StaffLoginPage` (`/staff-login`)**
+
+The staff sign-in screen, rebuilt from the Figma design "Desktop - 9" (node `33:40`): two overlapping frosted-glass panels. The background is the website's front page (`/`) re-rendered blurred and dimmed behind them; the left panel shows the AppointMed logo over a heavily blurred blue photo (`public/staff-login-bg.jpg` and `public/staff-login-logo.png`, both exported from the design, positioned with the same crop the design uses); the right panel holds the form. The blurred front-page backdrop is marked `aria-hidden` and made `inert` so it is not focusable.
+
+| Detail | Behavior |
+|---|---|
+| Fields | Username (first field, exactly as the backend authenticates) and password, both wrapped in `<label>` |
+| Remember me | Checked by default as drawn in the design. Ticking it stores the **username only** in `localStorage` (`appointmed.remembered-username`) to prefill the next visit. The token is still kept in `sessionStorage` only |
+| Forgot Password? | Toggles a hint line: passwords are reset by an administrator (there is no self-service reset endpoint) |
+| Cancel | Navigates back to `/` |
+| Log in | Rejects empty fields, calls `authApi.login`, on success navigates to `/<role>` with `replace`. API errors are shown inline with `role="alert"` |
+| Styling | Frosted-glass panels and inputs defined in `index.css` (`.glass-panel`, `.glass-panel--left`, `.glass-panel--form`, `.glass-input`, `.glass-login-button`); the page uses the Poppins font (loaded in `index.html`). The form panel uses a near-opaque frosted white (`rgba(252,253,247,.85)`) so the navy text stays readable over the dark backdrop |
+| Known deviation | The design labels the first field "Email address"; the implementation asks for the username because `/api/auth/login` matches staff by username only |
 
 **`BookingPage` (`/book`)**
 
@@ -599,7 +613,7 @@ The project is graded against the CMSC 203 final project brief in `CONTRIBUTING.
 
 | Brief requires | How the frontend meets it |
 |---|---|
-| Multiple windows/forms | Public landing and booking pages, a login dialog, and 16 routed staff and admin pages. Modals for add and edit forms, reschedule, passwords, and schedules |
+| Multiple windows/forms | Public landing, booking, and staff login pages, and 16 routed staff and admin pages. Modals for add and edit forms, reschedule, passwords, and schedules |
 | Buttons | Primary, secondary, and danger button styles in `ui.ts`, used across all pages |
 | Labels | Every field has a visible label or an `aria-label` |
 | Textboxes | Text, search, email, tel, number, password, date, time, and `datetime-local` inputs, plus `<textarea>` |
@@ -612,7 +626,7 @@ The project is graded against the CMSC 203 final project brief in `CONTRIBUTING.
 
 | Brief requires | Where it exists |
 |---|---|
-| User login | `LoginModal`, `AuthContext`, `ProtectedRoute` |
+| User login | `StaffLoginPage`, `AuthContext`, `ProtectedRoute` |
 | Add records | Booking requests, walk-in appointments, patients, users, rooms, prescriptions (through examination), invoices |
 | Edit records | Patients, users, rooms, profile, clinic settings, doctor schedules, rescheduling |
 | Delete records | Patients (with no visits), rooms (not used in appointments). Users are deactivated instead, which protects history |

@@ -10,7 +10,8 @@ import re
 from typing import Any
 
 from backend.core.database import Database, database
-from backend.core.exceptions import ConflictError, NotFoundError, PermissionDeniedError, ValidationFailedError
+from backend.core.exceptions import AppError, ConflictError, NotFoundError, PermissionDeniedError, ValidationFailedError
+from backend.services.backup_parser import parse_backup
 from backend.models.domain import User
 from backend.repositories.database_repository import DatabaseAdminRepository, admin_session, to_json_value
 from backend.repositories.system_repository import AuditRepository
@@ -21,7 +22,7 @@ _NO_INSERT = frozenset({"users"})  # new accounts need a hashed password: use th
 _TEXT_TYPES = frozenset({"char", "varchar", "tinytext", "text", "mediumtext", "longtext"})
 _READ_KINDS = frozenset({"select", "show", "describe", "desc", "explain"})
 _CONSOLE_LIMIT = 500
-
+_KEEP_ON_IMPORT = frozenset({"audit_logs"})  # append-only, so an import never replaces it
 
 class DatabaseService:
     """Rules for the administrator's database tools."""
@@ -211,3 +212,49 @@ class DatabaseService:
             stamp = session.server_now()
             AuditRepository(session).record(admin.id, "BACKUP_DATABASE", "database", None, f"Downloaded a backup ({summary})")
         return f"appointmed-backup_{stamp:%Y-%m-%d_%H%M}.sql", content
+
+        # ------------------------------------------------------------ import
+    def import_backup(self, admin: User, content: str) -> dict[str, Any]:
+        """Replace the rows of every table with the rows in a backup file (structure is not changed)."""
+        parsed = parse_backup(content)  # nothing touches the database until the file is understood
+        with admin_session(self._db) as session:
+            repo = DatabaseAdminRepository(session)
+            existing = repo.table_names()
+            unknown = sorted(parsed.tables - set(existing))
+            if unknown:
+                raise ValidationFailedError(f"The backup has tables this database does not have: {', '.join(unknown)}.")
+            missing = [name for name in existing if name not in parsed.tables]
+            if missing:
+                raise ValidationFailedError(f"The backup is incomplete. It is missing: {', '.join(missing)}.")
+            allowed = {name: {c["name"] for c in repo.columns(name) if not c["generated"]} for name in existing}
+            for table, columns, _ in parsed.inserts:
+                bad = [c for c in columns if c not in allowed[table]]
+                if bad:
+                    raise ValidationFailedError(f"The backup has columns that {table} does not have: {', '.join(bad)}.")
+
+            targets = [name for name in existing if name not in _KEEP_ON_IMPORT]
+            total = 0
+            repo.set_foreign_key_checks(False)
+            try:
+                for name in targets:
+                    repo.clear_table(name)
+                for table, columns, rows in parsed.inserts:
+                    if table in _KEEP_ON_IMPORT:
+                        continue
+                    try:
+                        total += repo.insert_many(table, columns, rows)
+                    except (ValidationFailedError, ConflictError) as exc:
+                        raise ValidationFailedError(f"Could not import into {table}: {exc.message}") from exc
+                if not repo.is_active_admin(admin.id):
+                    raise ConflictError(
+                        "The backup does not contain your own active administrator account, so nothing was changed."
+                    )
+            finally:
+                try:
+                    repo.set_foreign_key_checks(True)
+                except AppError:
+                    pass
+            AuditRepository(session).record(
+                admin.id, "RESTORE_DATABASE", "database", None, f"Imported a backup ({len(targets)} tables, {total} rows)"
+            )
+        return {"ok": True, "tables": len(targets), "rows": total}

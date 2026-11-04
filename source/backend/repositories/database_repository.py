@@ -255,6 +255,32 @@ class DatabaseAdminRepository:
     def delete_row(self, table: str, key_column: str, key: str) -> int:
         return self._db.update(f"DELETE FROM {quote(table)} WHERE {quote(key_column)} = %s", (key,))
 
+    # ------------------------------------------------------------ import
+    def set_foreign_key_checks(self, on: bool) -> None:
+        """Switched off only while a backup is loaded, so tables can be filled in any order."""
+        self._db.update(f"SET FOREIGN_KEY_CHECKS = {1 if on else 0}")
+
+    def clear_table(self, table: str) -> int:
+        return self._db.update(f"DELETE FROM {quote(table)}")
+
+    def insert_many(self, table: str, columns: list[str], rows: list[list[Any]]) -> int:
+        """Insert rows 100 at a time. Every value is a parameter."""
+        if not rows:
+            return 0
+        column_list = ", ".join(quote(c) for c in columns)
+        group = "(" + ", ".join(["%s"] * len(columns)) + ")"
+        for start in range(0, len(rows), 100):
+            chunk = rows[start : start + 100]
+            self._db.update(
+                f"INSERT INTO {quote(table)} ({column_list}) VALUES {', '.join([group] * len(chunk))}",
+                [value for row in chunk for value in row],
+            )
+        return len(rows)
+
+    def is_active_admin(self, user_id: int) -> bool:
+        row = self._db.fetch_one("SELECT 1 AS hit FROM users WHERE id = %s AND role = 'admin' AND is_active = 1", (user_id,))
+        return row is not None
+
     # ------------------------------------------------------------ backup
     def dump(self) -> tuple[str, str]:
         """The whole database as SQL (structure and data). Returns the text and a one-line summary."""
