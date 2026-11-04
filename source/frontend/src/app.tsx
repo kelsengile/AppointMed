@@ -3,6 +3,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { NAV } from "./config/Navigation";
 import { AuthProvider } from "./context/AuthContext";
 import DashboardLayout from "./layouts/DashboardLayout";
+import StaffLoginPage from "./pages/StaffLoginPage";
 import BookingPage from "./pages/BookingPage";
 import LandingPage from "./pages/LandingPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
@@ -80,6 +81,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/book" element={<BookingPage />} />
+          <Route path="/staff-login" element={<StaffLoginPage />} />
           {ROLES.map((role) => (
             <Route
               key={role}
