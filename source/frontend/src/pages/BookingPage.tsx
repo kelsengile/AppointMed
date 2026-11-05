@@ -8,7 +8,8 @@ import { formatDate, formatTime, isoDate, weekdayList } from "../utils/format";
 import { MIN_BIRTHDATE, cleanAddress, cleanEmail, cleanName, cleanPhone, cleanText, isEmail, isName, isPhone } from "../utils/input";
 
 const input =
-  "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30";
+  "mt-1 w-full rounded-xl border border-[#BBD4F3] bg-white px-3 py-2 text-landing-heading focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30";
+const card = "space-y-4 rounded-3xl border border-[#DCE9FB] bg-white p-5 shadow-[0_14px_30px_rgba(53,88,130,0.1)]";
 
 interface Person {
   full_name: string;
@@ -33,11 +34,30 @@ const CLEAN: Record<keyof Person, (v: string) => string> = {
 
 function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
   return (
-    <label className="block text-sm font-medium">
+    <label className="block text-sm font-medium text-landing-body">
       {label}
       {children}
       {error && <span className="mt-1 block text-sm font-normal text-red-700">{error}</span>}
     </label>
+  );
+}
+
+// Page frame in the landing-page style: gradient background and a floating pill header.
+function Shell({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
+  return (
+    <div className="app-theme min-h-screen bg-gradient-to-b from-[#EAF5FD] via-[#F4F9FE] to-[#EAF4FC]">
+      <header className="px-4 pt-4 sm:px-8">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 rounded-2xl bg-white/85 px-4 py-2.5 shadow-[0_10px_30px_rgba(53,88,130,0.12)] backdrop-blur">
+          <Link to="/" aria-label="Back to AppointMed home">
+            <Logo size={36} />
+          </Link>
+          <Link to="/" className="rounded-xl border border-brand-200 px-4 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">
+            Back to home
+          </Link>
+        </div>
+      </header>
+      <main className={`mx-auto ${narrow ? "max-w-xl" : "max-w-2xl"} px-6 pb-16 pt-8 md:pt-10`}>{children}</main>
+    </div>
   );
 }
 
@@ -145,21 +165,12 @@ export default function BookingPage() {
     }
   }
 
-  const header = (
-    <>
-      <Link to="/" aria-label="Back to AppointMed home">
-        <Logo size={36} />
-      </Link>
-      <h1 className="mt-6 text-2xl font-semibold">Book an appointment</h1>
-    </>
-  );
-
   if (receipt) {
     return (
-      <main className="mx-auto max-w-xl p-6 md:p-10">
-        {header}
-        <div className="mt-6 rounded-xl border border-brand-100 bg-white p-6" role="status">
-          <h2 className="text-lg font-semibold text-brand-700">Request received</h2>
+      <Shell narrow>
+        <h1 className="text-3xl sm:text-4xl">Book an appointment</h1>
+        <div className="mt-6 rounded-3xl border border-[#DCE9FB] bg-white p-6 shadow-[0_14px_30px_rgba(53,88,130,0.1)]" role="status">
+          <h2 className="text-lg font-bold text-brand-700">Request received</h2>
           <p className="mt-2 text-slate-700">
             You asked to see <strong>{receipt.doctor_name}</strong> on <strong>{formatDate(receipt.preferred_datetime)}</strong> at{" "}
             <strong>{formatTime(receipt.preferred_datetime)}</strong>.
@@ -168,29 +179,29 @@ export default function BookingPage() {
             Our staff will review it. We will email <strong>{receipt.email}</strong> as soon as it is confirmed, or if the time cannot be
             accommodated. It is not a confirmed appointment yet.
           </p>
-          <Link to="/" className="mt-5 inline-block rounded-lg bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700">
+          <Link to="/" className="book-btn mt-5 inline-block rounded-xl px-5 py-2.5 font-semibold text-white">
             Back to home
           </Link>
         </div>
-      </main>
+      </Shell>
     );
   }
 
   return (
-    <main className="mx-auto max-w-2xl p-6 md:p-10">
-      {header}
-      <p className="mt-1 text-slate-600">Choose a doctor and a time. A nurse will confirm your request by email.</p>
+    <Shell>
+      <h1 className="text-3xl sm:text-4xl">Book an appointment</h1>
+      <p className="mt-1 text-landing-muted">Choose a doctor and a time. A nurse will confirm your request by email.</p>
 
-      {loadError && <p className="mt-6 rounded-lg bg-red-50 p-4 text-red-800" role="alert">{loadError}</p>}
+      {loadError && <p className="mt-6 rounded-2xl bg-red-50 p-4 text-red-800" role="alert">{loadError}</p>}
       {!catalog && !loadError && <p className="mt-6 text-slate-500">Loading...</p>}
       {catalog && !catalog.booking_open && (
-        <p className="mt-6 rounded-lg bg-amber-50 p-4 text-amber-900">Online booking is currently closed. Please call the clinic to book.</p>
+        <p className="mt-6 rounded-2xl bg-amber-50 p-4 text-amber-900">Online booking is currently closed. Please call the clinic to book.</p>
       )}
 
       {catalog && catalog.booking_open && (
         <form onSubmit={submit} noValidate className="mt-6 space-y-8">
-          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold">1. Your details</h2>
+          <section className={card}>
+            <h2 className="font-bold">1. Your details</h2>
             <Field label="Full name" error={errors.full_name}>
               <input className={input} maxLength={100} value={person.full_name} onChange={(e) => setField("full_name", e.target.value)} autoComplete="name" />
             </Field>
@@ -220,8 +231,8 @@ export default function BookingPage() {
             </Field>
           </section>
 
-          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold">2. Doctor and time</h2>
+          <section className={card}>
+            <h2 className="font-bold">2. Doctor and time</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Specialization">
                 <select
@@ -258,10 +269,10 @@ export default function BookingPage() {
                 </select>
               </Field>
             </div>
-            {chosen && <p className="text-sm text-slate-500">{chosen.full_name} sees patients on {weekdayList(chosen.weekdays)}.</p>}
+            {chosen && <p className="text-sm text-landing-muted">{chosen.full_name} sees patients on {weekdayList(chosen.weekdays)}.</p>}
 
             {/* A div, not a label: a label around a button can fire the button twice. */}
-            <div className="text-sm font-medium">
+            <div className="text-sm font-medium text-landing-body">
               Date
               <BookingCalendar
                 value={day}
@@ -276,7 +287,7 @@ export default function BookingPage() {
 
             {doctorId && dayInRange && (
               <div>
-                <p className="text-sm font-medium">Available times</p>
+                <p className="text-sm font-medium text-landing-body">Available times</p>
                 {slotsLoading && <p className="mt-1 text-sm text-slate-500">Loading times...</p>}
                 {!slotsLoading && slots.length === 0 && (
                   <p className="mt-1 text-sm text-slate-500">No open times on this day. Try another date.</p>
@@ -289,8 +300,10 @@ export default function BookingPage() {
                       role="radio"
                       aria-checked={slot === s}
                       onClick={() => setSlot(s)}
-                      className={`rounded-lg border px-2 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                        slot === s ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 hover:bg-brand-50"
+                      className={`rounded-xl border px-2 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                        slot === s
+                          ? "border-[#365983] bg-gradient-to-r from-[#365983] to-[#527DAA] font-semibold text-white shadow-md"
+                          : "border-[#BBD4F3] bg-white text-landing-body hover:bg-brand-50"
                       }`}
                     >
                       {formatTime(s)}
@@ -302,12 +315,12 @@ export default function BookingPage() {
             )}
           </section>
 
-          {submitError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">{submitError}</p>}
-          <button type="submit" disabled={busy} className="rounded-lg bg-brand-600 px-5 py-3 font-medium text-white hover:bg-brand-700 disabled:opacity-60">
+          {submitError && <p className="rounded-2xl bg-red-50 p-3 text-sm text-red-800" role="alert">{submitError}</p>}
+          <button type="submit" disabled={busy} className="book-btn rounded-2xl px-6 py-3 font-semibold text-white disabled:opacity-60">
             {busy ? "Sending..." : "Request appointment"}
           </button>
         </form>
       )}
-    </main>
+    </Shell>
   );
 }

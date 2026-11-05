@@ -1,5 +1,5 @@
 // Admin: browse and edit table rows, run one SQL statement, and download a full SQL backup.
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { databaseApi } from "../../api/databaseApi";
 import Alert from "../../components/Alert";
 import Badge from "../../components/Badge";
@@ -9,6 +9,7 @@ import { usePolling } from "../../hooks/usePolling";
 import type { DbCell, DbColumn, DbQueryResult, DbRow, DbTableData } from "../../types/database";
 
 const PAGE_SIZE = 25;
+const MAX_IMPORT_BYTES = 25_000_000;
 
 function Cell({ value }: { value: DbCell }) {
   if (value === null) return <span className="italic text-slate-400">NULL</span>;
@@ -214,6 +215,8 @@ export default function DatabasePage() {
   const [message, setMessage] = useState("");
   const [actionError, setActionError] = useState("");
   const [backupBusy, setBackupBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const importInput = useRef<HTMLInputElement>(null);
 
   const table = data.data;
   const visibleColumns = table?.columns.filter((c) => !c.hidden) ?? [];
@@ -255,6 +258,33 @@ export default function DatabasePage() {
     }
   }
 
+  async function chooseBackup(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // lets the same file be chosen again later
+    if (!file) return;
+    setMessage("");
+    setActionError("");
+    if (!file.name.toLowerCase().endsWith(".sql")) return setActionError("Choose a .sql backup file made by this page.");
+    if (file.size > MAX_IMPORT_BYTES) return setActionError("That file is too large to import.");
+    if (
+      !window.confirm(
+        `Import "${file.name}"?\n\nThis replaces the data in every table (except the audit log) with the data in the file. ` +
+          "It cannot be undone. Create a backup first if you may need the current data.",
+      )
+    )
+      return;
+    setImportBusy(true);
+    try {
+      const result = await databaseApi.importBackup(await file.text());
+      setMessage(`Backup imported: ${result.rows} rows loaded into ${result.tables} tables.`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not import the backup.");
+    } finally {
+      setImportBusy(false);
+      await refresh();
+    }
+  }
+
   async function remove(row: DbRow) {
     if (!table?.primary_key) return;
     const key = String(row[table.primary_key]);
@@ -289,6 +319,20 @@ export default function DatabasePage() {
         </div>
         <button type="button" className={primaryButton} disabled={backupBusy} onClick={() => void backup()}>
           {backupBusy ? "Creating backup..." : "Create and download backup"}
+        </button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-5">
+        <div className="max-w-xl">
+          <h2 className="font-semibold">Import</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Loads a .sql file made by the backup above and replaces the rows of every table with its data. Table structure is not changed, and
+            the audit log is kept. The file must be a complete backup and must contain your own administrator account.
+          </p>
+        </div>
+        <input ref={importInput} type="file" accept=".sql,text/plain" className="hidden" onChange={chooseBackup} aria-label="Choose a backup file" />
+        <button type="button" className={secondaryButton} disabled={importBusy} onClick={() => importInput.current?.click()}>
+          {importBusy ? "Importing..." : "Choose backup file and import"}
         </button>
       </div>
 
