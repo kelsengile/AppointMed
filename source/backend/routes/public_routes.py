@@ -1,4 +1,4 @@
-"""Endpoints used by the public booking page (no login)."""
+"""Endpoints used by the public booking page and front page (no login)."""
 
 from datetime import date
 
@@ -8,15 +8,31 @@ from backend.core.exceptions import RateLimitError
 from backend.core.security import booking_limiter
 from backend.schemas.api import BookingRequest
 from backend.services.booking_service import BookingService
+from backend.services.department_service import DepartmentService
+from backend.services.staff_directory_service import StaffDirectoryService
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 service = BookingService()
+department_service = DepartmentService()
+staff_service = StaffDirectoryService()
 
 
 @router.get("/catalog")
 def catalog() -> dict:
     """Clinic info and bookable doctors."""
     return service.catalog()
+
+
+@router.get("/departments")
+def departments() -> list:
+    """Clinical departments for the front page and its 'View all' popup."""
+    return department_service.list_public()
+
+
+@router.get("/staff")
+def staff() -> list:
+    """All active staff (doctors, nurses, admins) for the front page. Names and roles only."""
+    return staff_service.list_public()
 
 
 @router.get("/slots")
