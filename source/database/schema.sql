@@ -78,6 +78,16 @@ CREATE TABLE IF NOT EXISTS doctor_schedules (
     UNIQUE KEY uq_schedule_block (doctor_id, weekday, start_time)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS doctor_days_off (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    doctor_id  INT NOT NULL,
+    off_date   DATE NOT NULL,
+    reason     VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_days_off_doctor FOREIGN KEY (doctor_id) REFERENCES users(id),
+    UNIQUE KEY uq_doctor_off_date (doctor_id, off_date)
+) ENGINE=InnoDB;
+
 -- ============================================================
 -- ROOMS: simple availability board, editable by a nurse or doctor
 -- ============================================================

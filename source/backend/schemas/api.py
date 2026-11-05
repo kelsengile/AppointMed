@@ -9,6 +9,7 @@ from typing import Callable, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Sex = Literal["Male", "Female", "Other"]
+BookingSex = Literal["Male", "Female"]
 RoomState = Literal["Available", "Occupied", "Maintenance"]
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 MAX_MONEY = Decimal("1000000")
@@ -155,7 +156,7 @@ class PasswordChange(Schema):
 class BookingRequest(Schema):
     full_name: str = Field(min_length=2, max_length=100)
     birthdate: date
-    sex: Sex
+    sex: BookingSex
     contact_number: str = Field(max_length=20)
     email: str = Field(max_length=100, pattern=EMAIL_PATTERN)
     address: str = Field(min_length=3, max_length=255)
@@ -276,6 +277,14 @@ class CancelRequest(Schema):
 class RoomAssign(Schema):
     room_id: int | None = Field(default=None, ge=1)
 
+class DayOffIn(Schema):
+    day: date
+    reason: str | None = Field(default=None, max_length=255)
+
+    @field_validator("reason")
+    @classmethod
+    def reason_ok(cls, value: str | None) -> str | None:
+        return _opt(value, _no_control)
 
 class PrescriptionItemIn(Schema):
     medicine_name: str = Field(min_length=1, max_length=150)

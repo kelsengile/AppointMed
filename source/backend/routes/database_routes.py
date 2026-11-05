@@ -5,7 +5,7 @@ from fastapi.responses import Response
 
 from backend.core.security import require_feature
 from backend.models.domain import User
-from backend.schemas.database import RowValues, SqlRequest
+from backend.schemas.database import BackupImport, RowValues, SqlRequest
 from backend.services.database_service import DatabaseService
 
 router = APIRouter(prefix="/database", tags=["admin-database"])
@@ -54,3 +54,8 @@ def backup(user: User = Depends(require_feature("database"))) -> Response:
         media_type="application/sql",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+@router.post("/import")
+def import_backup(body: BackupImport, user: User = Depends(require_feature("database"))) -> dict:
+    """Replace the data in every table with the rows of an uploaded backup (.sql) file."""
+    return service.import_backup(user, body.content)

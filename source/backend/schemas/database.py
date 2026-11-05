@@ -31,3 +31,8 @@ class SqlRequest(Schema):
     """One SQL statement typed in the console."""
 
     sql: str = Field(min_length=1, max_length=5000)
+
+class BackupImport(Schema):
+    """The text of a backup file made by the Database page."""
+
+    content: str = Field(min_length=1, max_length=30_000_000)

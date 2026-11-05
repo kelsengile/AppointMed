@@ -1,5 +1,5 @@
 // Backend calls for the admin Database page. Paths match backend/routes/database_routes.py.
-import type { DbQueryResult, DbTableData, DbTableSummary } from "../types/database";
+import type { DbImportResult, DbQueryResult, DbTableData, DbTableSummary } from "../types/database";
 import { download, request } from "./client";
 
 type Ok = { ok: boolean };
@@ -27,4 +27,5 @@ export const databaseApi = {
     request<Ok>(`${BASE}/tables/${encodeURIComponent(name)}/rows/${encodeURIComponent(key)}`, { method: "DELETE" }),
   query: (sql: string) => request<DbQueryResult>(`${BASE}/query`, { method: "POST", body: { sql } }),
   backup: () => download(`${BASE}/backup`),
+  importBackup: (content: string) => request<DbImportResult>(`${BASE}/import`, { method: "POST", body: { content } }),
 };

@@ -7,16 +7,17 @@ from datetime import date, datetime, timedelta
 from backend.core.database import Executor
 from backend.core.exceptions import InvalidScheduleError, NotFoundError
 from backend.repositories.appointment_repository import AppointmentRepository
-from backend.repositories.user_repository import ScheduleRepository, UserRepository
+from backend.repositories.user_repository import DayOffRepository, ScheduleRepository, UserRepository
 
 
 class SchedulingService:
-    """Turns weekly schedule blocks into bookable slots, removing taken and past times."""
+    """Turns weekly schedule blocks into bookable slots, removing days off, taken and past times."""
 
     def __init__(self, db: Executor) -> None:
         self._db = db
         self._users = UserRepository(db)
         self._schedules = ScheduleRepository(db)
+        self._days_off = DayOffRepository(db)
         self._appointments = AppointmentRepository(db)
 
     def available_slots(self, doctor_id: int, day: date) -> list[datetime]:
@@ -24,6 +25,8 @@ class SchedulingService:
         doctor = self._users.get(doctor_id)
         if doctor is None or doctor["role"] != "doctor" or not doctor["is_active"]:
             raise NotFoundError("Doctor not found.")
+        if self._days_off.is_off(doctor_id, day):  # the doctor marked this date as unavailable
+            return []
         now = self._db.server_now()
         taken = self._appointments.booked_times(doctor_id, day)
         slots: list[datetime] = []

@@ -10,6 +10,7 @@ from backend.schemas.api import (
     AppointmentCreate,
     ApproveRequest,
     CancelRequest,
+    DayOffIn,
     DismissRequest,
     ExamFinish,
     PatientIn,
@@ -61,6 +62,16 @@ def appointments(day: str = "today", q: str | None = None, user: User = Depends(
 @router.get("/calendar")
 def calendar(date_from: date, date_to: date, user: User = Depends(require_feature("appointments"))) -> dict:
     return appointment_service.calendar(user, date_from, date_to)
+
+
+@router.post("/days-off", status_code=201)
+def set_day_off(body: DayOffIn, user: User = Depends(require_feature("schedule"))) -> dict:
+    return appointment_service.set_day_off(user, body.day, body.reason)
+
+
+@router.delete("/days-off/{day}")
+def clear_day_off(day: date, user: User = Depends(require_feature("schedule"))) -> dict:
+    return appointment_service.clear_day_off(user, day)
 
 
 @router.post("/appointments", status_code=201)
