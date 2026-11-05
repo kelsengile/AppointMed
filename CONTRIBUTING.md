@@ -29,7 +29,7 @@ By the end of this section you will have three things running on your computer:
 | Backend | FastAPI (Python) | http://127.0.0.1:8000 |
 | Frontend | React web app (Vite) | http://localhost:5173 |
 
-Set aside about 30 minutes the first time. Do the steps in order, and use the **Verify** line at the end of each step before moving on. If something fails, check [Troubleshooting](#troubleshooting).
+Set aside about 30 minutes the first time. The quickest way is the [dev console](#quick-start-recommended-the-dev-console) (`python dev.py`), which does the setup for you. If you prefer to do it by hand, follow the steps in order and use the **Verify** line at the end of each step before moving on. If something fails, check [Troubleshooting](#troubleshooting).
 
 ### Prerequisites
 
@@ -65,6 +65,49 @@ git config --global user.email "you@example.com"
 ```
 
 **Verify:** `git status` prints `On branch main` and `nothing to commit, working tree clean`.
+
+### Quick start (recommended): the dev console
+
+`dev.py` in the project root is a terminal menu that does Steps 2 to 7 for you. It checks your tools, installs the backend and frontend packages, writes `source/.env`, sets up the database, and opens the backend and the frontend in their own terminal windows. It only uses Python's standard library, so it runs before anything else is installed. Finish [Prerequisites](#prerequisites) and Step 1, then run this from the project root:
+
+```bash
+python dev.py        # Windows: py dev.py
+```
+
+Press **f** for **First-time setup**. It asks for three things:
+
+1. **A database password** for the `appointmed_user` account. Press Enter to generate a random one. It is saved in `source/.env` and used when the account is created.
+2. **Whether to send real emails.** Answer **No** for development. Emails are then printed in the backend terminal.
+3. **The MySQL `root` password**, which is used only to create the database and the app account. It is never saved.
+
+When it finishes, it offers to start the project. If you used the dev console, skip to [Verify the setup](#verify-the-setup). Steps 2 to 7 below are the same work done by hand.
+
+| Option | What it does |
+|---|---|
+| `f` | First-time setup: runs options 1 to 4 in order, then offers to start the project |
+| `1` | Checks Python (3.11+), Git, Node.js (20+), npm, and the MySQL client |
+| `2` | Creates `source/.venv`, runs `pip install -r requirements.txt` and `npm install` |
+| `3` | Creates `source/.env` from `.env.example` with your database password and a fresh random `JWT_SECRET` |
+| `4` | Creates the database and app account, loads `schema.sql`, `seed.sql` (only if the database is empty), and `landing_update.sql` |
+| `5` | Reset database: drops and rebuilds it with fresh sample data (you must type `RESET`) |
+| `6`, `7` | Start the backend or the frontend in a new terminal window that stays open |
+| `8` | Starts both, runs a health check, and opens the web app in your browser |
+| `9` | Health check: API, database, and frontend status |
+| `10` | Opens the web app, the status page, or the API docs in your browser |
+| `11` | Runs `npm run build` (the TypeScript check required before a pull request) |
+| `12` | Update from GitHub: `git pull`, reinstalls both sets of packages, and warns when the SQL files changed |
+
+The top of the menu shows a live checklist (virtual environment, packages, `.env`, backend, database, frontend), so you can see at a glance what is missing. Each option also works as a command, so you can skip the menu:
+
+```bash
+python dev.py start       # backend + frontend in new windows, then the browser
+python dev.py install     # reinstall dependencies
+python dev.py reset-db    # fresh database
+```
+
+Other commands: `setup`, `check`, `env`, `db`, `backend`, `frontend`, `health`, `open`, `build`, `sync`.
+
+To stop the servers, close their terminal windows or press `Ctrl + C` in them.
 
 ### Step 2: Install backend dependencies
 
@@ -144,13 +187,14 @@ The web app connects as `appointmed_user`, never as `root`.
 
 ### Step 5: Load the schema and sample data
 
-The schema creates the 12 tables. The seed fills them with fictional sample data: staff are SpongeBob SquarePants characters and patients are cartoon characters. Run both from the **project root**, in this order.
+The schema creates the tables. The seed fills them with fictional sample data: staff are SpongeBob SquarePants characters and patients are cartoon characters. `landing_update.sql` adds the `departments` table and three more sample doctors for the front page. Run all three from the **project root**, in this order.
 
 **Git Bash, Command Prompt, macOS, or Linux:**
 
 ```bash
 mysql -u root -p appointmed < source/database/schema.sql
 mysql -u root -p appointmed < source/database/seed.sql
+mysql -u root -p appointmed < source/database/landing_update.sql
 ```
 
 **PowerShell** does not support the `<` operator. Use one of these instead:
@@ -158,6 +202,7 @@ mysql -u root -p appointmed < source/database/seed.sql
 ```powershell
 cmd /c "mysql -u root -p appointmed < source\database\schema.sql"
 cmd /c "mysql -u root -p appointmed < source\database\seed.sql"
+cmd /c "mysql -u root -p appointmed < source\database\landing_update.sql"
 ```
 
 or, from the project root, open MySQL and use `SOURCE`:
@@ -166,15 +211,16 @@ or, from the project root, open MySQL and use `SOURCE`:
 mysql -u root -p appointmed
 SOURCE source/database/schema.sql;
 SOURCE source/database/seed.sql;
+SOURCE source/database/landing_update.sql;
 ```
 
-Load `seed.sql` **once**. Running it twice causes `Duplicate entry` errors. To start over, see [Resetting your database](#resetting-your-database).
+Load `seed.sql` **once**. Running it twice causes `Duplicate entry` errors. `schema.sql` and `landing_update.sql` are safe to repeat. To start over, see [Resetting your database](#resetting-your-database).
 
 **Verify:** in the MySQL prompt, run:
 
 ```sql
-SHOW TABLES;                          -- 12 tables
-SELECT username, role FROM users;     -- 5 users
+SHOW TABLES;                          -- 14 tables
+SELECT username, role FROM users;     -- 8 users
 ```
 
 The sample staff accounts (all fictional, for development only) are:
@@ -185,7 +231,9 @@ The sample staff accounts (all fictional, for development only) are:
 | `dr.cheeks` | `doctor123` | Doctor | General Medicine, works Monday to Friday |
 | `dr.tentacles` | `doctor123` | Doctor | Pediatrics, works Monday, Wednesday, Friday |
 | `nurse.spongebob` | `nurse123` | Nurse | Supports `dr.cheeks` |
-| `nurse.patrick` | `nurse123` | Nurse | Supports `dr.tentacles` |
+| `dr.spongebob` | `doctor123` | Doctor | Orthopedics, works Monday to Thursday (added by `landing_update.sql`) |
+| `dr.krabs` | `doctor123` | Doctor | Cardiology, works Monday to Friday (added by `landing_update.sql`) |
+| `dr.star` | `doctor123` | Doctor | Neurology, works Tuesday, Thursday, Saturday (added by `landing_update.sql`) |
 
 These passwords are public. Never use them outside your own computer. Appointment dates in the seed are relative to the day you load it, so "today" always has a live queue to test with. The top of `seed.sql` describes exactly what data it covers.
 
@@ -246,7 +294,7 @@ Common mistakes:
 
 ### Step 7: Run the project
 
-Use two terminals, and leave both running. **Start the backend first**, because the frontend dev server forwards every `/api` request to it.
+> **Shortcut:** `python dev.py start` (or option **8** in the dev console) opens both windows for you, waits until they answer, and opens the browser.
 
 **Terminal 1: Backend** (from `source`, with `(.venv)` active):
 
@@ -305,7 +353,9 @@ A quick tour that touches every role and confirms the whole system works:
 | The booking page shows no available times | That doctor does not work that weekday (Dr. Tentacles works Monday, Wednesday, Friday only), the times already passed or are taken, the date is outside the booking window, or online booking is switched off in Clinic Settings | Try another date or doctor, or check **Clinic Settings** as `admin` |
 | No confirmation email arrives | `SMTP_HOST` is empty, so the email is printed in the backend console | Read the console, or configure SMTP in `.env` |
 | `npm run build` fails with TypeScript errors | Strict mode is on, and unused variables and imports count as errors | Fix the lines the compiler reports |
-| PowerShell rejects `mysql ... < file.sql` | PowerShell does not support `<` | Use the `cmd /c` or `SOURCE` options in Step 5 |
+| `dev.py` says "Python 3.11 or newer" is needed | `dev.py` was started with an older Python | Run it with a newer one, for example `py -3.12 dev.py` or `python3.12 dev.py` |
+| `dev.py` database step says `Access denied for user 'root'` | Wrong MySQL root password, or (Linux) root uses socket login | Retype the password. On Linux run `sudo mysql` once and set one with `ALTER USER 'root'@'localhost' IDENTIFIED BY 'new_password';` |
+| `dev.py` prints "No supported terminal was found" | No desktop terminal is installed, or there is no desktop session (SSH/WSL) | Open two terminals yourself and run the commands it prints |
 
 ### Resetting your database
 
@@ -317,7 +367,7 @@ CREATE DATABASE appointmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 GRANT SELECT, INSERT, UPDATE, DELETE ON appointmed.* TO 'appointmed_user'@'localhost';
 ```
 
-Then repeat Step 5. Never run `seed.sql` against a shared or production database.
+Then repeat Step 5, or choose **Reset database** in the dev console (`python dev.py`), which does all of this after you type `RESET` to confirm. Never run `seed.sql` against a shared or production database.
 
 ### Staying up to date
 
@@ -330,7 +380,7 @@ Each time you start working, run `git pull`, then check what changed:
 | `source/database/schema.sql` or `seed.sql` | Reset your database (see above) so it matches the team's |
 | `source/.env.example` | Add any new variables to your own `source/.env`, then restart the backend |
 
-Then start the backend and the frontend as in Step 7.
+Then start the backend and the frontend as in Step 7, or use the dev console: its **Update from GitHub** option runs `git pull`, reinstalls both sets of packages, and warns you when the SQL files changed.
 
 ---
 
@@ -344,6 +394,7 @@ Then start the backend and the frontend as in Step 7.
 ├── README.md
 ├── SECURITY.md
 └── source/
+    ├── dev.py                    # terminal console: install, set up the database, start the project
     ├── .env                      # local secrets (gitignored)
     ├── .env.example              # template for .env 
     ├── main.py                   # FastAPI entry point: CORS, error handlers, routers, status page
