@@ -2,18 +2,22 @@ import { useState, type FormEvent } from "react";
 import { staffApi } from "../api/endpoints";
 import type { AppointmentItem } from "../types";
 import { formatMoney, isoDateTimeLocal, toNumber } from "../utils/format";
-import { INT_PROPS, MONEY_PROPS, cleanDosage, cleanInt, cleanMedicine, cleanMoney, cleanMultiline, cleanText, isMoney } from "../utils/input";
+import { INT_PROPS, MONEY_PROPS, cleanInt, cleanMedicine, cleanMoney, cleanMultiline, cleanText, isMoney } from "../utils/input";
 import { inputClass, primaryButton } from "./ui";
 
 interface Row {
   medicine_name: string;
-  dosage: string;
+  dosageAmount: string;
+  dosageUnit: string;
   quantity: string;
   unit_price: string;
   instructions: string;
 }
 
-const blankRow = (): Row => ({ medicine_name: "", dosage: "", quantity: "1", unit_price: "0", instructions: "" });
+const DOSAGE_UNITS = ["mg", "mcg", "g", "mL", "IU", "drops", "tsp", "tbsp", "tablet", "capsule"];
+
+const blankRow = (): Row => ({ medicine_name: "", dosageAmount: "", dosageUnit: "mg", quantity: "1", unit_price: "0", instructions: "" });
+
 const MAX_INVOICE = 99_999_999.99;
 
 // The doctor's examination form. The invoice grows as medicines are added, and is saved on "Finish".
@@ -57,6 +61,10 @@ export default function ExamPanel({ appointment, onDone }: { appointment: Appoin
         setError(`The price for ${r.medicine_name} must be an amount such as 8 or 8.50 (up to 1,000,000).`);
         return;
       }
+      if (r.dosageAmount && !(Number(r.dosageAmount) > 0)) {
+        setError(`The dosage amount for ${r.medicine_name} must be a number greater than 0.`);
+        return;
+      }
     }
     if (total > MAX_INVOICE) {
       setError("The invoice total is too large. Check the quantities and prices.");
@@ -76,7 +84,7 @@ export default function ExamPanel({ appointment, onDone }: { appointment: Appoin
         follow_up_time: followUp || null,
         items: filled.map((r) => ({
           medicine_name: r.medicine_name.trim(),
-          dosage: r.dosage.trim() || null,
+          dosage: r.dosageAmount ? `${Number(r.dosageAmount)} ${r.dosageUnit}` : null,
           quantity: Number(r.quantity),
           unit_price: Number(r.unit_price),
           instructions: r.instructions.trim() || null,
@@ -107,7 +115,14 @@ export default function ExamPanel({ appointment, onDone }: { appointment: Appoin
           {rows.map((r, i) => (
             <div key={i} className="grid gap-2 rounded-lg border border-slate-200 p-3 md:grid-cols-12">
               <input className={`${inputClass} md:col-span-4`} maxLength={150} placeholder="Medicine" aria-label="Medicine" value={r.medicine_name} onChange={(e) => change(i, "medicine_name", cleanMedicine(e.target.value))} />
-              <input className={`${inputClass} md:col-span-2`} maxLength={100} placeholder="Dosage" aria-label="Dosage" value={r.dosage} onChange={(e) => change(i, "dosage", cleanDosage(e.target.value))} />
+              <div className="flex gap-2 md:col-span-3">
+                <input {...MONEY_PROPS} maxLength={8} className={`${inputClass} min-w-0 flex-1`} placeholder="Amount" aria-label="Dosage amount" value={r.dosageAmount} onChange={(e) => change(i, "dosageAmount", cleanMoney(e.target.value, 5))} />
+                <select className={`${inputClass} !w-24 shrink-0`} aria-label="Dosage unit" value={r.dosageUnit} onChange={(e) => change(i, "dosageUnit", e.target.value)}>
+                  {DOSAGE_UNITS.map((u) => (
+                    <option key={u}>{u}</option>
+                  ))}
+                </select>
+              </div>
               <input {...INT_PROPS} className={`${inputClass} md:col-span-1`} maxLength={4} placeholder="Qty" aria-label="Quantity" value={r.quantity} onChange={(e) => change(i, "quantity", cleanInt(e.target.value, 4))} />
               <input {...MONEY_PROPS} className={`${inputClass} md:col-span-2`} placeholder="Unit price" aria-label="Unit price" value={r.unit_price} onChange={(e) => change(i, "unit_price", cleanMoney(e.target.value))} />
               <button type="button" onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))} className="rounded-lg px-2 py-2 text-sm text-red-700 hover:bg-red-50 md:col-span-3">
