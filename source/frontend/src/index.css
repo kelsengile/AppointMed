@@ -88,3 +88,41 @@ body {
   cursor: not-allowed;
 }
 
+/*
+ * Landing page (pages/LandingPage.tsx) helpers from the Figma design (node 19:86).
+ * The gradient for the "Book Appointment" button is sampled from the design's
+ * glassy blue bar: light edges with a deep blue center.
+ */
+.book-btn {
+  background-image: linear-gradient(
+    90deg,
+    #f1f5fe 0%,
+    #527daa 12%,
+    #375a84 28%,
+    #365983 52%,
+    #365983 74%,
+    #527daa 92%,
+    #f1f5fe 100%
+  );
+  box-shadow:
+    inset 0 1px 4px rgba(27, 133, 185, 0.28),
+    0 6px 12px rgba(54, 89, 131, 0.25);
+  transition: filter 150ms ease, transform 150ms ease;
+}
+
+.book-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.book-btn:active {
+  transform: translateY(0);
+}
+
+.landing-section-swirl {
+  background-image: url("/footer-bg.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
