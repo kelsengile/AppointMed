@@ -4,7 +4,48 @@
 
 body {
   @apply bg-slate-50 text-brand-900 antialiased;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: Poppins, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/*
+ * App theme: the landing-page look applied to the booking page and the staff portal.
+ * Add the `app-theme` class to a page root to use it. Most pages already use
+ * `rounded-xl border border-slate-200 bg-white` for cards, so those are restyled here
+ * instead of editing every page.
+ */
+.app-theme {
+  font-family: Poppins, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1f3655;
+}
+
+.app-theme h1 {
+  color: #1f3655;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.app-theme h2,
+.app-theme h3 {
+  color: #1f3655;
+}
+
+.app-theme .rounded-xl.border-slate-200 {
+  border-radius: 1.5rem;
+  border-color: #dce9fb;
+  box-shadow: 0 14px 30px rgba(53, 88, 130, 0.1);
+}
+
+.app-theme .bg-slate-50 {
+  background-color: #eff5fe;
+}
+
+.app-theme thead {
+  color: #5079a7;
+}
+
+.app-theme input[type="checkbox"],
+.app-theme input[type="radio"] {
+  accent-color: #365983;
 }
 
 /* Staff login (pages/StaffLoginPage.tsx): frosted-glass panels from the Figma design. */
@@ -91,7 +132,7 @@ body {
 /*
  * Landing page (pages/LandingPage.tsx) helpers from the Figma design (node 19:86).
  * The gradient for the "Book Appointment" button is sampled from the design's
- * glassy blue bar: light edges with a deep blue center.
+ * glassy blue bar: light edges with a deep blue center. Also used by primary buttons across the app.
  */
 .book-btn {
   background-image: linear-gradient(
@@ -119,10 +160,16 @@ body {
   transform: translateY(0);
 }
 
+.book-btn:disabled,
+.book-btn:disabled:hover {
+  filter: none;
+  transform: none;
+  cursor: not-allowed;
+}
+
 .landing-section-swirl {
   background-image: url("/footer-bg.png");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
-

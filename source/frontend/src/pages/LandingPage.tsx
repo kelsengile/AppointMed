@@ -1,16 +1,23 @@
 /*
  * Landing page, rebuilt from the Figma design "Desktop - 6" (node 19:86):
  * floating pill navbar, light hero over a hospital photo, About us band,
- * services bento grid, doctor cards (live data from /api/public/catalog),
- * clinical departments grid, and a light-blue footer.
+ * services bento grid, "Meet Our Staff" cards (every active account, from /api/public/staff),
+ * clinical departments grid (from /api/public/departments) with a "View all" popup,
+ * and a light-blue footer (address and clinic name from Clinic Settings).
  *
  * Image assets were exported from the Figma file into frontend/public/.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { departmentApi } from "../api/departmentApi";
 import { publicApi } from "../api/endpoints";
-import type { Catalog, DoctorOption } from "../types";
+import { staffDirectoryApi } from "../api/staffDirectoryApi";
+import DepartmentsModal from "../components/DepartmentsModal";
+import { useAuth } from "../context/AuthContext";
+import type { Role } from "../types";
+import type { Catalog } from "../types";
+import type { DepartmentItem } from "../types/department";
+import type { StaffMember } from "../types/staff";
 
 // Figma font for the whole landing page (already loaded in index.html).
 const pageFont = { fontFamily: "Poppins, system-ui, -apple-system, sans-serif" };
@@ -45,38 +52,24 @@ const SERVICES: { title: string; text: string; image: string }[] = [
   },
 ];
 
-const DEPARTMENTS: { name: string; text: string; icon: string }[] = [
-  {
-    name: "Cardiology",
-    text: "Heart disease diagnosis, treatment and cardiac surgery. ECG, Echo, and stress testing available.",
-    icon: "/dept-cardiology.png",
-  },
-  {
-    name: "Neurology",
-    text: "Expert care for neurological disorders including stroke, epilepsy, and movement disorders.",
-    icon: "/dept-neurology.png",
-  },
-  {
-    name: "Orthopedics",
-    text: "Bone, joint and muscle care including sports injuries, fractures, and joint replacement surgery.",
-    icon: "/dept-orthopedics.png",
-  },
-  {
-    name: "Pediatrics",
-    text: "Comprehensive child health care from newborns to adolescents with specialized pediatric specialists.",
-    icon: "/dept-pediatrics.png",
-  },
-  {
-    name: "Ophthalmology",
-    text: "Complete eye care services including LASIK, cataract surgery, and vision treatments.",
-    icon: "/dept-ophthalmology.png",
-  },
-  {
-    name: "General Medicine",
-    text: "Primary care, routine checkups, preventive health screenings and chronic disease management.",
-    icon: "/dept-general.png",
-  },
+// Shown only if the departments request fails (for example the database has not been updated yet).
+const FALLBACK_DEPARTMENTS: DepartmentItem[] = [
+  { id: -1, name: "Cardiology", description: "Heart disease diagnosis, treatment and cardiac surgery. ECG, Echo, and stress testing available.", icon: "/dept-cardiology.png", is_featured: true, doctor_count: 0 },
+  { id: -2, name: "Neurology", description: "Expert care for neurological disorders including stroke, epilepsy, and movement disorders.", icon: "/dept-neurology.png", is_featured: true, doctor_count: 0 },
+  { id: -3, name: "Orthopedics", description: "Bone, joint and muscle care including sports injuries, fractures, and joint replacement surgery.", icon: "/dept-orthopedics.png", is_featured: true, doctor_count: 0 },
+  { id: -4, name: "Pediatrics", description: "Comprehensive child health care from newborns to adolescents with specialized pediatric specialists.", icon: "/dept-pediatrics.png", is_featured: true, doctor_count: 0 },
+  { id: -5, name: "Ophthalmology", description: "Complete eye care services including LASIK, cataract surgery, and vision treatments.", icon: "/dept-ophthalmology.png", is_featured: true, doctor_count: 0 },
+  { id: -6, name: "General Medicine", description: "Primary care, routine checkups, preventive health screenings and chronic disease management.", icon: "/dept-general.png", is_featured: true, doctor_count: 0 },
 ];
+
+const DEFAULT_ADDRESS = "123 Medical Center Drive, Healthcare City, HC 45678";
+
+const ROLE_LABEL: Record<Role, string> = { doctor: "Doctor", nurse: "Nurse", admin: "Administrator" };
+const ROLE_BADGE: Record<Role, string> = {
+  doctor: "bg-brand-50 text-landing-body",
+  nurse: "bg-green-100 text-landing-leaf",
+  admin: "bg-slate-100 text-slate-700",
+};
 
 // Small line icons for the footer contact list.
 function ContactIcon({ kind }: { kind: "pin" | "phone" | "mail" | "clock" }) {
@@ -107,11 +100,22 @@ function weekdayLabel(weekdays: number[]): string {
   return contiguous ? `${words[0]} - ${words[words.length - 1]}` : words.join(", ");
 }
 
-// Uses one of the design's character cutouts as a friendly placeholder avatar,
-// round-robin by doctor id.
-function doctorArt(id: number): { bg: string; figure: string } {
-  const slot = ((id % 5) + 5) % 5 + 1;
+// The five character cutouts from the design. A person gets the cutout whose keyword is in their name
+// (so the same character looks the same in every role); anyone else gets one round-robin.
+const ART_KEYS = ["spongebob", "sandy", "krabs", "squidward", "patrick"];
+
+function staffArt(member: StaffMember, index: number): { bg: string; figure: string } {
+  const name = member.full_name.toLowerCase();
+  const found = ART_KEYS.findIndex((key) => name.includes(key));
+  const slot = (found >= 0 ? found : index % ART_KEYS.length) + 1;
   return { bg: `/doctor-${slot}.png`, figure: `/docchar-${slot}.png` };
+}
+
+// The detail shown under the role: specialization, the doctor a nurse supports, or the admin duty.
+function staffDetail(member: StaffMember): string {
+  if (member.role === "doctor") return member.specialization ?? "Clinic Staff";
+  if (member.role === "nurse") return member.assigned_doctor_name ? `Supports ${member.assigned_doctor_name}` : "Nursing staff";
+  return "Clinic administration";
 }
 
 // ---------------- small building blocks ----------------
@@ -149,14 +153,31 @@ function BentoCard({ title, text, image, tall = false }: { title: string; text: 
   );
 }
 
-function DoctorArt({ doctor }: { doctor: DoctorOption }) {
-  const art = doctorArt(doctor.id);
+// The same "Book an appointment" button as the hero (white pill with the calendar icon).
+function BookButton({ className = "" }: { className?: string }) {
+  return (
+    <Link
+      to="/book"
+      className={`inline-flex items-center gap-3 rounded-2xl bg-white px-5 py-4 shadow-[0_16px_36px_rgba(53,88,130,0.18)] transition-transform hover:-translate-y-0.5 ${className}`}
+    >
+      {/* calendar icon from the design */}
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <rect x="3.5" y="5" width="17" height="15" rx="2.5" stroke="#1F3655" strokeWidth="1.8" />
+        <path d="M8 3v4M16 3v4M3.5 9.5h17" stroke="#1F3655" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M12 12.5v3.5M10.2 14.2h3.6" stroke="#1F3655" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+      <span className="text-sm font-semibold text-landing-heading sm:text-base">Book an appointment</span>
+    </Link>
+  );
+}
+
+function StaffArt({ member, art }: { member: StaffMember; art: { bg: string; figure: string } }) {
   return (
     <div className="relative h-40 w-full overflow-hidden sm:h-44">
       <img src={art.bg} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
       <img
         src={art.figure}
-        alt={doctor.full_name}
+        alt={member.full_name}
         loading="lazy"
         className="absolute bottom-0 left-1/2 h-[96%] max-w-none -translate-x-1/2 object-contain"
       />
@@ -164,38 +185,44 @@ function DoctorArt({ doctor }: { doctor: DoctorOption }) {
   );
 }
 
-function DoctorCard({ doctor }: { doctor: DoctorOption }) {
-  // Green "Available" badge only when the doctor works today (1 = Monday).
+function StaffCard({ member, art }: { member: StaffMember; art: { bg: string; figure: string } }) {
+  // Green "Available" badge only when a doctor works today (1 = Monday).
   const todayIdx = ((new Date().getDay() + 6) % 7) + 1;
-  const availableToday = (doctor.weekdays ?? []).includes(todayIdx);
+  const availableToday = (member.weekdays ?? []).includes(todayIdx);
 
   return (
     <article className="flex flex-col overflow-hidden rounded-3xl bg-white shadow-[0_18px_40px_rgba(53,88,130,0.14)] transition-shadow hover:shadow-[0_24px_50px_rgba(53,88,130,0.22)]">
-      <DoctorArt doctor={doctor} />
+      <StaffArt member={member} art={art} />
       <div className="flex flex-1 flex-col px-4 pb-4 pt-3 text-left">
-        <h3 className="text-sm font-bold text-landing-ink sm:text-[15px]">{doctor.full_name}</h3>
-        <p className="mt-0.5 text-xs font-medium text-landing-muted">{doctor.specialization ?? "Clinic Staff"}</p>
-        <div className="mt-2.5 flex items-center gap-2">
-          <span className="rounded-md bg-brand-50 px-2.5 py-1 text-[10px] font-semibold text-landing-body">
-            {weekdayLabel(doctor.weekdays)}
+        <h3 className="text-sm font-bold text-landing-ink sm:text-[15px]">{member.full_name}</h3>
+        <p className="mt-0.5 text-xs font-medium text-landing-muted">
+          {ROLE_LABEL[member.role]} · {staffDetail(member)}
+        </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <span className={`rounded-md px-2.5 py-1 text-[10px] font-semibold ${ROLE_BADGE[member.role]}`}>
+            {ROLE_LABEL[member.role]}
           </span>
-          <span
-            className={`rounded-md px-2.5 py-1 text-[10px] font-semibold ${
-              availableToday ? "bg-green-100 text-landing-leaf" : "bg-amber-100 text-amber-700"
-            }`}
-          >
-            {availableToday ? "Available" : "Off today"}
-          </span>
+          {member.role === "doctor" && (
+            <>
+              <span className="rounded-md bg-brand-50 px-2.5 py-1 text-[10px] font-semibold text-landing-body">
+                {weekdayLabel(member.weekdays)}
+              </span>
+              <span
+                className={`rounded-md px-2.5 py-1 text-[10px] font-semibold ${
+                  availableToday ? "bg-green-100 text-landing-leaf" : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {availableToday ? "Available" : "Off today"}
+              </span>
+            </>
+          )}
         </div>
-        <Link to="/book" className="book-btn mt-3 rounded-lg px-4 py-2 text-center text-xs font-bold text-white">
-          Book Appointment
-        </Link>
       </div>
     </article>
   );
 }
 
-function DoctorSkeletons() {
+function StaffSkeletons() {
   return (
     <>
       {Array.from({ length: 5 }).map((_, i) => (
@@ -204,7 +231,7 @@ function DoctorSkeletons() {
           <div className="px-4 pb-5 pt-3">
             <div className="h-3.5 w-3/4 rounded bg-brand-100" />
             <div className="mt-2 h-3 w-1/2 rounded bg-brand-100" />
-            <div className="mt-4 h-8 rounded-lg bg-brand-100" />
+            <div className="mt-4 h-6 rounded-lg bg-brand-100" />
           </div>
         </article>
       ))}
@@ -212,15 +239,25 @@ function DoctorSkeletons() {
   );
 }
 
-function DeptCard({ name, text, icon }: { name: string; text: string; icon: string }) {
+function DeptCard({ department, onOpen }: { department: DepartmentItem; onOpen: (name: string) => void }) {
   return (
     <article className="rounded-3xl bg-white p-5 text-left shadow-[0_14px_30px_rgba(53,88,130,0.1)] transition-shadow hover:shadow-[0_20px_44px_rgba(53,88,130,0.18)]">
-      <img src={icon} alt="" aria-hidden className="h-12 w-12 rounded-xl shadow-sm" />
-      <h3 className="mt-4 text-base font-bold text-[#365983]">{name}</h3>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-[#759ECA]">{text}</p>
-      <Link to="/book" className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-landing-body hover:gap-2">
+      {department.icon ? (
+        <img src={department.icon} alt="" aria-hidden className="h-12 w-12 rounded-xl shadow-sm" />
+      ) : (
+        <span aria-hidden className="grid h-12 w-12 place-items-center rounded-xl bg-brand-100 text-xl font-bold text-brand-700">
+          {department.name.charAt(0).toUpperCase()}
+        </span>
+      )}
+      <h3 className="mt-4 text-base font-bold text-[#365983]">{department.name}</h3>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-[#759ECA]">{department.description}</p>
+      <button
+        type="button"
+        onClick={() => onOpen(department.name)}
+        className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-landing-body hover:gap-2"
+      >
         Learn More <span aria-hidden>→</span>
-      </Link>
+      </button>
     </article>
   );
 }
@@ -255,11 +292,7 @@ function FooterColumn({ title, links }: { title: string; links: { label: string;
       <ul className="mt-3 space-y-2">
         {links.map((l) => (
           <li key={l.label} className="text-sm text-landing-faint transition-colors hover:text-landing-body">
-            {l.to.startsWith("/") ? (
-              <Link to={l.to}>{l.label}</Link>
-            ) : (
-              <a href={l.to}>{l.label}</a>
-            )}
+            {l.to.startsWith("/") ? <Link to={l.to}>{l.label}</Link> : <a href={l.to}>{l.label}</a>}
           </li>
         ))}
       </ul>
@@ -272,16 +305,44 @@ function FooterColumn({ title, links }: { title: string; links: { label: string;
 export default function LandingPage() {
   const { user } = useAuth();
   const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [loadError, setLoadError] = useState("");
+  const [staff, setStaff] = useState<StaffMember[] | null>(null);
+  const [staffError, setStaffError] = useState("");
+  const [departments, setDepartments] = useState<DepartmentItem[] | null>(null);
+  // null = popup closed; a string = open, with that text pre-filled in the search box.
+  const [popupQuery, setPopupQuery] = useState<string | null>(null);
 
+  // Clinic name and address for the footer. A failure here is not shown; the page uses defaults.
   useEffect(() => {
     publicApi
       .catalog()
       .then(setCatalog)
-      .catch((e) => setLoadError(e instanceof Error ? e.message : "Could not load the doctors."));
+      .catch(() => undefined);
   }, []);
 
-  const doctors = (catalog?.doctors ?? []).slice(0, 5);
+  useEffect(() => {
+    staffDirectoryApi
+      .list()
+      .then(setStaff)
+      .catch((e) => setStaffError(e instanceof Error ? e.message : "Could not load the staff."));
+  }, []);
+
+  useEffect(() => {
+    departmentApi
+      .list()
+      .then(setDepartments)
+      .catch(() => setDepartments([])); // an empty list makes the page use the built-in featured six
+  }, []);
+
+  const allDepartments = departments && departments.length > 0 ? departments : FALLBACK_DEPARTMENTS;
+  const featured = useMemo(() => {
+    const picked = allDepartments.filter((d) => d.is_featured).slice(0, 6);
+    return picked.length > 0 ? picked : allDepartments.slice(0, 6);
+  }, [allDepartments]);
+  const total = allDepartments.length;
+  const viewAllLabel = `View All ${total >= 25 ? "25+" : total} Departments`;
+
+  const address = catalog?.clinic_address?.trim() || DEFAULT_ADDRESS;
+  const clinicName = catalog?.clinic_name?.trim() || "AppointMed";
 
   return (
     <div style={pageFont} className="relative bg-landing-pagebg text-landing-body">
@@ -299,8 +360,8 @@ export default function LandingPage() {
             <a href="#about" className="hidden rounded-lg px-3 py-1.5 font-medium text-landing-body hover:bg-brand-50 sm:inline-block">
               About
             </a>
-            <a href="#doctors" className="hidden rounded-lg px-3 py-1.5 font-medium text-landing-body hover:bg-brand-50 sm:inline-block">
-              Doctors
+            <a href="#staff" className="hidden rounded-lg px-3 py-1.5 font-medium text-landing-body hover:bg-brand-50 sm:inline-block">
+              Staff
             </a>
             <a href="#departments" className="hidden rounded-lg px-3 py-1.5 font-medium text-landing-body hover:bg-brand-50 md:inline-block">
               Departments
@@ -346,18 +407,7 @@ export default function LandingPage() {
             Enjoy effortless scheduling on your own timeline. Simply choose your doctor and a convenient time; our clinical
             team will confirm your details so your room is fully prepared upon your arrival.
           </p>
-          <Link
-            to="/book"
-            className="mt-8 inline-flex items-center gap-3 rounded-2xl bg-white px-5 py-4 shadow-[0_16px_36px_rgba(53,88,130,0.18)] transition-transform hover:-translate-y-0.5"
-          >
-            {/* calendar icon from the design */}
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <rect x="3.5" y="5" width="17" height="15" rx="2.5" stroke="#1F3655" strokeWidth="1.8" />
-              <path d="M8 3v4M16 3v4M3.5 9.5h17" stroke="#1F3655" strokeWidth="1.8" strokeLinecap="round" />
-              <path d="M12 12.5v3.5M10.2 14.2h3.6" stroke="#1F3655" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
-            <span className="text-sm font-semibold text-landing-heading sm:text-base">Book an appointment</span>
-          </Link>
+          <BookButton className="mt-8" />
         </div>
       </section>
 
@@ -387,25 +437,37 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ---------------- meet our doctors ---------------- */}
-      <section id="doctors" className="bg-[#F4F9FE] px-6 pb-16 pt-10">
+      {/* ---------------- meet our staff ---------------- */}
+      <section id="staff" className="bg-[#F4F9FE] px-6 pb-16 pt-10">
         <div className="mx-auto max-w-7xl">
           {/* The heading sits in a white tab, as in the design. */}
           <div className="inline-block rounded-br-3xl bg-white px-8 py-4 shadow-[0_14px_30px_rgba(53,88,130,0.1)]">
-            <h2 className="text-2xl font-extrabold text-landing-heading sm:text-3xl">Meet Our Doctors</h2>
+            <h2 className="text-2xl font-extrabold text-landing-heading sm:text-3xl">Meet Our Staff</h2>
           </div>
-          {loadError ? (
+          {staffError ? (
             <div className="mt-8 rounded-2xl bg-white p-6 text-center shadow-sm">
-              <p className="text-sm font-medium text-landing-body">{loadError}</p>
-              <Link to="/book" className="mt-3 inline-block text-sm font-semibold text-brand-600 hover:underline">
-                Try booking directly →
-              </Link>
+              <p className="text-sm font-medium text-landing-body">{staffError}</p>
             </div>
           ) : (
             <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {catalog ? (doctors.length ? doctors.map((d) => <DoctorCard key={d.id} doctor={d} />) : <p className="col-span-full rounded-2xl bg-white p-6 text-center text-sm text-landing-muted shadow-sm">No doctors are currently listed.</p>) : <DoctorSkeletons />}
+              {staff ? (
+                staff.length ? (
+                  staff.map((m, i) => <StaffCard key={m.id} member={m} art={staffArt(m, i)} />)
+                ) : (
+                  <p className="col-span-full rounded-2xl bg-white p-6 text-center text-sm text-landing-muted shadow-sm">
+                    No staff are currently listed.
+                  </p>
+                )
+              ) : (
+                <StaffSkeletons />
+              )}
             </div>
           )}
+
+          {/* One booking button for the whole list, below the last card. */}
+          <div className="mt-10 flex justify-center">
+            <BookButton />
+          </div>
         </div>
       </section>
 
@@ -418,17 +480,19 @@ export default function LandingPage() {
             subtitle="World-class clinical care delivered by specialists across all major medical disciplines."
           />
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {DEPARTMENTS.map((d) => (
-              <DeptCard key={d.name} name={d.name} text={d.text} icon={d.icon} />
+            {featured.map((d) => (
+              <DeptCard key={d.id} department={d} onOpen={(name) => setPopupQuery(name)} />
             ))}
           </div>
           <div className="mt-10 flex justify-center">
-            <Link
-              to="/book"
+            <button
+              type="button"
+              onClick={() => setPopupQuery("")}
+              aria-haspopup="dialog"
               className="rounded-xl bg-white px-6 py-3 text-sm font-semibold text-landing-body shadow-[0_10px_24px_rgba(53,88,130,0.12)] transition-transform hover:-translate-y-0.5"
             >
-              View All 25+ Departments
-            </Link>
+              {viewAllLabel}
+            </button>
           </div>
         </div>
       </section>
@@ -468,7 +532,7 @@ export default function LandingPage() {
                 links={[
                   { label: "Home", to: "#top" },
                   { label: "About Us", to: "#about" },
-                  { label: "Doctors", to: "#doctors" },
+                  { label: "Our Staff", to: "#staff" },
                   { label: "Departments", to: "#departments" },
                   { label: "Contact Us", to: "#contact" },
                 ]}
@@ -489,7 +553,7 @@ export default function LandingPage() {
                 <ul className="mt-3 space-y-3 text-sm text-[#94A3B8]">
                   <li className="flex items-start gap-2">
                     <ContactIcon kind="pin" />
-                    <span>123 Medical Center Drive, Healthcare City, HC 45678</span>
+                    <span>{address}</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <ContactIcon kind="phone" />
@@ -505,16 +569,21 @@ export default function LandingPage() {
                   </li>
                 </ul>
               </div>
-            </div>
+            </div>  
           </div>
 
           <div className="mt-10 border-t border-[#B9D3EA] pt-4">
             <p className="text-xs font-medium text-landing-faint">
-              © 2026 AppointMed. All rights reserved.&nbsp;|&nbsp;Privacy Policy&nbsp;|&nbsp;Terms of Service
+              © 2026 {clinicName}. All rights reserved.&nbsp;|&nbsp;Privacy Policy&nbsp;|&nbsp;Terms of Service
             </p>
           </div>
         </div>
       </footer>
+
+      {/* ---------------- departments popup ---------------- */}
+      {popupQuery !== null && (
+        <DepartmentsModal departments={allDepartments} initialQuery={popupQuery} onClose={() => setPopupQuery(null)} />
+      )}
     </div>
   );
 }
