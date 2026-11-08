@@ -264,6 +264,11 @@ def install_backend() -> bool:
     ok("Backend packages are installed.")
     return True
 
+def sql_for(path: Path, db_name: str) -> str:
+    """Reads a SQL file and points its USE line at the configured database (the files say USE appointmed)."""
+    text = path.read_text(encoding="utf-8")
+    return re.sub(r"(?im)^[ \t]*USE[ \t]+`?\w+`?[ \t]*;", f"USE `{db_name}`;", text)
+
 
 def install_frontend() -> bool:
     heading("Frontend dependencies")
@@ -413,7 +418,10 @@ def setup_database(reset: bool = False) -> bool:
     )
     if mysql_step("Create the database and the app account", cfg, root_password, sql=create) is None:
         return False
-    if mysql_step("Load schema.sql (tables)", cfg, root_password, args=[CHARSET, name], path=DB_DIR / "schema.sql") is None:
+    if (DB_DIR / "seed.sql").stat().st_size < 500 or "INSERT INTO users" not in (DB_DIR / "seed.sql").read_text(encoding="utf-8"):
+        fail("source/database/seed.sql is empty or does not contain the users INSERT. Paste the new seed into that file and save it.")
+        return False
+    if mysql_step("Load schema.sql (tables)", cfg, root_password, args=[CHARSET], sql=sql_for(DB_DIR / "schema.sql", name)) is None:
         return False
 
     counted = mysql_step("Check for existing data", cfg, root_password,
@@ -422,11 +430,28 @@ def setup_database(reset: bool = False) -> bool:
         return False
     existing = int(counted.stdout.decode("utf-8", "replace").strip() or 0)
     if existing == 0:
-        if reset:
-            info("Reset loads schema.sql and seed.sql only, so landing_update.sql was skipped.")
-        elif mysql_step("Load landing_update.sql (departments and extra doctors)", cfg, root_password,
-                    args=[CHARSET, name], path=DB_DIR / "landing_update.sql") is None:
+        if mysql_step("Load seed.sql (sample data)", cfg, root_password, args=[CHARSET], sql=sql_for(DB_DIR / "seed.sql", name)) is None:
             return False
+    else:
+        info(f"The database already has {existing} user(s), so seed.sql was skipped.")
+    if reset:
+        info("Reset loads schema.sql and seed.sql only, so landing_update.sql was skipped.")
+    elif mysql_step("Load landing_update.sql (departments and extra doctors)", cfg, root_password,
+                    args=[CHARSET], sql=sql_for(DB_DIR / "landing_update.sql", name)) is None:
+        return False
+
+    # Prove the data really loaded, so a silent problem cannot hide.
+    check = mysql_step("Count staff accounts", cfg, root_password,
+                       args=["-N", "-B", name, "-e", "SELECT COUNT(*) FROM users"], quiet=True)
+    if check is None:
+        return False
+    total = int(check.stdout.decode("utf-8", "replace").strip() or 0)
+    if total == 0:
+        fail("The database has no users, so the sample data did not load. Read the errors above.")
+        return False
+    ok(f"{total} staff accounts are in the database.")
+    if port_open(BACKEND_PORT):
+        warn("The backend is running. Close its terminal window and start it again (menu option 6) so it uses the new database.")
     ok(f"Database '{name}' is ready. Sample logins are listed in CONTRIBUTING.md (Step 5).")
     return True
 
