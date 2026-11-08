@@ -102,7 +102,7 @@ function weekdayLabel(weekdays: number[]): string {
 
 // The five character cutouts from the design. A person gets the cutout whose keyword is in their name
 // (so the same character looks the same in every role); anyone else gets one round-robin.
-const ART_KEYS = ["spongebob", "sandy", "krabs", "squidward", "patrick"];
+const ART_KEYS = ["spongebob", "sandy", "krabs", "squidward", "patrick", "pearl", "blossom", "bubbles", "buttercup", "dora"];
 
 function staffArt(member: StaffMember, index: number): { bg: string; figure: string } {
   const name = member.full_name.toLowerCase();

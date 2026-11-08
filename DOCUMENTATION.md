@@ -2,7 +2,7 @@
 
 AppointMed is a web-based clinic appointment and management system. Patients request appointments on a public booking page. Clinic staff (doctors, nurses, and administrators) use a role-based browser portal that takes each visit from request to payment. A Python (FastAPI) backend serves both, and every record lives in one shared MySQL database.
 
-This document describes the problem the system addresses, how it is designed and built, how the object-oriented, data-structure, and information-management concepts appear in the code, and how it is tested.
+This document describes the problem the system addresses, how it is designed and built, how the object-oriented, data-structure, and information-management concepts appear in the code, and how it is tested. Short study notes with code excerpts are in [note.md](note.md).
 
 **Developers**
 
@@ -48,24 +48,22 @@ System Project Assigned: Clinic Appointment System
 
 ## 1. Introduction
 
-AppointMed is a web application for managing clinic appointments. Clinic staff sign in through a web browser to manage schedules, patient records, examinations, prescriptions, and billing. Patients use a public booking page to request an appointment without needing an account. All users share a single MySQL database, reached only through the FastAPI backend, so everyone sees the same up-to-date information.
+AppointMed is a web application for managing clinic appointments. Clinic staff sign in through a browser to manage schedules, patient records, examinations, prescriptions, and billing. Patients use a public booking page to request an appointment without an account. All users share one MySQL database, reached only through the FastAPI backend, so everyone sees the same up-to-date information. Because it runs in a browser, AppointMed needs no installation on each clinic computer.
 
-Because it runs in a browser, AppointMed needs no installation on each clinic computer. Any device on the clinic network with a modern browser can use it.
-
-The system is built as the final project for three courses, so it is deliberately structured to show each course's ideas (see [Section 12](#12-object-oriented-design), [Section 15](#15-data-structures-and-algorithms), and [Section 16](#16-information-management)).
+The system is built as the final project for three courses, so it is structured to show each course's ideas (see Sections 12, 15, and 16).
 
 | Part | Technology |
 |---|---|
 | Frontend | React 18, TypeScript (strict), Vite, Tailwind CSS, React Router 7 |
 | Backend | Python 3.11+, FastAPI, Pydantic 2, PyJWT, bcrypt |
 | Database | MySQL 8.0+ through `mysql-connector-python` |
-| Tooling | Git, GitHub |
+| Tooling | Git, GitHub, `dev.py` developer console |
 
 ## 2. Statement of the Problem
 
-Many small clinics still rely on paper logbooks, phone calls, and scattered spreadsheets to manage appointments. This leads to several problems:
+Many small clinics still rely on paper logbooks, phone calls, and scattered spreadsheets. This leads to:
 
-- Double-booked time slots and unclear doctor availability.
+- Double-booked time slots and unclear doctor availability (including days the doctor is away).
 - Patients who must phone the clinic during office hours just to book a visit.
 - Appointment requests that get lost or are handled late.
 - Patient records that are hard to find and not shared between doctor and nurse.
@@ -78,77 +76,84 @@ Many small clinics still rely on paper logbooks, phone calls, and scattered spre
 
 **Specific objectives:**
 
-1. Provide a public booking page where patients can view available time slots and request an appointment, with confirmation or disapproval sent by email.
+1. Provide a public booking page where patients see available time slots and request an appointment, with confirmation or disapproval sent by email.
 2. Let nurses (or the doctor) approve or disapprove requests, register walk-ins, check patients in, and manage the waiting queue.
-3. Let doctors examine patients one at a time, record diagnoses, issue prescriptions, assign exam rooms, and schedule follow-ups.
+3. Let doctors examine patients one at a time, record diagnoses, issue prescriptions, assign exam rooms, schedule follow-ups, and mark days they are unavailable.
 4. Generate an invoice for each session (consultation fee plus medicines) and track it through payment.
 5. Prevent conflicting bookings for the same doctor and time, even when two requests arrive at once.
 6. Restrict system functions by user role (Admin, Doctor, Nurse) with secure authentication, enforced on the server.
-7. Give administrators tools for users, schedules, rooms, clinic settings, reports, and an audit log.
-8. Handle invalid input, database errors, and scheduling conflicts with clear, plain messages.
+7. Give administrators tools for users, schedules, rooms, clinic settings, reports, an audit log, and database backup and restore.
+8. Validate input on the server and handle invalid input, database errors, and scheduling conflicts with clear, plain messages.
 9. Apply object-oriented principles (encapsulation, inheritance, polymorphism, abstraction) in the backend design.
+10. Protect passwords, credentials, and patient data (hashing, least privilege, scoped access, audit).
 
 ## 4. Scope and Limitations
 
 **Scope**
 
 - Web application for a single clinic, used by Doctor, Nurse, and Admin roles.
-- Public booking page for patients (no patient accounts).
-- Management of users, doctor weekly schedules, rooms, booking requests, appointments, examinations, prescriptions, and session invoices.
+- Public front page (services, staff list, departments) and booking page (no patient accounts).
+- Management of users, doctor weekly schedules and days off, rooms, booking requests, appointments, examinations, prescriptions, and session invoices.
 - Patient records with visit history.
-- Admin tools for clinic settings, reports (with CSV download), and an audit log.
-- Booking confirmation and disapproval emails (sent through SMTP when configured, otherwise written to the backend log).
+- Admin tools for clinic settings, reports (CSV), an audit log, and the Database page (table browser and editor, SQL console, backup, and import).
+- Booking confirmation and disapproval emails (SMTP when configured, otherwise written to the backend log).
 - Centralized MySQL database accessed only through the FastAPI backend.
 
 **Limitations**
 
 - Intended for one clinic; multi-branch support is not included.
-- Each nurse supports exactly one doctor, and each doctor's data is separate. A nurse cannot work with several doctors at once.
+- Each nurse supports exactly one doctor. A nurse cannot work with several doctors at once.
 - Prescriptions are record-keeping only. There is no pharmacy or inventory module.
-- Billing covers per-session invoices only, with no online payment processing and no printed invoice layout.
-- Emails are sent only for approved and disapproved booking requests. There are no appointment reminders and no SMS.
+- Billing covers per-session invoices only, with no online payment and no printed invoice layout.
+- Emails are sent only for approved and disapproved booking requests. There are no reminders and no SMS.
 - No patient portal for viewing records.
-- The `default_slot_minutes` clinic setting is stored for reference. The length of bookable slots comes from each doctor's schedule blocks.
-- Rate limiting is kept in memory, so it resets when the backend restarts and is not shared between server processes.
-- There are no automated tests yet. Testing is done by hand (see [Section 20](#20-testing-results)).
-- Uses fictional sample data only and is not designed or certified for real medical records. See `SECURITY.md` for the full list of known gaps.
+- The `default_slot_minutes` setting is stored for reference. Slot length comes from each doctor's schedule blocks.
+- Rate limiting is in memory, so it resets when the backend restarts and is not shared between processes.
+- Part of the landing page (about text, service cards, contact phone and email, built-in fallback departments) is fixed in the code. Staff, departments, clinic name, and address come from the database.
+- The `departments` table is created by `landing_update.sql`, not `schema.sql`.
+- The SQL console and backup are powerful admin tools. They are audited but not limited further (see Section 17).
+- There are no automated tests yet. Testing is done by hand (Section 20).
+- Uses fictional sample data only and is not designed or certified for real medical records. See `SECURITY.md`.
 
 ## 5. Review of Related Studies and Systems
 
 *To be completed by the team.* Suggested approach:
 
-1. Identify 3–5 existing clinic or appointment systems (commercial or open source) and compare their features against AppointMed. Useful comparison points: online booking, queue handling, per-role access, billing, audit trail, and cost.
-2. Summarize 2–3 published studies or articles on appointment scheduling, no-show reduction, or clinic information systems.
-3. State what AppointMed does the same, what it does differently, and what it leaves out.
+1. Identify 3–5 existing clinic or appointment systems and compare their features against AppointMed (online booking, queue handling, per-role access, billing, audit trail, cost).
+2. Summarize 2–3 published studies on appointment scheduling, no-show reduction, or clinic information systems.
+3. State what AppointMed does the same, differently, and leaves out.
 4. Cite every source in [References](#22-references).
 
 ## 6. System Features
 
 | Feature | Description | Primary role |
 |---|---|---|
-| Online booking | Patients pick a doctor, a date, and an open time slot and submit a request. No account is needed. Requests are rate-limited. | Public |
-| Slot generation | Open times are computed from the doctor's weekly schedule, minus taken appointments, pending requests, and past times. | System |
-| Request inbox | Staff approve (choosing the time and an optional room) or disapprove (with a reason) each request. The patient is emailed the result. | Nurse, Doctor |
-| Patient creation and reuse | Approving a request creates the patient record, or reuses one with the same name and birthdate. | System |
-| Walk-in booking | Create an appointment for a new or existing patient, optionally checking them in at once. | Nurse, Doctor |
-| Reschedule and cancel | Move a scheduled appointment, or cancel a scheduled or checked-in one. Cancelling frees the slot and cancels an unpaid invoice. | Nurse, Doctor |
-| Conflict prevention | A doctor cannot hold two active appointments at the same time. Enforced in the service and by a unique index in MySQL. | System |
-| Check-in and queue | Patients are checked in and served in check-in order (a min-heap `WaitingQueue`). The doctor is told when someone arrives. | Nurse, Doctor |
-| Room board | Rooms can be Available, Occupied, or Maintenance. Starting an exam occupies the room and finishing frees it. | Nurse, Doctor, Admin |
-| Examination | One patient at a time: diagnosis, notes, prescription, consultation fee, optional follow-up booking. | Doctor |
-| Prescriptions | Medicines with dosage, quantity, unit price, and instructions, listed per doctor with search. | Doctor |
-| Billing | The invoice opens when the exam starts and is totalled when it finishes. Marking it paid completes the visit. Unbilled sessions can be billed manually. | Doctor, Nurse |
-| Patient records | Search, add, edit, and delete patients (only if they have no appointments), with full visit history. | Doctor, Nurse |
-| History | Completed visits with prescriptions and bills, searchable and filterable by date range. | Doctor, Nurse |
-| Dashboards | Today's numbers, who is being examined, the waiting queue, and upcoming appointments. Refreshes automatically. | Doctor, Nurse |
-| User management | Create, edit, deactivate, and reactivate staff, reset passwords, and set each doctor's weekly schedule. | Admin |
-| Rooms | Add, rename, set status, and delete rooms (rooms used in appointments cannot be deleted). | Admin |
-| Clinic settings | Clinic name and address, default consultation fee, slot length, booking window, and the online booking switch. | Admin |
-| Reports | Appointments by status, per-doctor totals, and day-by-day revenue for a date range, with CSV download. | Admin |
-| Audit log | Searchable, filterable, paged log of who did what and when, with CSV download of the current page. | Admin |
-| Profile | Edit name and email, upload or remove a photo, and change the password. | All staff |
-| Help | Short guides written for each role. | All staff |
-| Authentication and roles | Login with bcrypt and JWT, role checks on the server, and login rate limiting. | All staff |
+| Front page | Services, live staff list, departments with a search popup, clinic name and address | Public |
+| Online booking | Pick a doctor, a date on a calendar, and an open slot. No account needed. Rate-limited. | Public |
+| Booking calendar | Red days: doctor unavailable. Amber days: fully booked. Past days and days outside the window cannot be chosen. | Public |
+| Slot generation | Open times come from the doctor's weekly schedule, minus days off, taken appointments, pending requests, and past times | System |
+| Doctor days off | A doctor marks a single date unavailable (with a private reason) or available again. Refused while that day still has open appointments or pending requests. | Doctor |
+| Request inbox | Staff approve (choosing time and room) or disapprove (with a reason). The patient is emailed. | Nurse, Doctor |
+| Patient creation and reuse | Approving creates the patient record, or reuses one with the same name and birthdate | System |
+| Walk-in booking | Appointment for a new or existing patient, optionally checked in at once | Nurse, Doctor |
+| Reschedule and cancel | Move a scheduled appointment, or cancel a scheduled or checked-in one (an unpaid invoice is cancelled too) | Nurse, Doctor |
+| Conflict prevention | One active appointment per doctor and time, enforced in the service and by a unique index | System |
+| Check-in and queue | A room must be chosen first. Served in check-in order (min-heap). The doctor is told when someone arrives. | Nurse, Doctor |
+| Room board | Available, Occupied, or Maintenance. Starting an exam occupies the room and finishing frees it. | Nurse, Doctor, Admin |
+| Examination | One patient at a time: diagnosis, notes, prescription (dosage amount and unit), fee, optional follow-up | Doctor |
+| Prescriptions | Medicines with dosage, quantity, unit price, and instructions, searchable | Doctor |
+| Billing | Invoice opens when the exam starts and is totalled when it finishes. Paying completes the visit. | Doctor, Nurse |
+| Patient records | Search, add, edit, and delete (only without appointments), with full visit history | Doctor, Nurse |
+| History | Completed visits with prescriptions and bills, filterable by date | Doctor, Nurse |
+| Dashboards | Today's numbers, exam room, queue, upcoming appointments. Refreshes automatically. | Doctor, Nurse |
+| User management | Create, edit, deactivate, reset passwords, set weekly schedules | Admin |
+| Rooms, settings | Manage rooms (used rooms cannot be deleted) and clinic settings | Admin |
+| Reports | Status counts, per-doctor totals, day-by-day revenue, with CSV download | Admin |
+| Audit log | Searchable, filterable, paged log with CSV download | Admin |
+| Database page | Browse and edit rows, run one SQL statement, download a backup, import a backup | Admin |
+| Profile and settings | Edit name, email, and photo. Change password (strength checklist). | All staff |
+| Help | Short guides for each role | All staff |
+| Authentication | bcrypt, JWT, server-side role checks, login rate limiting, timing-equalized login | All staff |
 
 ## 7. System Architecture
 
@@ -156,7 +161,7 @@ Many small clinics still rely on paper logbooks, phone calls, and scattered spre
 
 ```mermaid
 flowchart LR
-    P[Patient browser<br/>public booking page] -->|/api/public| API
+    P[Patient browser<br/>front page and booking page] -->|/api/public| API
     S[Staff browser<br/>React portal] -->|/api/auth, /api/staff, /api/admin| API
     subgraph Backend [FastAPI backend]
         API[Routes] --> SV[Services]
@@ -171,84 +176,78 @@ In development, the Vite dev server on port 5173 forwards every `/api` request t
 
 ### 7.2 Backend layers
 
-A request flows downward, and each layer only calls the one below it.
-
 | Layer | Role | Location |
 |---|---|---|
-| Routes | Thin endpoints. Declare the required feature with `require_feature(...)`, call one service method, and return the result. | `backend/routes/` |
-| Schemas | Pydantic request bodies. Every input is validated before it reaches a service. | `backend/schemas/api.py` |
-| Services | Business rules: booking conflicts, the status workflow, doctor scoping, transactions, audit logging, and emails. | `backend/services/` |
-| Repositories | The only place that contains SQL. Each extends `BaseRepository` and uses parameterized queries. | `backend/repositories/` |
-| Models | Domain objects: `User` and its role subclasses, and the `AppointmentWorkflow` state machine. | `backend/models/domain.py` |
-| Core | Settings, the database pool and transactions, exceptions and their handlers, security, the mailer, and utilities. | `backend/core/` |
-
-Services and what they own:
+| Routes | Thin endpoints. Declare the feature with `require_feature(...)`, call one service method. | `backend/routes/` |
+| Schemas | Pydantic request bodies. Every input is validated before it reaches a service. | `backend/schemas/` |
+| Services | Business rules: conflicts, workflow, doctor scoping, transactions, audit, emails. | `backend/services/` |
+| Repositories | The only place with SQL. Each extends `BaseRepository` (or works on any `Executor`). | `backend/repositories/` |
+| Models | `User` and role subclasses, `AppointmentWorkflow`. | `backend/models/domain.py` |
+| Core | Settings, database pool and transactions, exceptions, security, mailer, utilities. | `backend/core/` |
 
 | Service | Responsibility |
 |---|---|
 | `AuthService` | Login, profile, avatar, password change |
-| `BookingService` | Public catalog, open slots, and booking requests |
-| `SchedulingService` | Turns schedule blocks into open slots and checks that a time is bookable |
-| `AppointmentService` | Request approval and dismissal, walk-ins, check-in, exam start and finish, cancel, reschedule, rooms |
+| `BookingService` | Public catalog, open slots, booking calendar, booking requests |
+| `SchedulingService` | Turns schedule blocks into open slots, honoring days off |
+| `AppointmentService` | Approval and dismissal, walk-ins, check-in, exam start and finish, cancel, reschedule, rooms, days off, agenda calendar |
 | `BillingService` | Invoices, payment, history, prescriptions |
 | `PatientService` | Patient search, create, update, delete |
-| `DashboardService` | Staff and admin dashboards and admin reports |
+| `DashboardService` | Staff and admin dashboards and reports |
 | `AdminService` | Users, schedules, rooms, settings, audit |
+| `DepartmentService`, `StaffDirectoryService` | Read-only public lists for the front page |
+| `DatabaseService`, `backup_parser` | Admin Database page: tables, SQL console, backup, import |
 | `WaitingQueue` | The check-in priority queue (a data structure rather than a service) |
 
 ### 7.3 Frontend structure
 
-The frontend is a single-page React app.
-
 | Folder | Contents |
 |---|---|
-| `api/` | `client.ts` (the only place that calls `fetch`, adds the token, and turns errors into `ApiError`) and `endpoints.ts` (every backend call) |
-| `components/` | Shared pieces: `Badge`, `Modal`, `Alert`, `ExamPanel`, `EncounterCard`, `ScheduleEditor`, `WalkInModal`, `StatCard`, `ProtectedRoute`, and more |
-| `config/Navigation.ts` | The side-panel items for each role |
+| `api/` | `client.ts` (the only `fetch`, adds the token, `ApiError`, file download) and `endpoints.ts`, `databaseApi.ts`, `departmentApi.ts`, `staffDirectoryApi.ts` |
+| `components/` | `Badge`, `Modal`, `Alert`, `ExamPanel`, `EncounterCard`, `ScheduleEditor`, `WalkInModal`, `AgendaCalendar`, `BookingCalendar`, `DepartmentsModal`, `PasswordRequirements`, `StatCard`, `ProtectedRoute` |
+| `config/Navigation.ts` | Side-panel items per role |
 | `context/AuthContext.tsx` | The signed-in user. The token is kept in `sessionStorage`. |
-| `hooks/usePolling.ts` | Loads data now and again on an interval, and reloads when its inputs change |
-| `layouts/DashboardLayout.tsx` | The side panel and page frame |
-| `pages/` | `LandingPage`, `BookingPage`, plus `staff/`, `admin/`, and `shared/` pages |
-| `types/index.ts` | Types that match the backend JSON |
-| `utils/` | Formatting of dates, money, and age; image resizing; CSV download |
+| `hooks/usePolling.ts` | Loads data now and on an interval. Only the newest request may update the screen. |
+| `layouts/DashboardLayout.tsx` | Side panel and page frame |
+| `pages/` | `LandingPage`, `BookingPage`, `StaffLoginPage`, plus `staff/`, `admin/`, `shared/` |
+| `types/` | Types matching the backend JSON |
+| `utils/` | `format`, `csv`, `image`, `input` (character filters), `password` (strength rules) |
 
-`ProtectedRoute` and the hidden menu items are conveniences only. The backend enforces every role rule.
+`ProtectedRoute` and hidden menu items are conveniences only. The backend enforces every role rule.
 
 ## 8. Roles and Permissions
 
-Each role class lists the features it may open. Routes declare the feature they need, and the permission check is `User.can_access(feature)`.
+Each role class lists the features it may open. Routes declare the feature they need, and the check is `User.can_access(feature)`.
 
 | Feature | Doctor | Nurse | Admin |
 |---|:---:|:---:|:---:|
-| `dashboard` | Yes | Yes | |
-| `appointments` | Yes | Yes | |
-| `notifications` | Yes | Yes | |
-| `patients` | Yes | Yes | |
-| `history` | Yes | Yes | |
-| `invoice` | Yes | Yes | |
+| `dashboard`, `appointments`, `notifications`, `patients`, `history`, `invoice` | Yes | Yes | |
 | `prescriptions` | Yes | | |
-| `exam` (start, release, and finish an examination) | Yes | | |
-| `admin_dashboard`, `users`, `rooms`, `settings`, `reports`, `audit` | | | Yes |
+| `exam` (start, release, finish an examination) | Yes | | |
+| `schedule` (mark and clear days off) | Yes | | |
+| `admin_dashboard`, `users`, `rooms`, `settings`, `reports`, `audit`, `database` | | | Yes |
 
-**Doctor scope.** Clinical data belongs to a doctor. A doctor works with their own data. A nurse works with the data of the doctor they are assigned to. Administrators do not work with clinical records. The `scope_doctor_id` property on each role class returns the doctor, or raises `PermissionDeniedError`. Services compare a record's doctor with the user's scope and answer "not found" for anything outside it.
+**Doctor scope.** Clinical data belongs to a doctor. A doctor works with their own data. A nurse works with the data of their assigned doctor. Administrators do not work with clinical records. `scope_doctor_id` returns the doctor or raises `PermissionDeniedError`, and services answer "not found" for anything outside it.
 
 ## 9. Appointment Workflow
 
 ### 9.1 From request to payment
 
-1. A patient submits a request on the booking page. It is stored in `notifications` as **Pending** and routed to the doctor and to the assigned nurse with the fewest pending requests.
-2. Staff **approve** it (the patient record is created or reused, an appointment is created, and the patient is emailed) or **disapprove** it with a reason (the patient is emailed the reason).
-3. On arrival, staff **check the patient in**. Only today's appointments can be checked in. This sets `checked_in_at`, which orders the queue.
-4. The doctor **starts the examination**. Only one examination per doctor can be in progress. A room can be chosen. The invoice is created with the default consultation fee.
-5. The doctor **finishes the examination**: diagnosis, notes, prescription, and the final consultation fee are saved, the invoice is totalled, the room is freed, and an optional follow-up appointment is booked.
-6. The doctor or nurse **marks the invoice paid**. The appointment becomes **Completed** and appears in History and the patient's record.
+1. A patient submits a request. It is stored in `notifications` as **Pending** and routed to the doctor and to the assigned nurse with the fewest pending requests.
+2. Staff **approve** it (patient record created or reused, appointment created, patient emailed) or **disapprove** it with a reason (emailed).
+3. On arrival, staff choose an exam room and **check the patient in**. Only today's appointments can be checked in. This sets `checked_in_at`, which orders the queue.
+4. The doctor **starts the examination**. Only one exam per doctor can be in progress (a row lock closes the race). The invoice is created with the default fee.
+5. The doctor **finishes the examination**: diagnosis, notes, prescription, and fee are saved, the invoice is totalled, the room is freed, and an optional follow-up is booked.
+6. The doctor or nurse **marks the invoice paid**. The appointment becomes **Completed** and appears in History.
+
+A doctor may also mark a date as a **day off** at any time, as long as no open appointment or pending request still wants that day.
 
 ### 9.2 Appointment status state machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> Scheduled
-    Scheduled --> CheckedIn: check in
+    Scheduled --> CheckedIn: check in (room required)
     Scheduled --> Cancelled: cancel
     CheckedIn --> Consulting: start exam
     CheckedIn --> Cancelled: cancel
@@ -259,20 +258,20 @@ stateDiagram-v2
     Cancelled --> [*]
 ```
 
-`CheckedIn` is the `Checked-in` status in the database. `AppointmentWorkflow.TRANSITIONS` holds this table, and `AppointmentWorkflow.ensure(current, target)` raises `InvalidStatusError` for any other change.
+`CheckedIn` is `Checked-in` in the database. `AppointmentWorkflow.ensure(current, target)` raises `InvalidStatusError` for any other change.
 
 ### 9.3 Other status values
 
 | Item | Values |
 |---|---|
-| Booking request (`notifications.status`) | Pending, Converted (shown to staff as "Approved"), Dismissed (shown as "Disapproved") |
-| Invoice (`invoices.status`) | Unpaid, Paid, Cancelled |
-| Room (`rooms.status`) | Available, Occupied, Maintenance |
-| Appointment source (`appointments.source`) | Notification, Walk-in, Follow-up |
+| Booking request | Pending, Converted (shown as "Approved"), Dismissed (shown as "Disapproved") |
+| Invoice | Unpaid, Paid, Cancelled |
+| Room | Available, Occupied, Maintenance |
+| Appointment source | Notification, Walk-in, Follow-up |
 
 ## 10. Database Design
 
-The schema has 12 tables in `source/database/schema.sql`. Sample data lives in `seed.sql`.
+`schema.sql` creates 13 tables. `landing_update.sql` adds `departments` (14 in total). Sample data is in `seed.sql`. Details are in `DATABASE.md`.
 
 ### 10.1 Entity relationship diagram
 
@@ -280,6 +279,7 @@ The schema has 12 tables in `source/database/schema.sql`. Sample data lives in `
 erDiagram
     users ||--o{ users : "nurse supports doctor"
     users ||--o{ doctor_schedules : "has weekly blocks"
+    users ||--o{ doctor_days_off : "marks days off"
     users ||--o{ notifications : "receives requests"
     users ||--o{ appointments : "sees patients"
     users ||--o{ examinations : "records"
@@ -297,24 +297,25 @@ erDiagram
     prescriptions ||--o{ prescription_items : "lists"
 ```
 
-`clinic_settings` is a standalone key/value table, with `updated_by` pointing to `users`.
+`clinic_settings` and `departments` are standalone tables (`clinic_settings.updated_by` points to `users`).
 
 ### 10.2 Tables
 
 | Table | Purpose | Notable columns and rules |
 |---|---|---|
-| `users` | Clinic staff only. Patients have no accounts. | `role` enum (doctor, nurse, admin), `password_hash` (bcrypt), `assigned_doctor_id` (nurses only), `avatar` (small image), `is_active` (deactivate instead of delete) |
-| `doctor_schedules` | Weekly working hours | `weekday` 1 to 7 (ISO), `start_time`, `end_time`, `slot_minutes`. `CHECK` that the end is after the start. Unique per doctor, weekday, and start. Two rows on one day make a lunch break. |
-| `rooms` | Exam room board | Unique `room_name`, `status` enum, `updated_by` |
-| `notifications` | Booking requests | Requester details (name, birthdate, sex, contact, email, address), `preferred_datetime`, `origin`, `status`, `decision_note`, `decided_by`, `resolved_at` |
-| `patients` | Clinical records | Indexed by name, `condition_summary`, `doctor_id` (primary doctor) |
-| `appointments` | Every booked visit | `status` enum, `checked_in_at`, `source`, nullable `notification_id`, `patient_id`, `nurse_id`, `room_id`. Generated column `active_slot` with a unique index (see below). |
-| `examinations` | The doctor's record of a visit | One per appointment (`appointment_id` is unique), `diagnosis`, `notes`, `outcome`, `follow_up_appointment_id` |
-| `prescriptions` | One per examination that has medicines or a note | Links examination, patient, and doctor |
-| `prescription_items` | Medicine lines | `quantity > 0` and `unit_price >= 0` checks, `ON DELETE CASCADE` from the prescription |
-| `invoices` | One per appointment | `consultation_fee`, `medicines_total`, `amount` (their sum), `status`, `paid_at`, `paid_by`, `CHECK (amount >= 0)` |
-| `clinic_settings` | Admin-managed key/value settings | Keys: `clinic_name`, `clinic_address`, `consultation_fee`, `default_slot_minutes`, `online_booking_enabled`, `booking_window_days` |
-| `audit_logs` | Append-only activity log | `user_id` (null for system or public actions), `action`, `entity`, `entity_id`, `details` |
+| `users` | Clinic staff only | `role` enum, `password_hash` (bcrypt), `assigned_doctor_id` (nurses), `avatar`, `is_active` |
+| `doctor_schedules` | Weekly working hours | ISO `weekday`, `start_time`, `end_time`, `slot_minutes`. `CHECK` end > start. Two rows on a day make a lunch break. |
+| `doctor_days_off` | Single unavailable dates | `UNIQUE (doctor_id, off_date)`, optional private `reason` |
+| `rooms` | Exam room board | Unique name, `status` enum |
+| `notifications` | Booking requests | Requester details, `preferred_datetime`, `origin`, `status`, `decision_note` |
+| `patients` | Clinical records | Indexed by name, `condition_summary`, `doctor_id` |
+| `appointments` | Every booked visit | `status` enum, `checked_in_at`, `source`, generated `active_slot` with a unique index |
+| `examinations` | The doctor's record | One per appointment, `outcome`, `follow_up_appointment_id` |
+| `prescriptions`, `prescription_items` | Medicines | `quantity > 0`, `unit_price >= 0`, `ON DELETE CASCADE` |
+| `invoices` | One per appointment | `amount = consultation_fee + medicines_total` (checked by `CHECK`), `status`, `paid_at`, `paid_by` |
+| `clinic_settings` | Admin key/value settings | Six keys (name, address, fee, slot minutes, booking switch, booking window) |
+| `audit_logs` | Append-only activity log | `user_id` (null for system actions), `action`, `entity`, `details` |
+| `departments` | Front-page departments | `name`, `description`, `icon`, `is_featured`, `is_active`, `sort_order` |
 
 ### 10.3 Double-booking guard
 
@@ -324,68 +325,66 @@ active_slot DATETIME GENERATED ALWAYS AS
 UNIQUE KEY uq_doctor_active_slot (doctor_id, active_slot)
 ```
 
-A doctor cannot have two non-cancelled appointments at the same time. A cancelled row has a `NULL` `active_slot`, and MySQL allows many `NULL` values in a unique index, so a cancelled slot can be booked again. The services also check for conflicts first so the user gets a friendly message, but the index is what stops two simultaneous requests from both succeeding. The repository turns a duplicate-entry error into `AppointmentConflictError`.
+A doctor cannot have two non-cancelled appointments at the same time. A cancelled row has a `NULL` `active_slot`, and MySQL allows many `NULL` values in a unique index, so the slot can be booked again. Services check first for a friendly message, but the index stops two simultaneous requests from both succeeding. A duplicate-entry error becomes `AppointmentConflictError`.
 
 ### 10.4 Database access
 
-The web app connects as `appointmed_user`, which has only `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on the `appointmed` database. It cannot change the table structure. Only `root` loads `schema.sql`.
+The web app connects as `appointmed_user` with only `SELECT`, `INSERT`, `UPDATE`, and `DELETE`. It cannot change the table structure. Only `root` loads `schema.sql` and restores a backup.
 
 ## 11. API Reference
 
-All endpoints are under `/api`. Errors always look like `{"detail": "..."}`. Interactive documentation is at `http://127.0.0.1:8000/docs` while the backend runs.
+All endpoints are under `/api`. Errors look like `{"detail": "..."}`. Interactive docs: `http://127.0.0.1:8000/docs`.
 
 ### 11.1 Health
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/health` | Confirms the backend is running |
-| GET | `/api/health/db` | Confirms the backend can reach MySQL |
+| GET | `/api/health` | Backend is running |
+| GET | `/api/health/db` | Backend can reach MySQL |
 
 ### 11.2 Authentication and profile (`/api/auth`)
 
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/login` | Sign in and receive a token |
-| GET | `/me` | The signed-in user's profile |
-| PUT | `/me` | Change own name and email |
-| PUT | `/me/avatar` | Upload a profile picture (base64 data URL) |
-| DELETE | `/me/avatar` | Remove the profile picture |
-| POST | `/change-password` | Change own password |
+| GET, PUT | `/me` | Read or change own name and email |
+| PUT, DELETE | `/me/avatar` | Upload or remove a profile picture |
+| POST | `/change-password` | Change own password (strength rules apply) |
 
-### 11.3 Public booking (`/api/public`, no login)
+### 11.3 Public (`/api/public`, no login)
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/catalog` | Clinic info, whether booking is open, the booking window, and bookable doctors |
+| GET | `/catalog` | Clinic info, booking switch, booking window, bookable doctors |
+| GET | `/departments` | Active departments with doctor counts |
+| GET | `/staff` | Active staff: names, roles, specialization, weekdays |
 | GET | `/slots?doctor_id=&day=` | Open times for a doctor on a day |
-| POST | `/bookings` | Submit an appointment request (rate-limited per visitor) |
+| GET | `/calendar?doctor_id=&date_from=&date_to=` | Working weekdays, fully booked days, and days off (dates only) |
+| POST | `/bookings` | Submit a request (rate-limited per visitor) |
 
 ### 11.4 Doctor and nurse (`/api/staff`)
 
 | Method | Path | Feature | Purpose |
 |---|---|---|---|
-| GET | `/dashboard` | `dashboard` | Today's numbers, queue, exam room, upcoming |
-| GET | `/notifications` | `notifications` | Booking requests, optionally by status |
-| POST | `/notifications/{id}/approve` | `notifications` | Approve a request (time and room) |
-| POST | `/notifications/{id}/dismiss` | `notifications` | Disapprove a request with a reason |
-| GET | `/appointments` | `appointments` | List by day (`today`, `upcoming`, `all`, or a date) and search |
-| POST | `/appointments` | `appointments` | Create a walk-in appointment |
-| POST | `/appointments/{id}/check-in` | `appointments` | Add to the waiting queue |
-| POST | `/appointments/{id}/start` | `exam` | Start the examination |
-| POST | `/appointments/{id}/release` | `exam` | Return the patient to the queue |
-| POST | `/appointments/{id}/finish` | `exam` | Finish the examination |
-| POST | `/appointments/{id}/cancel` | `appointments` | Cancel |
-| POST | `/appointments/{id}/reschedule` | `appointments` | Move to a new time |
+| GET | `/dashboard` | `dashboard` | Numbers, queue, exam room, upcoming |
+| GET | `/notifications` | `notifications` | Booking requests by status |
+| POST | `/notifications/{id}/approve`, `/dismiss` | `notifications` | Approve (time, room) or disapprove (reason) |
+| GET, POST | `/appointments` | `appointments` | List by day and search, or create a walk-in |
+| GET | `/calendar` | `appointments` | Working weekdays, busy days, and days off for the agenda calendar |
+| POST | `/days-off` | `schedule` | Mark a day unavailable |
+| DELETE | `/days-off/{day}` | `schedule` | Make a day available again |
+| POST | `/appointments/{id}/check-in` | `appointments` | Add to the queue (room required) |
+| POST | `/appointments/{id}/start`, `/release`, `/finish` | `exam` | Start, return to queue, finish |
+| POST | `/appointments/{id}/cancel`, `/reschedule` | `appointments` | Cancel or move |
 | PUT | `/appointments/{id}/room` | `appointments` | Choose or clear the room |
-| POST | `/appointments/{id}/bill` | `invoice` | Create an invoice for an examined, unbilled session |
+| POST | `/appointments/{id}/bill` | `invoice` | Invoice an examined, unbilled session |
 | GET | `/rooms` | `appointments` | Rooms with the patient inside |
 | PUT | `/rooms/{id}/status` | `appointments` | Change room status |
-| GET, POST | `/patients` | `patients` | Search or add patients |
-| PUT, DELETE | `/patients/{id}` | `patients` | Edit or delete a patient |
+| GET, POST | `/patients` | `patients` | Search or add |
+| PUT, DELETE | `/patients/{id}` | `patients` | Edit or delete |
 | GET | `/patients/{id}/history` | `patients` | A patient's completed visits |
-| GET | `/history` | `history` | Completed visits with search and date range |
-| GET | `/invoices` | `invoice` | Invoices, optionally by status |
-| GET | `/invoices/unbilled` | `invoice` | Examined sessions with no invoice |
+| GET | `/history` | `history` | Completed visits, search and dates |
+| GET | `/invoices`, `/invoices/unbilled` | `invoice` | Invoices and unbilled sessions |
 | POST | `/invoices/{id}/pay` | `invoice` | Mark paid and complete the visit |
 | GET | `/prescriptions` | `prescriptions` | The doctor's prescriptions |
 
@@ -393,18 +392,23 @@ All endpoints are under `/api`. Errors always look like `{"detail": "..."}`. Int
 
 | Method | Path | Feature | Purpose |
 |---|---|---|---|
-| GET | `/dashboard` | `admin_dashboard` | Clinic-wide totals and recent activity |
+| GET | `/dashboard` | `admin_dashboard` | Clinic totals and recent activity |
 | GET, POST | `/users` | `users` | List or create users |
 | PUT | `/users/{id}` | `users` | Edit a user |
-| POST | `/users/{id}/active` | `users` | Activate or deactivate |
-| POST | `/users/{id}/password` | `users` | Reset a password |
+| POST | `/users/{id}/active`, `/password` | `users` | Activate or deactivate, reset password |
 | GET, PUT | `/users/{id}/schedule` | `users` | Read or replace a doctor's weekly schedule |
-| GET | `/doctors` | `users` | Active doctors (for assigning nurses) |
+| GET | `/doctors` | `users` | Active doctors |
 | GET, POST | `/rooms` | `rooms` | List or add rooms |
 | PUT, DELETE | `/rooms/{id}` | `rooms` | Edit or delete a room |
 | GET, PUT | `/settings` | `settings` | Read or save clinic settings |
 | GET | `/reports` | `reports` | Summaries for a date range (up to one year) |
 | GET | `/audit` | `audit` | A page of audit entries |
+| GET | `/database/tables`, `/database/tables/{table}` | `database` | Table list and a page of rows |
+| POST | `/database/tables/{table}/rows` | `database` | Insert a row |
+| PUT, DELETE | `/database/tables/{table}/rows/{key}` | `database` | Edit or delete a row |
+| POST | `/database/query` | `database` | Run one SQL statement |
+| GET | `/database/backup` | `database` | Download a `.sql` backup |
+| POST | `/database/import` | `database` | Replace data with a backup file |
 
 ### 11.6 Status codes
 
@@ -414,31 +418,29 @@ All endpoints are under `/api`. Errors always look like `{"detail": "..."}`. Int
 | 400, 422 | Invalid input or a broken business rule |
 | 401 | Not signed in, or the session ended |
 | 403 | Signed in but not allowed |
-| 404 | Not found (or outside the user's doctor scope) |
-| 409 | Conflict, such as a double booking or an invalid status change |
+| 404 | Not found (or outside the doctor scope) |
+| 409 | Conflict (double booking, invalid status change) |
 | 429 | Too many attempts |
 | 503 | Database unavailable |
 
 ## 12. Object-Oriented Design
 
-This table maps the CMSC 203 requirements to the code.
-
 | Concept | Where it lives |
 |---|---|
-| **Classes and objects** | `User`, `Doctor`, `Nurse`, `Admin`, `AppointmentWorkflow`, `Settings`, `Database`, `Transaction`, `Mailer`, `RateLimiter`, `WaitingQueue`, every repository and every service |
-| **Constructors** | `User.__init__` rejects a missing username or full name. Repositories receive their `Executor`. Services receive their `Database` and `Mailer`. |
-| **Factory methods** | `User.from_row` builds the correct subclass from a database row. `Settings.from_env` builds the settings from the environment. |
-| **Encapsulation** | `Settings` is a frozen dataclass that reads the environment once. `Database` hides the connection pool, locking, and error translation. `User` keeps private fields (`_id`, `_username`, ...) and exposes them through read-only properties. `RateLimiter` hides its event store and lock. |
-| **Abstraction** | `Executor` is an abstract way to run SQL (`fetch_all`, `execute`, `update`). `BaseRepository` declares abstract `table` and `columns`. `User.scope_doctor_id` is an abstract property. |
-| **Inheritance** | `Doctor`, `Nurse`, and `Admin` extend `User`. Every repository extends `BaseRepository`. Every business error extends `AppError`. `DuplicateEntryError`, `AppointmentConflictError`, and `InvalidStatusError` extend `ConflictError`. |
-| **Polymorphism** | Each role answers `scope_doctor_id` in its own way (a doctor returns their own id, a nurse returns the assigned doctor, an admin raises an error). `Database` and `Transaction` are interchangeable `Executor`s, so a repository works inside or outside a transaction without changing. |
-| **Custom exceptions** | The `AppError` family (see [Section 18](#18-exception-handling-and-validation)) |
-| **Method overloading** | Python has no overloading. `ReportRepository` and `AppointmentRepository.list_for_doctor` achieve the same effect by accepting a `str` or a `date` for the day filter and optional filter arguments. |
+| **Classes and objects** | `User`, `Doctor`, `Nurse`, `Admin`, `AppointmentWorkflow`, `Settings`, `Database`, `Transaction`, `AdminSession`, `Mailer`, `RateLimiter`, `WaitingQueue`, every repository and service |
+| **Constructors** | `User.__init__` rejects a missing username or name. Repositories receive an `Executor`. Services receive a `Database` and `Mailer`. |
+| **Factory methods** | `User.from_row`, `Settings.from_env` |
+| **Encapsulation** | `Settings` (frozen dataclass), `Database` (hides pool, lock, error translation), `User` (private fields behind properties), `RateLimiter` (private store and lock) |
+| **Abstraction** | `Executor` (abstract way to run SQL), `BaseRepository` (abstract `table` and `columns`), `User.scope_doctor_id` |
+| **Inheritance** | Roles extend `User`. Repositories extend `BaseRepository`. Errors extend `AppError`. `DuplicateEntryError`, `AppointmentConflictError`, `InvalidStatusError` extend `ConflictError`. |
+| **Polymorphism** | Each role answers `scope_doctor_id` differently. `Database`, `Transaction`, and `AdminSession` are interchangeable `Executor`s. |
+| **Custom exceptions** | The `AppError` family (Section 18) |
+| **Method overloading** | Python has none. `AppointmentRepository.list_for_doctor` accepts a `str` or a `date` for the day filter, and optional arguments give the same effect. |
 | **Interfaces and abstract classes** | `Executor`, `BaseRepository`, `User` (all `ABC`) |
 
 ## 13. UML Class Diagrams
 
-The diagrams below are written in Mermaid, which GitHub renders directly. Export them to images in `source/documentation/diagrams/` if the course requires picture files.
+The diagrams are written in Mermaid. Export them to images in `source/documentation/diagrams/` if the course requires picture files.
 
 ### 13.1 Users and the appointment workflow
 
@@ -452,24 +454,14 @@ classDiagram
         -username: str
         -full_name: str
         -email: str
-        -specialization: str
         -assigned_doctor_id: int
         +can_access(feature) bool
         +scope_doctor_id() int*
         +from_row(row) User$
     }
-    class Doctor {
-        +role = "doctor"
-        +scope_doctor_id() int
-    }
-    class Nurse {
-        +role = "nurse"
-        +scope_doctor_id() int
-    }
-    class Admin {
-        +role = "admin"
-        +scope_doctor_id() int
-    }
+    class Doctor { +role = "doctor" }
+    class Nurse { +role = "nurse" }
+    class Admin { +role = "admin" }
     class AppointmentWorkflow {
         +STATUSES: tuple
         +TRANSITIONS: dict
@@ -499,8 +491,9 @@ classDiagram
         +transaction() Transaction
         +is_reachable() bool
     }
-    class Transaction {
-        -connection
+    class Transaction { -connection }
+    class AdminSession {
+        +select(sql) tuple
     }
     class BaseRepository {
         <<abstract>>
@@ -513,10 +506,12 @@ classDiagram
     }
     Executor <|-- Database
     Executor <|-- Transaction
+    Executor <|-- AdminSession
     Database ..> Transaction : creates
     BaseRepository o-- Executor
     BaseRepository <|-- UserRepository
     BaseRepository <|-- ScheduleRepository
+    BaseRepository <|-- DayOffRepository
     BaseRepository <|-- PatientRepository
     BaseRepository <|-- AppointmentRepository
     BaseRepository <|-- NotificationRepository
@@ -527,6 +522,9 @@ classDiagram
     BaseRepository <|-- SettingsRepository
     BaseRepository <|-- AuditRepository
     BaseRepository <|-- ReportRepository
+    BaseRepository <|-- DepartmentRepository
+    BaseRepository <|-- StaffDirectoryRepository
+    DatabaseAdminRepository o-- Executor
 ```
 
 ### 13.3 Exceptions
@@ -567,10 +565,14 @@ classDiagram
         +cancel()
         +reschedule()
         +assign_room()
+        +calendar()
+        +set_day_off()
+        +clear_day_off()
     }
     class BookingService {
         +catalog()
         +slots()
+        +calendar()
         +book()
     }
     class SchedulingService {
@@ -579,11 +581,16 @@ classDiagram
     }
     class BillingService {
         +invoices()
-        +unbilled()
         +bill()
         +pay()
         +history()
-        +prescriptions()
+    }
+    class DatabaseService {
+        +tables()
+        +table()
+        +run_sql()
+        +backup()
+        +import_backup()
     }
     class WaitingQueue {
         -heap: list
@@ -598,14 +605,13 @@ classDiagram
         +record(key)
         +reset(key)
     }
-    class Mailer {
-        +send(to, subject, body)
-    }
+    class Mailer { +send(to, subject, body) }
     BookingService ..> SchedulingService
     AppointmentService ..> Mailer
     AppointmentService ..> AppointmentWorkflow
     BillingService ..> AppointmentWorkflow
     DashboardService ..> WaitingQueue
+    DatabaseService ..> backup_parser
 ```
 
 ## 14. Flowcharts
@@ -618,7 +624,7 @@ flowchart TD
     B -- No --> B1[Show closed message] --> Z([End])
     B -- Yes --> C[Enter personal details]
     C --> D[Choose specialization and doctor]
-    D --> E[Choose a date inside the booking window]
+    D --> E[Choose a date: red and amber days are locked]
     E --> F[Load open slots from the backend]
     F --> G{Any open slot?}
     G -- No --> E
@@ -628,7 +634,7 @@ flowchart TD
     I -- Yes --> K{Under the rate limit?}
     K -- No --> L[Show wait message] --> Z
     K -- Yes --> M[Store request as Pending, route to doctor and nurse]
-    M --> N[Show receipt: request received, not yet confirmed]
+    M --> N[Show receipt: received, not yet confirmed]
     N --> Z
 ```
 
@@ -640,13 +646,15 @@ flowchart TD
     B --> C{Approve or disapprove?}
     C -- Disapprove --> D[Enter a reason] --> E[Mark Dismissed, email the reason] --> Z([End])
     C -- Approve --> F[Confirm time and optional room]
-    F --> G{Doctor already booked at that time?}
-    G -- Yes --> H[Show conflict, choose another time] --> F
-    G -- No --> I[Create or reuse the patient]
+    F --> G{Doctor free at that time and not on a day off?}
+    G -- No --> H[Show error, choose another time] --> F
+    G -- Yes --> I[Create or reuse the patient]
     I --> J[Create the appointment as Scheduled]
     J --> K[Mark request Converted, email confirmation]
     K --> L[Patient arrives on the day]
-    L --> M[Check in: status Checked-in, added to the queue]
+    L --> L2{Room chosen?}
+    L2 -- No --> L3[Choose an exam room] --> L2
+    L2 -- Yes --> M[Check in: status Checked-in, added to the queue]
     M --> Z
 ```
 
@@ -656,73 +664,91 @@ flowchart TD
 flowchart TD
     A([Next patient in the queue]) --> B{Another exam in progress?}
     B -- Yes --> B1[Finish or return that patient first] --> A
-    B -- No --> C[Start exam: choose a room, status Consulting]
-    C --> D[Invoice opens with the default consultation fee]
+    B -- No --> C[Start exam: status Consulting, room occupied]
+    C --> D[Invoice opens with the default fee]
     D --> E[Enter diagnosis, notes, medicines, and fee]
     E --> F{Started by mistake?}
     F -- Yes --> G[Return to queue] --> A
-    F -- No --> H[Finish exam: save record, prescription, and totals]
+    F -- No --> H[Finish exam: save record, prescription, totals]
     H --> I[Free the room, status Examined]
     I --> J{Follow-up wanted?}
     J -- Yes --> K[Book a follow-up appointment] --> L
     J -- No --> L[Invoice waits for payment]
     L --> M[Doctor or nurse marks it paid]
-    M --> N[Status Completed, visit appears in History and the patient record]
+    M --> N[Status Completed, visit in History]
     N --> Z([End])
+```
+
+### 14.4 A doctor marks a day off
+
+```mermaid
+flowchart TD
+    A([Open the agenda calendar]) --> B[Press Manage days off, click a date]
+    B --> C{Date is today or later, within one year?}
+    C -- No --> X[Show error] --> Z([End])
+    C -- Yes --> D{Already a day off?}
+    D -- Yes --> E[Offer to make it available again] --> Z
+    D -- No --> F{Open appointments or pending requests that day?}
+    F -- Yes --> G[Refuse: reschedule, cancel, or disapprove them first] --> Z
+    F -- No --> H[Save the day off, write an audit entry]
+    H --> I[Booking page shows the day as unavailable] --> Z
 ```
 
 ## 15. Data Structures and Algorithms
 
+Full explanations with code and complexity are in [note.md](note.md).
+
 | Item | Where | Notes |
 |---|---|---|
-| **Min-heap priority queue** | `services/waiting_queue.py` | `WaitingQueue` orders checked-in patients by `(checked_in_at, id)`. `heapq` gives O(log n) insertion and O(log n) removal of the earliest arrival, instead of sorting the whole list every time. Patients with no check-in time sort last. `ordered()` drains the heap and tags each patient with a 1-based `queue_position`. |
-| **Sliding-window rate limiter** | `core/security.py` | `RateLimiter` keeps a `deque` of event times for each key. Old events are removed from the left, and a key is blocked when the window is full. Used for logins (5 per username per 5 minutes) and bookings (6 per IP per 10 minutes). |
-| **State machine** | `models/domain.py` | `AppointmentWorkflow.TRANSITIONS` is a dictionary from each status to the set of statuses it may become. Checking a change is a constant-time set lookup. |
-| **Slot generation** | `services/scheduling_service.py` | For each schedule block on the weekday, step from start to end by `slot_minutes`. Keep a slot if it is in the future and not in the `taken` set. The taken set is built once per request, so each membership test is O(1). The result is sorted. |
-| **Hash-based grouping** | `repositories/clinical_repository.py`, `user_repository.py` | Prescription items are grouped by appointment id with a `defaultdict(list)`, which avoids one query per row. Doctors' weekdays are grouped the same way. |
-| **Set operations** | `AppointmentRepository.booked_times` | The `UNION` of appointment times and pending request times is returned as a Python `set`. |
-| **Schedule validation** | `AdminService.replace_schedule` | Blocks are sorted by `(weekday, start_time)`, then adjacent pairs are compared to find overlaps in one pass. |
-| **Searching and sorting** | Repositories | `LIKE` searches, `ORDER BY` on indexed columns, `LIMIT` and `OFFSET` paging in the audit log. |
+| **Min-heap priority queue** | `services/waiting_queue.py` | `WaitingQueue` orders checked-in patients by `(checked_in_at, id)`. Insert and remove are O(log n). Patients with no check-in time sort last. |
+| **Sliding-window rate limiter** | `core/security.py` | A `deque` of event times per key. Old events leave from the left. Logins: 5 per username per 5 minutes. Bookings: 6 per IP per 10 minutes. |
+| **State machine** | `models/domain.py` | `TRANSITIONS` maps each status to a set of allowed next statuses. The check is a constant-time lookup. |
+| **Slot generation** | `services/scheduling_service.py` | Step through each schedule block by `slot_minutes`. Keep a slot if it is in the future and not in the `taken` set (O(1) lookups). Days off return no slots. |
+| **Hash-based grouping** | `clinical_repository.py`, `user_repository.py`, `staff_directory_repository.py` | `defaultdict(list)` groups medicine lines by appointment and weekdays by doctor, avoiding one query per row. |
+| **Set operations** | `AppointmentRepository.booked_times`, `booked_days`, `pending_days` | `UNION` results and day lists become Python sets. The agenda calendar merges busy days with a set union. |
+| **Schedule validation** | `AdminService.replace_schedule` | Sort blocks by `(weekday, start_time)`, then compare neighbors to find overlaps in one pass. |
+| **Parsing** | `services/backup_parser.py` | A regular-expression tokenizer splits a backup into statements, then values, in a single pass. Nothing is executed as SQL. |
+| **Searching and paging** | Repositories | `LIKE` searches, `ORDER BY` on indexed columns, `LIMIT` and `OFFSET` in the audit log and the Database page |
 
 ## 16. Information Management
 
 | Concept | Where it shows up |
 |---|---|
-| **Normalization** | 12 tables with each fact stored once: staff in `users`, medicine lines in `prescription_items` rather than repeated in `prescriptions`, settings in a key/value table. |
-| **Keys** | Primary keys on every table. Foreign keys between users, patients, appointments, examinations, prescriptions, invoices, rooms, and logs. Unique keys on `username`, `room_name`, one examination per appointment, and one invoice per appointment. |
-| **Constraints** | `CHECK` constraints for weekday range, schedule times, quantity, unit price, and invoice amount. `ENUM` columns for roles and statuses. `NOT NULL` where a value is required. |
-| **Indexes** | On role, assigned doctor, patient name, appointment time, doctor and status, notification status, invoice status, and audit time and user. |
-| **Integrity beyond SQL** | Role rules on foreign-key targets (for example "a nurse must be assigned to a doctor") cannot be written in plain SQL, so the services enforce them. |
-| **Double-booking guard** | The generated `active_slot` column with a unique index (see [Section 10.3](#103-double-booking-guard)). |
-| **Transactions** | `Database.transaction()` wraps multi-step changes (approving a request, finishing an examination, paying an invoice, saving a schedule) so they all succeed or all roll back. |
-| **Parameterized queries** | Every value is passed separately from the SQL text. Column names for generic inserts and updates come from a fixed whitelist in each repository. |
-| **Aggregate queries** | `ReportRepository` uses `GROUP BY`, `SUM`, `COUNT`, `COALESCE`, and joins for the dashboard and reports. |
-| **Audit trail** | `audit_logs` records who did what. Rows are only ever added by the app. |
-| **Referential safety** | Users are deactivated, not deleted. Patients with appointments and rooms used in appointments cannot be deleted, which protects history. |
-| **Money** | Prices and totals are handled as `Decimal` (`to_money`) in Python and `DECIMAL(10,2)` in MySQL, never as floating point. |
-| **Server clock** | `Executor.server_now()` reads `NOW()` from MySQL so Python's idea of "now" agrees with `CURDATE()` and `NOW()` used in queries. |
+| **Normalization** | Each fact is stored once: staff in `users`, medicine lines in `prescription_items`, settings as key/value rows |
+| **Keys** | Primary keys on every table. Foreign keys between users, patients, appointments, examinations, prescriptions, invoices, rooms, and logs. Unique keys on `username`, `room_name`, one examination per appointment, one invoice per appointment, one day off per doctor and date. |
+| **Constraints** | `CHECK` for weekday range, schedule times, quantity, price, and invoice amounts (`amount = fee + medicines`). `ENUM` for roles and statuses. `NOT NULL` where required. |
+| **Indexes** | Role, assigned doctor, patient name, appointment time, doctor and status, notification status, invoice status, audit time and user |
+| **Integrity beyond SQL** | Role rules on foreign-key targets are enforced in the services |
+| **Double-booking guard** | Generated `active_slot` plus a unique index (Section 10.3) |
+| **Transactions and locks** | `Database.transaction()` makes multi-step changes all-or-nothing. `SELECT ... FOR UPDATE` on the doctor row serializes exam starts, days off, and bookings. |
+| **Parameterized queries** | Every value is a parameter. Identifiers for generic queries come from a whitelist or are checked against `information_schema`. |
+| **Aggregates** | `ReportRepository`: `GROUP BY`, `SUM`, `COUNT`, `COALESCE`, joins |
+| **Audit trail** | `audit_logs`: rows are only ever added by the app |
+| **Backup and restore** | `DatabaseAdminRepository.dump()` writes structure and data. Import parses the file and reloads the rows in one transaction. |
+| **Referential safety** | Users are deactivated, not deleted. Patients and rooms with history cannot be deleted. |
+| **Money** | `Decimal` in Python, `DECIMAL(10,2)` in MySQL |
+| **Server clock** | `Executor.server_now()` reads `NOW()` from MySQL |
 
 ## 17. Security
 
-The full policy, including known gaps and the checklist before any real deployment, is in `SECURITY.md`. A summary:
+The full policy and known gaps are in `SECURITY.md`. Summary:
 
-- **Passwords:** salted bcrypt hashes. New passwords must be 8 to 72 characters. Changing a password needs the current one.
-- **Tokens:** a signed JWT (HS256) that expires after `JWT_EXPIRE_MINUTES` (default 480). The signing key comes from `JWT_SECRET`, and the backend refuses to start without it.
-- **Fresh user on every request:** the backend reloads the user from the database each time and uses the stored role, so deactivation and role changes take effect at once.
-- **Server-side role checks:** every protected route uses `require_feature(...)`. Hiding something in the frontend is never relied on.
-- **Doctor scope:** a nurse reaches only the assigned doctor's data. Records outside the scope answer "not found".
+- **Passwords:** salted bcrypt. New passwords: 8 to 72 bytes, with upper and lower case, a number, and a special character. Changing a password needs the current one. A dummy hash is checked for unknown usernames so timing does not reveal which usernames exist.
+- **Tokens:** signed JWT (HS256), expiring after `JWT_EXPIRE_MINUTES`. The key comes from `JWT_SECRET`, and the backend refuses to start without it.
+- **Fresh user on every request:** the role comes from the database, so deactivation and role changes apply at once.
+- **Server-side role checks and doctor scope:** every protected route uses `require_feature(...)`.
+- **Server-side input validation:** Pydantic allowlists, length limits, control-character rejection, and business rules in services.
 - **Rate limiting:** logins and public bookings.
-- **Public booking:** validated by Pydantic, restricted to the booking window, re-checked against real open slots, and only a request until staff approve it.
-- **Database:** parameterized SQL, a least-privilege account, and generic error messages with no SQL or driver details.
-- **Uploads:** profile pictures are PNG, JPEG, or WebP only (identified from the file's first bytes), at most 300 KB.
-- **Audit:** important actions are logged, with no passwords or medical details.
-- **Data:** only fictional sample data. The sample passwords are public and must never be used outside a personal computer.
+- **Public endpoints:** limited to clinic info, doctor and staff names, roles, specializations, weekdays, open times, and unavailable dates. They never return clinical data.
+- **Database:** parameterized SQL, a least-privilege account, and generic error messages. Admin-only Database page: `password_hash` and `avatar` columns are never sent to the browser, the audit log is append-only, and every change is audited without the values.
+- **Uploads:** PNG, JPEG, or WebP only (checked by file signature), at most 300 KB.
+- **Data:** only fictional sample data. Sample passwords are public.
 
 ## 18. Exception Handling and Validation
 
 ### 18.1 Validation
 
-Every request body is validated by Pydantic before it reaches a service: lengths, formats (email and phone patterns), ranges (quantity, price, slot minutes, weekdays), and rules such as "birthdate cannot be in the future". The frontend repeats the same checks for fast feedback, but the backend is the authority.
+Every request body is validated by Pydantic before it reaches a service: lengths, formats, character allowlists (letters only in names), ranges (quantity, price, slot minutes, weekdays), no time zones in times, and rules such as "birthdate cannot be in the future". The frontend filters characters while typing and repeats the checks, but the backend is the authority.
 
 ### 18.2 Custom exceptions
 
@@ -730,101 +756,115 @@ Every request body is validated by Pydantic before it reaches a service: lengths
 |---|---|---|
 | `AppError` | 400 | Base class for every expected error |
 | `ValidationFailedError` | 400 | Input is well-formed but breaks a business rule |
-| `AuthenticationError` | 401 | Not signed in, wrong credentials, or the account is deactivated |
+| `AuthenticationError` | 401 | Not signed in, wrong credentials, or deactivated account |
 | `PermissionDeniedError` | 403 | The role may not do this (or has no assigned doctor) |
 | `NotFoundError` | 404 | A record does not exist or is outside the user's scope |
 | `ConflictError` | 409 | The change clashes with current data |
-| `DuplicateEntryError` | 409 | A unique value (such as a username) already exists |
+| `DuplicateEntryError` | 409 | A unique value already exists |
 | `AppointmentConflictError` | 409 | The doctor already has an appointment at that time |
-| `InvalidStatusError` | 409 | The status change is not allowed by the workflow |
-| `InvalidScheduleError` | 400 | The time is outside the schedule, the booking window, or in the past |
-| `RateLimitError` | 429 | Too many attempts in a short time |
+| `InvalidStatusError` | 409 | The status change is not allowed |
+| `InvalidScheduleError` | 400 | The time is outside the schedule, on a day off, past, or outside the window |
+| `RateLimitError` | 429 | Too many attempts |
 | `DatabaseUnavailableError` | 503 | MySQL could not be reached or failed |
 
 ### 18.3 How errors reach the user
 
-`register_exception_handlers` turns every `AppError` into `{"detail": "<plain message>"}` with the right status code. Pydantic validation errors become a readable sentence with status 422. Unexpected errors are logged on the server and return a plain "Something went wrong" message. The frontend's `ApiError` carries that message, and every page shows it in an alert. Database driver errors are translated by `_translate` so SQL text is never leaked.
+`register_exception_handlers` turns every `AppError` into `{"detail": "<plain message>"}` with the right status. Pydantic errors become one readable sentence with status 422. Unexpected errors are logged and return a plain "Something went wrong" message. The frontend's `ApiError` carries the message into an alert. Driver errors are translated so SQL text is never leaked (only the admin Database page shows MySQL's own message to an administrator).
 
 ## 19. Screenshots of the Application
 
-*To be added.* Save screenshots in `source/documentation/screenshots/`, using fictional data only. Suggested list:
+*To be added.* Save screenshots in `source/documentation/screenshots/` using fictional data only. Suggested list:
 
-1. Landing page.
-2. Public booking page (details, doctor, and open times).
+1. Landing page (hero, staff cards, departments, departments popup).
+2. Public booking page with the calendar (red and amber days) and open times.
 3. Staff login.
 4. Nurse dashboard.
-5. Notifications (pending request, approve form, and the conflict warning).
-6. Appointments page (queue, exam room, agenda, rooms).
+5. Notifications (pending request, approve form, conflict warning).
+6. Appointments page (queue, exam room, agenda calendar, rooms, day-off banner).
 7. Doctor examination form with the live invoice.
 8. Invoice page.
 9. Patient record with visit history.
-10. History and Prescriptions pages.
-11. Admin users page and the schedule editor.
+10. History and Prescriptions.
+11. Admin users and the schedule editor.
 12. Admin rooms and clinic settings.
 13. Admin reports and audit log.
-14. Profile and settings pages.
+14. Admin Database page (tables, SQL console, backup and import).
+15. Profile and settings (password checklist).
 
 ## 20. Testing Results
 
-The project has no automated tests yet. Test by hand using the sample logins in `CONTRIBUTING.md`, and fill in the **Actual result** and **Status** columns as you run each case. Add automated tests as the backend grows.
+There are no automated tests yet. Test by hand using the sample logins in `CONTRIBUTING.md`, and fill in **Actual result** and **Status** as you run each case.
 
 | ID | Feature | Test case | Expected result | Actual result | Status |
 |---|---|---|---|---|---|
-| T-01 | Health check | Open `http://127.0.0.1:8000` with backend and MySQL running | Shows API: Online and Database: Connected | | |
-| T-02 | Health check | Stop MySQL and reload the status page | Shows Database: Not connected, with no error details | | |
-| T-03 | Login | Sign in as `nurse.spongebob` with the right password | Lands on the nurse dashboard | | |
+| T-01 | Health check | Open `http://127.0.0.1:8000` with backend and MySQL running | API: Online and Database: Connected | | |
+| T-02 | Health check | Stop MySQL and reload the status page | Database: Not connected, no error details | | |
+| T-03 | Login | Sign in as `nurse.dora` with the right password | Lands on the nurse dashboard | | |
 | T-04 | Login | Sign in with a wrong password | "Incorrect username or password." | | |
-| T-05 | Login | Fail five times for one username within 5 minutes | "Too many failed attempts." until the window passes | | |
+| T-05 | Login | Fail five times for one username within 5 minutes | "Too many failed attempts." | | |
 | T-06 | Login | Sign in as a deactivated user | "This account is deactivated." | | |
 | T-07 | Access control | As a nurse, open `/doctor/dashboard` by URL | Redirected to `/nurse` | | |
 | T-08 | Access control | As a nurse, call `POST /api/staff/appointments/{id}/start` in `/docs` | 403 | | |
-| T-09 | Doctor scope | As `dr.cheeks`, request an appointment that belongs to `dr.tentacles` | 404 "Appointment not found." | | |
-| T-10 | Booking | Submit a request with all fields valid on an open slot | Receipt shown, request appears as Pending for the doctor and nurse | | |
-| T-11 | Booking | Submit with an empty name, bad email, and bad phone | Field errors shown, nothing sent | | |
-| T-12 | Booking | Pick a date for a doctor's day off | "No open times on this day." | | |
-| T-13 | Booking | Switch online booking off in Clinic Settings, then open `/book` | "Online booking is currently closed." | | |
-| T-14 | Booking | Send 7 requests from one address within 10 minutes | The seventh is refused with a wait message | | |
-| T-15 | Approval | Approve a pending request | Appointment created, request becomes Approved, email logged or sent | | |
+| T-09 | Doctor scope | As `dr.cheeks`, request an appointment of `dr.tentacles` | 404 "Appointment not found." | | |
+| T-10 | Booking | Submit a valid request on an open slot | Receipt shown, request appears as Pending | | |
+| T-11 | Booking | Submit with empty name, bad email, bad phone | Field errors, nothing sent | | |
+| T-12 | Booking | Pick a date when the doctor does not work | Date is red and cannot be chosen | | |
+| T-13 | Booking | Switch online booking off, then open `/book` | "Online booking is currently closed." | | |
+| T-14 | Booking | Send 7 requests from one address within 10 minutes | The seventh is refused | | |
+| T-15 | Approval | Approve a pending request | Appointment created, request Approved, email logged or sent | | |
 | T-16 | Approval | Approve a request whose time was just booked | Warning shown, then 409 if confirmed | | |
-| T-17 | Approval | Disapprove with a reason of two characters | Blocked with a message asking for at least 3 | | |
-| T-18 | Double booking | Create two walk-ins for one doctor at the same minute | Second one fails with "That time is already booked for this doctor." | | |
+| T-17 | Approval | Disapprove with a 2-character reason | Blocked: at least 3 characters | | |
+| T-18 | Double booking | Create two walk-ins for one doctor at the same minute | Second fails: "That time is already booked for this doctor." | | |
 | T-19 | Double booking | Cancel an appointment, then book its time again | Booking succeeds | | |
 | T-20 | Check-in | Check in an appointment dated tomorrow | Button disabled, server also refuses | | |
-| T-21 | Queue | Check in three patients in order | Queue positions 1, 2, 3 match the check-in order | | |
-| T-22 | Exam | Start a second exam while one is in progress | "Finish the examination that is already in progress first." | | |
-| T-23 | Exam | Start an exam in a room that is Occupied | Refused with the room's status in the message | | |
-| T-24 | Exam | Finish with medicines and a follow-up time | Totals correct, room freed, status Examined, follow-up appointment created | | |
-| T-25 | Exam | Finish with a follow-up in the past | "The follow-up must be in the future." | | |
-| T-26 | Invoice | Pay an invoice before the exam is finished | Refused: the exam must be finished first | | |
-| T-27 | Invoice | Mark an Examined invoice as paid | Status Paid, appointment Completed, visit appears in History and the patient record | | |
-| T-28 | Invoice | Create an invoice for an Examined session with none | Invoice created from the default fee plus medicines | | |
-| T-29 | Cancel | Cancel a Checked-in appointment that has an unpaid invoice | Appointment and invoice both Cancelled | | |
-| T-30 | Reschedule | Reschedule to a past time | "Choose a time in the future." | | |
-| T-31 | Patients | Add a patient with the same name and birthdate as an existing one | "A patient with this name and birthdate already exists." | | |
-| T-32 | Patients | Delete a patient who has appointments | Refused to protect history | | |
-| T-33 | Users | Create a nurse with no assigned doctor | "Choose the doctor this nurse supports." | | |
-| T-34 | Users | Create a user with a taken username | "That username is already taken." | | |
-| T-35 | Users | As admin, deactivate your own account | Refused | | |
-| T-36 | Schedule | Save two overlapping blocks on one day | "Schedule blocks on the same day cannot overlap." | | |
-| T-37 | Rooms | Delete a room used in an appointment | Refused, with advice to set it to Maintenance | | |
-| T-38 | Settings | Save a slot length of 3 | Validation message (5 to 120) | | |
-| T-39 | Reports | Request a range longer than one year | "Choose a range of one year or less." | | |
-| T-40 | Audit | Perform an action, then open Audit Logs | A matching entry with the acting user appears | | |
-| T-41 | Profile | Upload a PNG, then a file renamed from `.txt` to `.png` | The PNG works, the fake image is rejected | | |
-| T-42 | Password | Change password to the same value as the current one | "Choose a password that is different..." | | |
-| T-43 | Error handling | Turn the backend off and use any page | "Cannot reach the server. Check that the backend is running." | | |
-| T-44 | Build | Run `npm run build` in `source/frontend` | Finishes with no TypeScript errors | | |
-| T-45 | Database | Reset the database and load `schema.sql` then `seed.sql` | Loads cleanly: 12 tables, 5 users | | |
+| T-21 | Check-in | Check in an appointment with no room | "Choose an exam room before checking the patient in." | | |
+| T-22 | Queue | Check in three patients in order | Positions 1, 2, 3 match the check-in order | | |
+| T-23 | Exam | Start a second exam while one is in progress | "Finish the examination that is already in progress first." | | |
+| T-24 | Exam | Start an exam in an Occupied room | Refused with the room's status | | |
+| T-25 | Exam | Finish with medicines and a follow-up | Totals correct, room freed, Examined, follow-up created | | |
+| T-26 | Exam | Finish with a follow-up in the past | "The follow-up must be in the future." | | |
+| T-27 | Invoice | Pay an invoice before the exam is finished | Refused | | |
+| T-28 | Invoice | Mark an Examined invoice as paid | Paid, appointment Completed, visit in History | | |
+| T-29 | Invoice | Create an invoice for an Examined session with none | Invoice created from the default fee plus medicines | | |
+| T-30 | Cancel | Cancel a Checked-in appointment with an unpaid invoice | Appointment and invoice Cancelled | | |
+| T-31 | Reschedule | Reschedule to a past time | "Choose a time in the future." | | |
+| T-32 | Patients | Add a patient with an existing name and birthdate | "A patient with this name and birthdate already exists." | | |
+| T-33 | Patients | Delete a patient who has appointments | Refused | | |
+| T-34 | Users | Create a nurse with no assigned doctor | "Choose the doctor this nurse supports." | | |
+| T-35 | Users | Create a user with a taken username | "That username is already taken." | | |
+| T-36 | Users | As admin, deactivate your own account | Refused | | |
+| T-37 | Schedule | Save two overlapping blocks on one day | "Schedule blocks on the same day cannot overlap." | | |
+| T-38 | Rooms | Delete a room used in an appointment | Refused, advice to set it to Maintenance | | |
+| T-39 | Settings | Save a slot length of 3 | Validation message (5 to 120) | | |
+| T-40 | Reports | Request a range longer than one year | "Choose a range of one year or less." | | |
+| T-41 | Audit | Perform an action, then open Audit Logs | A matching entry with the acting user | | |
+| T-42 | Profile | Upload a PNG, then a `.txt` renamed to `.png` | PNG works, the fake image is rejected | | |
+| T-43 | Password | Set a new password `password1` | "The password needs an uppercase letter, a special character." | | |
+| T-44 | Password | Change password to the same value as the current one | "Choose a password that is different..." | | |
+| T-45 | Error handling | Turn the backend off and use any page | "Cannot reach the server. Check that the backend is running." | | |
+| T-46 | Build | `npm run build` in `source/frontend` | No TypeScript errors | | |
+| T-47 | Database | Reset, then load `schema.sql`, `seed.sql`, `landing_update.sql` | 14 tables, 10 users | | |
+| T-48 | Day off | As a doctor, mark a free future date unavailable | Saved. The date turns red on `/book`. | | |
+| T-49 | Day off | Mark a day that has an open appointment | Refused with the counts of open appointments and requests | | |
+| T-50 | Day off | Approve a request, or reschedule, onto a day off | "The doctor is not available on that day." | | |
+| T-51 | Day off | As a nurse, call `POST /api/staff/days-off` | 403 | | |
+| T-52 | Input | Send a name with digits through `/docs` | 422 "A name cannot contain the character '1'." | | |
+| T-53 | Database page | Download a backup, open it | Header line, `DROP TABLE`, `CREATE TABLE`, and `INSERT` statements. Password hashes present. | | |
+| T-54 | Database page | Import a file that is not a backup | "This is not an AppointMed backup." | | |
+| T-55 | Database page | In the SQL console, run `DELETE FROM rooms` | "UPDATE and DELETE need a WHERE clause" | | |
+| T-56 | Database page | Run a statement that mentions `audit_logs` to change it | "The audit log is append-only and cannot be changed." | | |
+| T-57 | Database page | As a nurse, call `GET /api/admin/database/tables` | 403 | | |
+| T-58 | Landing page | Deactivate a doctor, reload `/` | That person disappears from Meet Our Staff | | |
 
 ## 21. Conclusion
 
 *To be written by the team after testing and the final demonstration.* Suggested points:
 
-1. What the system achieved against each objective in [Section 3](#3-objectives).
+1. What the system achieved against each objective in Section 3.
 2. Which object-oriented, data-structure, and information-management ideas proved most useful, and where.
-3. Challenges met (for example, preventing double booking under simultaneous requests, or keeping role rules on the server).
+3. Challenges met (preventing double booking under simultaneous requests, keeping role rules and validation on the server, safe backup and restore).
 4. Lessons learned from working as a team.
-5. Recommendations for future work. Natural next steps are automated tests, appointment reminders, a patient portal, a pharmacy module, and the hardening steps listed in `SECURITY.md`.
+5. Future work: automated tests, appointment reminders, a patient portal, a pharmacy module, tighter limits on the SQL console, and the hardening steps in `SECURITY.md`.
 
 ## 22. References
 
@@ -838,10 +878,11 @@ The project has no automated tests yet. Test by hand using the sample logins in 
 - Python `heapq` module. https://docs.python.org/3/library/heapq.html
 - PyJWT documentation. https://pyjwt.readthedocs.io
 - bcrypt for Python. https://pypi.org/project/bcrypt/
+- Republic Act 10173, Data Privacy Act of 2012 (Philippines). https://www.privacy.gov.ph/data-privacy-act/
 - Contributor Covenant, version 2.1. https://www.contributor-covenant.org
 
-*Add the related studies and systems from [Section 5](#5-review-of-related-studies-and-systems) here.*
+*Add the related studies and systems from Section 5 here.*
 
 ---
 
-*Last Updated: October 2026*
+*Last Updated: November 2026*
