@@ -457,62 +457,30 @@ def setup_database(reset: bool = False) -> bool:
 
 
 # ---------------------------------------------------------------- terminals and servers
-
 def launch(title: str, workdir: Path, parts: list) -> bool:
-    """Runs a command in a NEW VS Code integrated terminal."""
-
+    """Runs a command in a NEW terminal window that stays open. Works on Windows, macOS and Linux."""
     parts = [str(p) for p in parts]
-
-    if not shutil.which("code"):
-        fail("VS Code CLI was not found on PATH.")
-        return False
-
+    if IS_WINDOWS:
+        manual = f'cd /d "{workdir}" && {subprocess.list2cmdline(parts)}'
+    else:
+        manual = f"cd {shlex.quote(str(workdir))} && " + " ".join(shlex.quote(p) for p in parts)
     try:
         if IS_WINDOWS:
-            # Open a new VS Code terminal and execute the command.
-            command = subprocess.list2cmdline(parts)
-
-            script = (
-                f"$host.UI.RawUI.WindowTitle = '{title}'; "
-                f"Set-Location -LiteralPath '{workdir}'; "
-                f"{command}"
-            )
-
-            encoded = __import__("base64").b64encode(
-                script.encode("utf-16le")
-            ).decode("ascii")
-
-            subprocess.Popen(
-                [
-                    "code",
-                    "--reuse-window",
-                    "--command",
-                    "workbench.action.terminal.new"
-                ],
-                cwd=str(workdir)
-            )
-
-            # Execute the command in the newly opened terminal.
-            subprocess.Popen(
-                [
-                    "code",
-                    "--reuse-window",
-                    "--command",
-                    "workbench.action.terminal.sendSequence"
-                ],
-                cwd=str(workdir)
-            )
-
+            # start opens a new console; cmd /k keeps it open so errors stay readable.
+            subprocess.Popen(f'start "{title}" cmd /k "{subprocess.list2cmdline(parts)}"', shell=True, cwd=str(workdir))
             return True
-
+        if IS_MAC:
+            line = manual.replace("\\", "\\\\").replace('"', '\\"')
+            script = f'tell application "Terminal"\nactivate\ndo script "{line}"\nend tell'
+            subprocess.Popen(["osascript", "-e", script])
+            return True
+        if launch_linux(title, manual):
+            return True
     except OSError as exc:
-        fail(f"Could not open VS Code terminal: {exc}")
-
-    fail("Could not launch the VS Code integrated terminal.")
-    print("         " + subprocess.list2cmdline(parts))
+        fail(f"Could not open a terminal window: {exc}")
+    fail("No supported terminal was found. Open a new terminal yourself and run:")
+    print("         " + manual)
     return False
-
-
 
 def launch_linux(title: str, manual: str) -> bool:
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
