@@ -24,19 +24,18 @@ export default function StaffLoginPage() {
   const [busy, setBusy] = useState(false);
   const [showRecoveryHint, setShowRecoveryHint] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  // The backdrop re-renders the front page; keep it out of the tab order (aria-hidden + inert).
+
   const backdropRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (backdropRef.current) (backdropRef.current as HTMLDivElement & { inert: boolean }).inert = true;
   }, []);
 
-  // Prefill the username saved on a previous visit when "Remember me" was ticked.
   useEffect(() => {
     try {
       const saved = localStorage.getItem(REMEMBER_KEY);
       if (saved) setUsername(saved);
     } catch {
-      /* storage unavailable: start blank */
+      /* storage unavailable */
     }
   }, []);
 
@@ -54,7 +53,7 @@ export default function StaffLoginPage() {
         if (remember) localStorage.setItem(REMEMBER_KEY, username.trim());
         else localStorage.removeItem(REMEMBER_KEY);
       } catch {
-        /* storage unavailable: nothing to remember */
+        /* storage unavailable */
       }
       navigate(`/${role}`, { replace: true });
     } catch (err) {
