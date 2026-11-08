@@ -105,8 +105,23 @@ function weekdayLabel(weekdays: number[]): string {
 const ART_KEYS = ["spongebob", "sandy", "krabs", "squidward", "patrick", "pearl", "blossom", "bubbles", "buttercup", "dora"];
 
 function staffArt(member: StaffMember, index: number): { bg: string; figure: string } {
-  const name = member.full_name.toLowerCase();
-  const found = ART_KEYS.findIndex((key) => name.includes(key));
+  const words = member.full_name
+    .toLowerCase()
+    .replace(/^(dr|mr|mrs|ms)\.?\s+/, "") // drop a leading title
+    .split(/\s+/);
+
+  // 1) exact word match, first name first (so "Pearl Krabs" -> pearl, "Mr. Krabs" -> krabs)
+  let found = -1;
+  for (const word of words) {
+    found = ART_KEYS.indexOf(word);
+    if (found >= 0) break;
+  }
+
+  // 2) fallback: substring match, in case a name is spelled slightly differently
+  if (found < 0) {
+    found = ART_KEYS.findIndex((key) => words.some((w) => w.includes(key)));
+  }
+
   const slot = (found >= 0 ? found : index % ART_KEYS.length) + 1;
   return { bg: `/doctor-${slot}.png`, figure: `/docchar-${slot}.png` };
 }
