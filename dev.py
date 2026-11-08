@@ -392,7 +392,8 @@ def setup_database(reset: bool = False) -> bool:
     cfg = db_settings()
     if cfg is None:
         return False
-    missing = [name for name in SQL_FILES if not (DB_DIR / name).exists()]
+    needed = ("schema.sql", "seed.sql") if reset else SQL_FILES
+    missing = [name for name in needed if not (DB_DIR / name).exists()]
     if missing:
         fail("Missing file(s) in source/database: " + ", ".join(missing))
         return False
@@ -421,13 +422,11 @@ def setup_database(reset: bool = False) -> bool:
         return False
     existing = int(counted.stdout.decode("utf-8", "replace").strip() or 0)
     if existing == 0:
-        if mysql_step("Load seed.sql (sample data)", cfg, root_password, args=[CHARSET, name], path=DB_DIR / "seed.sql") is None:
+        if reset:
+            info("Reset loads schema.sql and seed.sql only, so landing_update.sql was skipped.")
+        elif mysql_step("Load landing_update.sql (departments and extra doctors)", cfg, root_password,
+                    args=[CHARSET, name], path=DB_DIR / "landing_update.sql") is None:
             return False
-    else:
-        info(f"The database already has {existing} user(s), so seed.sql was skipped.")
-    if mysql_step("Load landing_update.sql (departments and extra doctors)", cfg, root_password,
-                  args=[CHARSET, name], path=DB_DIR / "landing_update.sql") is None:
-        return False
     ok(f"Database '{name}' is ready. Sample logins are listed in CONTRIBUTING.md (Step 5).")
     return True
 
