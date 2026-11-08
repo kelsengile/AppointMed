@@ -2,7 +2,7 @@
 
 This document explains everything the AppointMed backend does: how a request travels through the code, what each file is responsible for, the business rules the services enforce, and how the code meets the CMSC 203 final-project requirements (and the related ITEC 104 and ITEC 105 ideas).
 
-For setup steps see `CONTRIBUTING.md`. For the overall system description, diagrams, and test cases see `source/documentation/DOCUMENTATION.md`. For the web app see `FRONTEND.md`.
+For setup see `CONTRIBUTING.md`. For the whole system, diagrams, and test cases see `source/documentation/DOCUMENTATION.md`. For the data layer see `DATABASE.md`, for the web app `FRONTEND.md`, and for short study notes [note.md](../../note.md).
 
 **Contents**
 
@@ -20,7 +20,7 @@ For setup steps see `CONTRIBUTING.md`. For the overall system description, diagr
 12. [Transactions and concurrency](#12-transactions-and-concurrency)
 13. [Configuration](#13-configuration)
 14. [Emails and logging](#14-emails-and-logging)
-15. [Legacy files](#15-legacy-files)
+15. [Admin database tools](#15-admin-database-tools)
 16. [Known issues and improvement ideas](#16-known-issues-and-improvement-ideas)
 17. [Compliance with the project instructions](#17-compliance-with-the-project-instructions)
 18. [How to extend the backend](#18-how-to-extend-the-backend)
@@ -29,7 +29,7 @@ For setup steps see `CONTRIBUTING.md`. For the overall system description, diagr
 
 ## 1. Overview
 
-The backend is a REST API written in Python with **FastAPI**. It is the only thing that talks to MySQL. The React web app and the public booking page both call it over HTTP and exchange JSON.
+The backend is a REST API written in Python with **FastAPI**. It is the only thing that talks to MySQL. The React web app and the public pages call it over HTTP and exchange JSON.
 
 | Concern | Choice |
 |---|---|
@@ -51,8 +51,9 @@ source/
 ├── requirements.txt
 ├── .env / .env.example           # configuration (the real .env is gitignored)
 ├── database/
-│   ├── schema.sql                # 12 tables and constraints
-│   └── seed.sql                  # fictional sample data
+│   ├── schema.sql                # 13 tables and constraints
+│   ├── seed.sql                  # fictional sample data
+│   └── landing_update.sql        # departments table for the front page
 └── backend/
     ├── core/
     │   ├── config.py             # Settings (frozen dataclass)
@@ -62,11 +63,16 @@ source/
     │   ├── mailer.py             # outgoing email
     │   └── utils.py              # to_money, blank_to_none, floor_minute, trim
     ├── models/domain.py          # User / Doctor / Nurse / Admin, AppointmentWorkflow
-    ├── schemas/api.py            # Pydantic request bodies
-    ├── repositories/             # base, user, patient, appointment, clinical, system
-    ├── services/                 # auth, booking, scheduling, appointment, billing,
-    │                             #   patient, dashboard, admin, waiting_queue
-    └── routes/                   # auth_routes, public_routes, staff_routes, admin_routes
+    ├── schemas/
+    │   ├── api.py                # Pydantic request bodies and shared checks
+    │   └── database.py           # bodies for the Database page
+    ├── repositories/             # base, user (+schedule, days off), patient, appointment
+    │                             #   (+notification), clinical, system, department,
+    │                             #   staff_directory, database
+    ├── services/                 # auth, booking, scheduling, appointment, billing, patient,
+    │                             #   dashboard, admin, department, staff_directory,
+    │                             #   database, backup_parser, waiting_queue
+    └── routes/                   # auth, public, staff, admin, database
 ```
 
 ## 3. How a request travels
@@ -95,35 +101,24 @@ sequenceDiagram
     R-->>B: JSON, or {"detail": "..."} on an AppError
 ```
 
-Two details matter:
-
 - The user is **reloaded from the database on every request**, and the role comes from that row, not from the token. Deactivating an account or changing a role takes effect immediately.
-- Every error that is an `AppError` becomes `{"detail": "<plain message>"}` with the right status code, so the frontend can show it as it is.
+- Every `AppError` becomes `{"detail": "<plain message>"}` with the right status code, so the frontend can show it as it is.
 
 ## 4. Entry point: `main.py`
 
-`main.py` is started with `uvicorn main:app --reload` from the `source` folder. It:
-
-1. Configures logging.
-2. Creates the `FastAPI` app (`AppointMed API`, version `1.0.0`).
-3. Adds **CORS** middleware, allowing only the origins in `CORS_ORIGINS`.
-4. Registers the exception handlers (`register_exception_handlers`).
-5. Includes the four routers: auth, public, staff, admin.
-6. Defines three extra routes:
+Started with `uvicorn main:app --reload` from the `source` folder. It configures logging, creates the `FastAPI` app (`AppointMed API`, version `1.0.0`), adds **CORS** middleware (only the origins in `CORS_ORIGINS`), registers the exception handlers, and includes the routers: auth, public, staff, and admin (the admin router includes the database router).
 
 | Route | Purpose |
 |---|---|
-| `GET /api/health` | Returns status, app name, version, environment, and UTC time |
-| `GET /api/health/db` | Returns whether MySQL is reachable (`database.is_reachable()`), never error details |
-| `GET /` | A small HTML status page that calls the two health routes and shows API and Database state |
-
-The status page follows the user's light or dark mode through a `prefers-color-scheme` media query.
+| `GET /api/health` | Status, app name, version, environment, and UTC time |
+| `GET /api/health/db` | Whether MySQL is reachable, never error details |
+| `GET /` | A small HTML status page (follows light or dark mode) |
 
 ## 5. Core package
 
 ### 5.1 `config.py`: `Settings`
 
-`Settings` is a **frozen dataclass**, so once built it cannot change. `Settings.from_env()` reads the environment (after `load_dotenv` loads `source/.env`) and applies safe defaults.
+A **frozen dataclass**, built once by `Settings.from_env()` after `load_dotenv` reads `source/.env`.
 
 | Field | Environment variable | Default |
 |---|---|---|
@@ -133,33 +128,26 @@ The status page follows the user's light or dark mode through a `prefers-color-s
 | `jwt_secret` | `JWT_SECRET` | **none, required** |
 | `jwt_expire_minutes` | `JWT_EXPIRE_MINUTES` | `480` |
 | `cors_origins` | `CORS_ORIGINS` | the two Vite addresses |
-| `smtp_host`, `smtp_port`, `smtp_user`, `smtp_password`, `smtp_from`, `smtp_tls` | `SMTP_*` | empty host, `587`, empty, empty, `no-reply@appointmed.example`, `true` |
+| `smtp_*` | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_TLS` | empty host, `587`, empty, empty, `no-reply@appointmed.example`, `true` |
 
-- A missing `JWT_SECRET` raises `RuntimeError` and the app refuses to start.
-- A secret still equal to `change_this_secret` logs a warning.
-- `smtp_enabled` is a property that is true when `SMTP_HOST` is set.
-- `_split` turns `"a, b, c"` into `["a", "b", "c"]` for the CORS list.
-- The module exposes one shared object, `settings`.
+A missing `JWT_SECRET` raises `RuntimeError` and the app refuses to start. A secret still equal to `change_this_secret` logs a warning. `smtp_enabled` is true when `SMTP_HOST` is set. The module exposes one shared object, `settings`.
 
 ### 5.2 `database.py`: `Executor`, `Transaction`, `Database`
 
-The repositories depend on a small abstract interface, **`Executor`**, not on a concrete connection.
+Repositories depend on the small abstract interface **`Executor`**, not on a concrete connection.
 
 | Class | Role |
 |---|---|
-| `Executor` (abstract) | Declares `fetch_all`, `execute` (returns the new row id), and `update` (returns rows changed). Provides `fetch_one` and `server_now()` on top of them. |
-| `Transaction` | Several statements on **one** connection. Does not commit by itself. |
-| `Database` | A pool wrapper. Each call borrows a connection, commits at once (`autocommit=True`), and returns it. `transaction()` gives a `Transaction` that commits when the `with` block ends normally and rolls back on any exception. |
+| `Executor` (abstract) | `fetch_all`, `execute` (returns the new id), `update` (returns rows changed), plus `fetch_one` and `server_now()` |
+| `Transaction` | Several statements on **one** connection. Commit and rollback are done by `Database.transaction()`. |
+| `Database` | A pool wrapper. Each call borrows a connection and commits at once (`autocommit=True`). `transaction()` commits when the `with` block ends normally and rolls back on any exception. |
 
-Behavior worth knowing:
+- The pool is created on **first use**, so the app starts even if MySQL is down. It has 8 connections, `utf8mb4`, `pool_reset_session=True`, and a 5-second connection timeout.
+- If a single autocommit call fails with `DatabaseUnavailableError`, `Database._retry` rebuilds the pool once and tries again (useful after the database was recreated).
+- Driver errors go through `_translate`: a duplicate-entry error becomes `DuplicateEntryError`, other integrity errors become `ConflictError`, and everything else is logged and becomes `DatabaseUnavailableError`. SQL text never reaches the user.
+- `server_now()` reads `NOW()` from MySQL so Python's "now" agrees with `CURDATE()` and `NOW()` in queries.
 
-- The pool is created on **first use**, guarded by a lock, so the app can start even if MySQL is down. It has 8 connections, `utf8mb4`, and a 5-second connection timeout.
-- Driver errors go through `_translate`: a duplicate-entry error becomes `DuplicateEntryError`, any other integrity error becomes `ConflictError`, and everything else is logged and becomes `DatabaseUnavailableError`. SQL text and driver details never reach the user.
-- `server_now()` reads `NOW()` from MySQL so the app's "now" agrees with `CURDATE()` and `NOW()` used inside queries.
-- `is_reachable()` runs `SELECT 1` and powers the health check.
-- The module exposes one shared object, `database`.
-
-Because `Database` and `Transaction` are both `Executor`s, **any repository works inside or outside a transaction without changing**. That is the polymorphism the design is built around.
+Because `Database`, `Transaction`, and the admin `AdminSession` are all `Executor`s, **any repository works inside or outside a transaction without changing**. That is the polymorphism the design is built around.
 
 ### 5.3 `exceptions.py`
 
@@ -178,69 +166,59 @@ AppError (400)
 └── DatabaseUnavailableError (503)
 ```
 
-Each class carries a `status_code` and a `default_message`, and any message can be overridden when it is raised. `register_exception_handlers(app)` attaches three handlers:
-
 | Handler | Result |
 |---|---|
 | `AppError` | `{"detail": message}` with the error's status code |
-| `RequestValidationError` (Pydantic) | Status 422 with the messages joined into one sentence, such as `contact_number: String should match pattern ...` |
-| `Exception` (anything unexpected) | Logs the stack trace and returns 500 with "Something went wrong on the server. Please try again." |
+| `RequestValidationError` (Pydantic) | Status 422 with the messages joined into one sentence, such as `contact_number: Enter a valid contact number...` |
+| `Exception` (unexpected) | Logs the stack trace, returns 500 "Something went wrong on the server. Please try again." |
 
 ### 5.4 `security.py`
 
 | Item | What it does |
 |---|---|
 | `hash_password`, `verify_password` | bcrypt hash with a random salt, and a safe comparison that returns `False` on a malformed hash |
-| `create_token` | A signed JWT with `sub` (user id), `role`, `iat`, and `exp` |
-| `decode_token` | Verifies signature and expiry. Failure raises `AuthenticationError("Your session has expired...")`. |
-| `get_current_user` | FastAPI dependency. Reads the `Bearer` token, loads the user fresh, checks `is_active`, and returns a `User` object (built by `User.from_row`). |
-| `require_feature(feature)` | Builds a dependency that returns the user only if `user.can_access(feature)`, otherwise raises `PermissionDeniedError`. |
-| `RateLimiter` | An in-memory sliding window. See below. |
+| `create_token`, `decode_token` | A signed JWT (`sub`, `role`, `iat`, `exp`). Failure raises `AuthenticationError("Your session has expired...")`. |
+| `get_current_user` | Dependency: reads the Bearer token, loads the user fresh, checks `is_active`, returns a `User` |
+| `require_feature(feature)` | Builds a dependency that returns the user only if `user.can_access(feature)`, otherwise `PermissionDeniedError` |
+| `RateLimiter` | In-memory sliding window over a `deque` per key, thread-safe, using `time.monotonic()` |
 | `login_limiter` | 5 events per 300 seconds, keyed by lowercase username |
 | `booking_limiter` | 6 events per 600 seconds, keyed by client IP |
 
-`RateLimiter` keeps a `deque` of timestamps per key, uses `time.monotonic()`, and is thread-safe with a lock. `is_blocked(key)` prunes old events then checks the count, `record(key)` adds an event, and `reset(key)` forgets the key (used after a successful login).
-
 ### 5.5 `mailer.py`
 
-`Mailer.send(to, subject, body)` starts a **daemon thread** so the request is never held up by email. If `to` is empty it does nothing. In the thread:
-
-- When SMTP is **not** configured, the whole email is written to the log (so developers can read it in the console).
-- When it is configured, it connects, optionally uses STARTTLS, logs in if a username is set, and sends. Failures are logged and never break the request.
+`Mailer.send(to, subject, body)` starts a **daemon thread** so the request is never delayed. With no address it does nothing. When SMTP is not configured, the whole email is written to the log. When it is configured, it connects (implicit SSL on port 465, otherwise optional STARTTLS), logs in if a username is set, and sends. Failures are logged with a clear reason and never break the request. `send_blocking` sends immediately and raises on failure, for checking SMTP settings.
 
 ### 5.6 `utils.py`
 
 | Function | Purpose |
 |---|---|
-| `to_money(value)` | Converts to a two-decimal `Decimal` (round half up). Money is never a float. |
-| `blank_to_none(value)` | Trims text and turns an empty result into `None` so it is stored as `NULL`. |
-| `floor_minute(value)` | Drops seconds so times line up with slots. |
-| `trim(text, limit)` | Shortens text with an ellipsis so it fits a `VARCHAR`. |
+| `to_money(value)` | Two-decimal `Decimal` (round half up). Money is never a float. |
+| `blank_to_none(value)` | Trims text and turns an empty result into `None` |
+| `floor_minute(value)` | Drops seconds so times line up with slots |
+| `trim(text, limit)` | Shortens text with an ellipsis so it fits a `VARCHAR` |
 
 ## 6. Domain models
 
-`models/domain.py` holds the two domain ideas that are not just database rows.
-
 ### 6.1 `User` and the role subclasses
 
-`User` is an **abstract class**. Its private fields (`_id`, `_username`, `_full_name`, `_email`, `_specialization`, `_assigned_doctor_id`) are exposed through read-only properties. The constructor rejects a missing username or full name with `ValidationFailedError`.
+`User` is an **abstract class**. Its private fields are exposed through read-only properties, and the constructor rejects a missing username or full name.
 
 | Member | Meaning |
 |---|---|
-| `role`, `features` | Class-level: the role name and the set of features that role may open |
+| `role`, `features` | Class-level: the role name and the set of features the role may open |
 | `can_access(feature)` | Polymorphic permission check |
 | `scope_doctor_id` | **Abstract** property: the doctor whose clinical data this user works with |
-| `from_row(row)` | **Factory** that picks the right subclass from the row's `role` |
+| `from_row(row)` | **Factory** that picks the subclass from the row's `role` |
 
 | Subclass | Features | `scope_doctor_id` |
 |---|---|---|
-| `Doctor` | dashboard, appointments, notifications, patients, history, invoice, prescriptions, exam | Their own id |
-| `Nurse` | the same set without `prescriptions` and `exam` | The assigned doctor, or `PermissionDeniedError` if none |
-| `Admin` | admin_dashboard, users, rooms, settings, reports, audit | Always raises `PermissionDeniedError` (admins do not touch clinical records) |
+| `Doctor` | dashboard, appointments, notifications, patients, history, invoice, prescriptions, exam, schedule | Their own id |
+| `Nurse` | dashboard, appointments, notifications, patients, history, invoice | The assigned doctor, or `PermissionDeniedError` if none |
+| `Admin` | admin_dashboard, users, rooms, settings, reports, audit, database | Always raises `PermissionDeniedError` |
 
 ### 6.2 `AppointmentWorkflow`
 
-A small state machine. `STATUSES` lists the six statuses, `TRANSITIONS` maps each status to the set it may become, `can_move(current, target)` answers yes or no, and `ensure(current, target)` raises `InvalidStatusError("This appointment is X, so it cannot become Y.")`.
+A small state machine. `TRANSITIONS` maps each status to the set it may become. `can_move(current, target)` answers yes or no, and `ensure(...)` raises `InvalidStatusError("This appointment is X, so it cannot become Y.")`.
 
 | From | May become |
 |---|---|
@@ -254,21 +232,36 @@ A small state machine. `STATUSES` lists the six statuses, `TRANSITIONS` maps eac
 
 `schemas/api.py` holds every request body as a Pydantic model. All inherit from `Schema`, which trims whitespace and ignores unknown fields. A body that breaks a rule never reaches a service.
 
+**Shared checks**
+
+| Check | Rule |
+|---|---|
+| `_person_name` | Letters, combining marks, and ` ' ’ . , ( ) -` only. At least two letters. No digits. |
+| `_specialization`, `_room_name`, `_medicine_text`, `_address` | Character allowlists for each field kind |
+| `_no_control` | Rejects control characters (newlines allowed only in long text) |
+| `_phone` | 7 to 15 digits; spaces, `+`, `-`, `( )` allowed |
+| `_naive` | Times are clinic-local: a time zone is refused, and the year must be 2000 to 2100 |
+| `_birthdate` | Not in the future and not before 1900 |
+| `_check_optional_email` | Empty or a plausible address |
+| `_check_password_strength` | At most 72 bytes, at least 8 characters, uppercase, lowercase, number, and special character |
+
 | Schema | Used by | Notable rules |
 |---|---|---|
-| `LoginRequest` | login | username 1 to 50, password 1 to 200 |
-| `ProfileUpdate`, `AvatarUpload`, `PasswordChange` | profile | name 2 to 100, optional valid email, image at most 500,000 characters, new password 8 to 72 |
-| `BookingRequest` | public booking | name 2 to 100, birthdate not in the future, sex is Male/Female/Other, phone and email patterns, address 3 to 255, reason 3 to 255 |
+| `LoginRequest` | login | username 1 to 50, password 1 to 200 (strength is not checked at login) |
+| `ProfileUpdate`, `AvatarUpload`, `PasswordChange` | profile | name checks, optional email, image text at most 500,000 characters, new password strong |
+| `BookingRequest` | public booking | all details required, sex Male or Female, email pattern (lowercased), phone and address checks |
 | `ApproveRequest`, `DismissRequest` | notifications | optional room and time, dismissal note 3 to 255 |
-| `AppointmentCreate` | walk-ins | existing `patient_id` or a name, optional birthdate, sex, contact, time, reason, `check_in_now` |
+| `AppointmentCreate` | walk-ins | existing `patient_id` or a name, optional details, `check_in_now` |
 | `RescheduleRequest`, `CancelRequest`, `RoomAssign` | appointments | new time, optional reason, optional room |
-| `PrescriptionItemIn` | exam | medicine name, quantity 1 to 9999, unit price at least 0 with two decimals |
-| `ExamFinish` | exam | diagnosis 2 to 2000, notes, fee at least 0, up to 30 medicine lines, optional follow-up time |
-| `PatientIn` | patients | name, optional birthdate (not future), sex, contact, valid email, address, condition |
+| `DayOffIn` | days off | a date and an optional reason |
+| `PrescriptionItemIn`, `ExamFinish` | exam | quantity 1 to 9999, price 0 to 1,000,000 with two decimals, diagnosis 2 to 2000, up to 30 medicine lines, optional follow-up time |
+| `PatientIn` | patients | name, optional birthdate, sex, phone, email, address, condition |
 | `RoomStatusUpdate`, `RoomIn` | rooms | status is Available, Occupied, or Maintenance |
-| `UserCreate`, `UserUpdate`, `PasswordReset`, `ActiveToggle` | admin users | username pattern `[A-Za-z0-9._-]{3,50}`, password 8 to 72 |
+| `UserCreate`, `UserUpdate`, `PasswordReset`, `ActiveToggle` | admin users | username pattern `[A-Za-z0-9._-]{3,50}`, strong password |
 | `ScheduleBlock`, `ScheduleUpdate` | admin schedule | weekday 1 to 7, slot 5 to 120 minutes, at most 70 blocks |
-| `SettingsUpdate` | admin settings | a dictionary of key to text, checked key by key in the service |
+| `SettingsUpdate` | admin settings | at most 10 keys of `[a-z_]` and values up to 255 characters, then validated key by key in the service |
+
+`schemas/database.py` holds `RowValues` (at most 60 columns, valid column names, values up to 70,000 characters), `SqlRequest` (1 to 5,000 characters), and `BackupImport` (up to 30,000,000 characters).
 
 ## 8. Repositories (all SQL)
 
@@ -276,79 +269,78 @@ A small state machine. `STATUSES` lists the six statuses, `TRANSITIONS` maps eac
 
 ### 8.1 `BaseRepository`
 
-An abstract class with generic `get`, `create`, `update`, and `delete`. Subclasses must define `table` and `columns`. `columns` is a **whitelist**: `_allowed` raises `ValueError` if the data contains a column that is not in it, so a column name can never come from user input. `placeholders(n)` builds `%s, %s, ...` lists for `IN (...)` queries.
+An abstract class with generic `get`, `create`, `update`, and `delete`. Subclasses define `table` and `columns`. `columns` is a **whitelist**: `_allowed` raises `ValueError` if data contains a column that is not in it, so a column name can never come from user input. `placeholders(n)` builds `%s, %s, ...` for `IN (...)`.
 
 ### 8.2 The repositories
 
 | Repository | Table | Notable methods |
 |---|---|---|
-| `UserRepository` | `users` | `get` (never returns the hash), `get_detail` (with the assigned doctor's name), `get_by_username` (login only, includes the hash), `list_users`, `touch_login`, `set_password`, avatar get and set, `public_doctors` (active doctors with a schedule and their weekdays), `nurses_for_doctor` (fewest pending requests first), `active_doctors` |
-| `ScheduleRepository` | `doctor_schedules` | `blocks_for_day`, `blocks_for_doctor` (times as `HH:MM`), `replace` (delete then insert, used inside a transaction). Converts MySQL `TIME` (a `timedelta`) to `datetime.time`. |
-| `PatientRepository` | `patients` | `search` (name, contact, or email, scoped to the doctor, with visit counts), `get_scoped`, `find_match` (same name ignoring case and same birthdate, NULL-safe with `<=>`), `has_history` |
-| `AppointmentRepository` | `appointments` | `get_item` (with patient, room, and invoice details), `list_for_doctor` (today, upcoming, all, or one date, with search and status filter), `queue`, `consulting`, `unbilled`, `conflict_exists`, `booked_times`, `status_counts_today` |
-| `NotificationRepository` | `notifications` | `list_for_doctor` (pending first, with a `slot_taken` warning flag), `resolve` (only if still Pending, returns rows changed), `count_pending` |
-| `ExaminationRepository` | `examinations` | `encounters`: completed visits with diagnosis and bill, filterable by patient, text, and dates |
-| `PrescriptionRepository` | `prescriptions` | `add_items`, `items_for_appointments` (grouped with a `defaultdict`), `list_for_doctor` |
-| `InvoiceRepository` | `invoices` | `get_by_appointment`, `get_item`, `list_for_doctor`, `set_amounts` (Unpaid only), `mark_paid` (Unpaid only, returns 0 otherwise), `count_awaiting_payment` |
-| `RoomRepository` | `rooms` | `list_with_occupant`, `in_use` |
-| `SettingsRepository` | `clinic_settings` | `all_rows`, `as_dict`, `upsert` (`ON DUPLICATE KEY UPDATE`) |
-| `AuditRepository` | `audit_logs` | `record` (details cut to 255 characters), `search` (page, total, and the list of known actions) |
-| `ReportRepository` | read-only | `overview` for the admin dashboard, `report(date_from, date_to)` with status counts, per-doctor totals, daily totals, and new patients |
+| `UserRepository` | `users` | `get` (never returns the hash), `get_detail`, `get_by_username` (login only, includes the hash), `list_users`, `touch_login`, `set_password`, avatar get and set, `public_doctors`, `nurses_for_doctor` (fewest pending first), `active_doctors` |
+| `ScheduleRepository` | `doctor_schedules` | `blocks_for_day`, `blocks_for_doctor` (`HH:MM`), `replace` (delete then insert, inside a transaction) |
+| `DayOffRepository` | `doctor_days_off` | `in_range`, `is_off`, `remove` |
+| `PatientRepository` | `patients` | `search`, `get_scoped`, `find_match` (NULL-safe `<=>`), `has_history` |
+| `AppointmentRepository` | `appointments` | `get_item`, `list_for_doctor`, `queue`, `consulting`, `unbilled`, `conflict_exists`, `booked_times`, `booked_days`, `active_count_on`, `status_counts_today` |
+| `NotificationRepository` | `notifications` | `list_for_doctor` (with `slot_taken`), `resolve` (only if still Pending), `count_pending`, `pending_days`, `pending_count_on` |
+| `ExaminationRepository`, `PrescriptionRepository`, `InvoiceRepository` | clinical tables | `encounters`, `add_items`, `items_for_appointments`, `get_by_appointment`, `set_amounts` and `mark_paid` (Unpaid only), `count_awaiting_payment` |
+| `RoomRepository`, `SettingsRepository`, `AuditRepository`, `ReportRepository` | system tables | `list_with_occupant`, `in_use`, `upsert`, `record`, `search`, `overview`, `report` |
+| `DepartmentRepository` | `departments` | `list_active` (featured first, with a doctor count by matching specialization) |
+| `StaffDirectoryRepository` | `users` | `list_active`: doctors, then nurses, then admins, with only safe fields and each doctor's weekdays |
+| `DatabaseAdminRepository` | any table | metadata from `information_schema`, `page`, `insert`, `update_row`, `delete_row`, `insert_many`, `dump` (see Section 15) |
 
-Several guards are done in SQL on purpose so they hold even under simultaneous requests: `resolve` only updates a row that is still `Pending`, and `set_amounts` and `mark_paid` only touch an `Unpaid` invoice.
+Several guards are done in SQL on purpose so they hold under simultaneous requests: `resolve` only updates a row that is still `Pending`, and `set_amounts` and `mark_paid` only touch an `Unpaid` invoice.
 
 ## 9. Services (business rules)
 
-Services hold the rules. Each receives its `Database` (and a `Mailer` where needed) through the constructor, so they can be created with test doubles.
+Each service receives its `Database` (and a `Mailer` where needed) through the constructor, so it can be created with test doubles.
 
 ### 9.1 `AuthService`
 
 | Method | Rules |
 |---|---|
-| `login` | Blocks after 5 failures per username in 5 minutes. A wrong username or password records a failure, writes a `LOGIN_FAILED` audit entry, and returns one generic message. A deactivated account is refused. On success it resets the limiter, updates `last_login_at`, writes a `LOGIN` audit entry, and returns the token and a small user object. |
-| `profile` | Returns the user detail with the avatar as a `data:` URL. The image type is detected from the first bytes, not trusted from the upload. |
-| `update_profile` | Changes the user's own name and email. |
-| `set_avatar` | Accepts only a PNG, JPEG, or WebP data URL, valid base64, at most 300,000 bytes, with a real image signature. |
-| `remove_avatar` | Clears the picture. |
-| `change_password` | Requires the current password and a new one that is different. |
+| `login` | Blocks after 5 failures per username in 5 minutes. For an unknown username it still checks a dummy bcrypt hash so the response time does not reveal real usernames. A wrong login records a failure, writes `LOGIN_FAILED`, and returns one generic message. A deactivated account is refused. Success resets the limiter, updates `last_login_at`, writes `LOGIN` (in a transaction), and returns the token and a small user object. |
+| `profile` | Returns user detail with the avatar as a `data:` URL (type detected from the first bytes) |
+| `update_profile`, `remove_avatar` | Change own name and email, or clear the picture |
+| `set_avatar` | PNG, JPEG, or WebP data URL, valid base64, at most 300,000 bytes, real image signature |
+| `change_password` | Requires the current password, and a new one that is different |
 
-### 9.2 `BookingService` and `SchedulingService`
+### 9.2 `SchedulingService` and `BookingService`
 
 `SchedulingService.available_slots(doctor_id, day)`:
 
 1. Confirms the doctor exists, is a doctor, and is active.
-2. Reads "now" from the database and the set of **taken** times for the day (non-cancelled appointments plus pending requests).
-3. For each schedule block on that weekday, steps from `start_time` by `slot_minutes` while a whole slot still fits before `end_time`.
-4. Keeps a slot only if it is in the future and not taken, then returns them sorted.
+2. Returns nothing if the doctor marked that date as a day off.
+3. Reads "now" from the database and the set of **taken** times (non-cancelled appointments plus pending requests).
+4. For each schedule block on that weekday, steps from `start_time` by `slot_minutes` while a whole slot fits.
+5. Keeps a slot only if it is in the future and not taken.
 
-`ensure_bookable(doctor_id, when)` raises `InvalidScheduleError` unless `when` is one of those open slots.
+`ensure_bookable(doctor_id, when)` raises `InvalidScheduleError` unless `when` is an open slot.
 
-`BookingService`:
-
-| Method | Rules |
+| `BookingService` method | Rules |
 |---|---|
-| `catalog` | Clinic name and address, whether booking is open, the booking window, and bookable doctors |
-| `slots` | Refuses if online booking is off, or if the day is before today or beyond the window |
-| `book` | Rounds to the minute, re-checks the day, and in one transaction: confirms the doctor, re-confirms the slot is open (the server never trusts the browser), picks the nurse with the fewest pending requests, requires an email, stores the request as `Pending` with origin `Website`, and writes an audit entry with no user |
+| `catalog` | Clinic name and address, whether booking is open, the window, and bookable doctors |
+| `slots` | Refuses if booking is off, or the day is before today or beyond the window |
+| `calendar` | For the booking calendar: working weekdays, days off (dates only), and working days with no open slot left. Range at most 62 days. |
+| `book` | Rounds to the minute, re-checks the day, and in one transaction: confirms the doctor, **locks the doctor row**, re-confirms the slot is open, picks the least-busy nurse, stores a `Pending` request (origin `Website`), and writes an audit entry with no user |
 
 ### 9.3 `AppointmentService`
 
-This is the largest service. Every method works on `user.scope_doctor_id`, loads the appointment with `_load`, and answers `NotFoundError` if it belongs to another doctor.
+Every method works on `user.scope_doctor_id`, loads the appointment with `_load`, and answers `NotFoundError` if it belongs to another doctor. Times are also checked against days off with `_ensure_working`.
 
 | Method | What it does |
 |---|---|
 | `list_notifications` | Requests for the doctor, optionally by status |
-| `approve_notification` | In one transaction: checks the request is still pending, takes the chosen or requested time, validates the room (must exist, not in maintenance), checks for a time conflict, finds or creates the patient (updating contact details of an existing one), creates the appointment as `Scheduled`, marks the request `Converted`, and writes an audit entry. After the transaction it emails the confirmation. |
-| `dismiss_notification` | Marks a pending request `Dismissed` with the reason, audits it, and emails the reason |
-| `list_appointments` | Today, upcoming, all, or a date, plus search |
-| `create_appointment` | A walk-in or phone appointment for an existing patient (scoped) or a new one (reused if the name and birthdate match). Rejects past dates, rejects check-in for another day, and checks for a time conflict. |
-| `check_in` | Needs a legal transition. Refuses future dates. Makes sure a patient record exists. Sets `Checked-in` and `checked_in_at` from the database clock. |
-| `start_exam` | Needs a legal transition. Refuses if another exam is in progress. Makes sure a patient record exists. If a room is chosen it must be `Available`, and it becomes `Occupied`. Sets `Consulting`. Creates the invoice with the default consultation fee if none exists. |
-| `release` | Consulting back to Checked-in (started by mistake). Frees the room. |
-| `finish_exam` | Needs a legal transition. Optionally books a **follow-up** (must be in the future and conflict-free, assigned to the nurse with the fewest pending requests, source `Follow-up`). Saves the examination, creates the prescription and its lines (if any), totals the invoice (fee plus medicines), frees the room, and sets `Examined`. |
-| `cancel` | Needs a legal transition. Sets `Cancelled`. Also cancels an unpaid invoice. |
-| `reschedule` | Only `Scheduled` appointments. The new time must be in the future and conflict-free. |
-| `assign_room` | Only before the exam starts. The room must exist and not be in maintenance. |
+| `approve_notification` | One transaction: still pending, chosen or requested time, not in the past, doctor working that day, room valid (not in maintenance), no time conflict, find or create the patient (updating contact details of an existing one), create the appointment as `Scheduled`, mark the request `Converted`, audit. The confirmation email is queued after the transaction. |
+| `dismiss_notification` | Marks a pending request `Dismissed` with the reason, audits it, emails the reason |
+| `list_appointments`, `calendar` | Agenda lists, and the working weekdays, busy days, and days off for the agenda calendar (range at most 62 days) |
+| `set_day_off`, `clear_day_off` | Doctor only. Today or later and within a year. Locks the doctor row. Refused while the day still has open appointments or pending requests. Audited. |
+| `create_appointment` | Walk-in for an existing patient (scoped) or a new one (reused if name and birthdate match). Rejects past dates and days off, rejects check-in for another day, checks conflicts. |
+| `check_in` | Legal transition, **room required**, not a future date, patient record ensured, sets `Checked-in` and `checked_in_at` |
+| `start_exam` | **Locks the doctor row**, legal transition, refuses if another exam is in progress, optional room must be `Available` and becomes `Occupied`, sets `Consulting`, creates the invoice with the default fee if none exists |
+| `release` | Consulting back to Checked-in. Frees the room. |
+| `finish_exam` | Legal transition. Optional follow-up (future, doctor working, conflict-free, assigned to the least-busy nurse, source `Follow-up`). Saves the examination, the prescription and lines, totals the invoice (fee plus medicines), frees the room, sets `Examined`. |
+| `cancel` | Legal transition, sets `Cancelled`, and cancels an unpaid invoice |
+| `reschedule` | `Scheduled` only. The new time must be future, a working day, and conflict-free. |
+| `assign_room` | Only before the exam starts. Room must exist and not be in maintenance. |
 | `list_rooms`, `set_room_status` | Room board for doctors and nurses |
 
 Almost every state change also calls `AuditRepository.record(...)`.
@@ -357,86 +349,78 @@ Almost every state change also calls `AuditRepository.record(...)`.
 
 | Method | Rules |
 |---|---|
-| `invoices` | The doctor's invoices (by status), each with its medicine lines |
-| `unbilled` | Examined sessions that have no invoice |
-| `bill` | Only for an `Examined` session with a patient and no invoice. Totals the fee from settings plus the prescribed medicines. |
-| `pay` | The invoice must belong to the doctor, be `Unpaid`, and its appointment must be `Examined`. In one transaction it marks the invoice paid (conditional update) and sets the appointment to `Completed`. |
-| `history` | Completed encounters with their medicine lines. Rejects a start date after the end date. |
-| `prescriptions` | The doctor's prescriptions, searchable by patient or diagnosis |
+| `invoices`, `unbilled` | The doctor's invoices with medicine lines, and examined sessions with no invoice |
+| `bill` | Only for an `Examined` session with a patient and no invoice. Fee from settings plus prescribed medicines. |
+| `pay` | The invoice belongs to the doctor, is `Unpaid`, and its appointment is `Examined`. One transaction: conditional update to paid, and the appointment becomes `Completed`. |
+| `history`, `prescriptions` | Completed encounters with medicine lines (start date not after end date), and the doctor's prescriptions |
 
-### 9.5 `PatientService`
+### 9.5 `PatientService`, `DashboardService`, `AdminService`
 
-Patients are scoped to the doctor. `create` refuses a duplicate name and birthdate. `update` and `delete` first load the patient through the scope check. `delete` refuses if the patient has **any** appointment on record, to protect clinical history. `ensure_access` is used by the patient history route.
-
-### 9.6 `DashboardService`
-
-| Method | Returns |
+| Service | Rules |
 |---|---|
-| `staff` | Today's count per status, pending requests, unbilled sessions, sessions awaiting payment, the queue (built with `WaitingQueue`), the patient being examined, and the next five upcoming scheduled appointments |
-| `admin` | Clinic-wide totals plus the eight latest audit entries |
-| `report` | Defaults to the last 30 days. The start must not be after the end, and the range must be at most 366 days. |
+| `PatientService` | Patients are scoped to the doctor. `create` refuses a duplicate name and birthdate. `delete` refuses if the patient has any appointment. |
+| `DashboardService` | `staff`: today's counts, pending requests, unbilled sessions, sessions awaiting payment, the queue (via `WaitingQueue`), the patient being examined, and the next five scheduled appointments. `admin`: totals and the eight latest audit entries. `report`: last 30 days by default, range at most 366 days. |
+| `AdminService` users | A nurse **must** be assigned to an active doctor. A duplicate username is a clear conflict. Users are deactivated, not deleted. An admin cannot deactivate their own account. Passwords are hashed before storing. All changes and audits run in transactions. |
+| `AdminService` schedules | Each block ends after it starts and is at least one slot long. Blocks are sorted and neighbors checked, so none overlap. The schedule is replaced in one transaction. |
+| `AdminService` rooms and settings | Unique room names. A room in any appointment cannot be deleted. Each setting is validated key by key (name and address required, fee 0 to 1,000,000, slot 5 to 120, window 1 to 365, booking `true` or `false`, unknown keys refused) and then saved together. |
 
-### 9.7 `AdminService`
+### 9.6 `DepartmentService`, `StaffDirectoryService`
 
-| Area | Rules |
-|---|---|
-| Users | A nurse **must** be assigned to an active doctor, and other roles never have one. A duplicate username becomes a clear conflict. Users are deactivated, not deleted. An admin cannot deactivate their own account. Passwords are hashed before storing. |
-| Schedules | Each block must end after it starts and be at least one slot long. Blocks are sorted and adjacent ones checked, so blocks on the same day cannot overlap. The whole schedule is replaced in one transaction. |
-| Rooms | Names must be unique. A room that appears in any appointment cannot be deleted (set it to Maintenance instead). |
-| Settings | Each key is validated first (`clinic_name` and `clinic_address` required and short, `consultation_fee` 0 to 1,000,000, `default_slot_minutes` 5 to 120, `booking_window_days` 1 to 365, `online_booking_enabled` true or false, unknown keys rejected), then all values are saved together in a transaction with one audit entry each. |
-| Audit | Paged search by text and action |
+Read-only services for the public front page. They add no rules beyond returning the repository results.
 
-### 9.8 `WaitingQueue`
+### 9.7 `WaitingQueue`
 
 A **min-heap** of checked-in appointments ordered by `(checked_in_at, id)`. `push` adds, `pop` removes the patient who has waited longest, `peek` looks without removing, and `ordered()` drains the heap into a list tagged with a 1-based `queue_position`. Appointments with no check-in time sort last.
 
 ## 10. Routes
 
-Routes are deliberately thin: read the validated body, call one service method, return the result. Each declares who may call it with `Depends(require_feature("..."))`.
+Routes are thin: read the validated body, call one service method, return the result.
 
 | Router | Prefix | Login | Features used |
 |---|---|---|---|
 | `auth_routes` | `/api/auth` | login is open, the rest need any signed-in user | none (uses `get_current_user`) |
-| `public_routes` | `/api/public` | none | none, but `/bookings` is rate-limited |
-| `staff_routes` | `/api/staff` | doctor or nurse | `dashboard`, `notifications`, `appointments`, `exam`, `invoice`, `patients`, `history`, `prescriptions` |
+| `public_routes` | `/api/public` | none | none. `/bookings` is rate-limited. |
+| `staff_routes` | `/api/staff` | doctor or nurse | `dashboard`, `notifications`, `appointments`, `exam`, `invoice`, `patients`, `history`, `prescriptions`, `schedule` (days off) |
 | `admin_routes` | `/api/admin` | admin | `admin_dashboard`, `users`, `rooms`, `settings`, `reports`, `audit` |
+| `database_routes` | `/api/admin/database` | admin | `database` |
 
-The complete endpoint list is in `DOCUMENTATION.md`, Section 11. The public booking route checks `booking_limiter.is_blocked` first, calls the service, and **records the hit only after a successful booking**, so a mistyped form does not use up a visitor's allowance.
+The complete endpoint list is in `DOCUMENTATION.md`, Section 11. The public booking route checks `booking_limiter.is_blocked` first and **records the hit only after a successful booking**, so a mistyped form does not use up a visitor's allowance.
 
 ## 11. Key flows step by step
 
 ### 11.1 Login
 
-1. `POST /api/auth/login` with username and password.
+1. `POST /api/auth/login`.
 2. The limiter is checked (5 failures per username per 5 minutes).
-3. `get_by_username` loads the user and the hash. `verify_password` compares.
-4. Wrong: record the failure, audit it, answer with the generic message. Deactivated: refuse. Right: reset the limiter, touch `last_login_at`, audit, return `{access_token, user}`.
+3. `get_by_username` loads the user and hash. `verify_password` compares (a dummy hash if the user is unknown).
+4. Wrong: record the failure, audit it, generic message. Deactivated: refuse. Right: reset the limiter, touch `last_login_at`, audit, return `{access_token, user}`.
 
 ### 11.2 A patient books
 
 1. `GET /api/public/catalog` lists doctors and whether booking is open.
-2. `GET /api/public/slots` returns open times, computed by `SchedulingService`.
-3. `POST /api/public/bookings` validates the body (Pydantic), checks the limiter, re-checks the slot, stores a `Pending` request routed to the doctor and the least-busy nurse, and returns a receipt.
+2. `GET /api/public/calendar` colors the calendar, and `GET /api/public/slots` returns open times.
+3. `POST /api/public/bookings` validates the body, checks the limiter, locks the doctor, re-checks the slot, stores a `Pending` request, and returns a receipt.
 
 ### 11.3 Staff approve the request
 
 1. `POST /api/staff/notifications/{id}/approve`.
-2. Inside a transaction: pending check, time and room checks, conflict check, find or create the patient, create the appointment, mark the request `Converted`, audit.
+2. In a transaction: pending check, time, day off, room, and conflict checks, find or create the patient, create the appointment, mark the request `Converted`, audit.
 3. After the commit, the confirmation email is queued.
 
 ### 11.4 Check-in, examination, and payment
 
-1. `check-in`: `Scheduled` to `Checked-in`, stamped with the time.
+1. `check-in`: a room must be set. `Scheduled` to `Checked-in`, stamped with the time.
 2. `start`: `Checked-in` to `Consulting`, one at a time per doctor, room occupied, invoice opened with the default fee.
-3. `finish`: examination, prescription, and invoice totals saved, room freed, optional follow-up booked, status `Examined`.
-4. `pay`: invoice `Paid`, appointment `Completed`. The visit now appears in History and the patient's record.
+3. `finish`: examination, prescription, and totals saved, room freed, optional follow-up, status `Examined`.
+4. `pay`: invoice `Paid`, appointment `Completed`. The visit appears in History.
 
 ## 12. Transactions and concurrency
 
-- Multi-step changes use `with self._db.transaction() as tx:` and build repositories from `tx`, so they commit together or roll back together.
-- **Double booking** is stopped twice: services check `conflict_exists` for a friendly message, and the unique index on `active_slot` in MySQL is the final guard. A duplicate-entry error is translated into `AppointmentConflictError`.
-- Conditional updates (`WHERE status = 'Pending'`, `WHERE status = 'Unpaid'`) prevent a request being handled twice or an invoice being paid twice.
-- The email is sent **after** the transaction ends, so a mail problem can never roll back saved work.
+- Multi-step changes use `with self._db.transaction() as tx:` and build repositories from `tx`, so they commit or roll back together.
+- **Double booking** is stopped twice: services check `conflict_exists` for a friendly message, and the unique `active_slot` index is the final guard. A duplicate-entry error becomes `AppointmentConflictError`.
+- **Row locks.** `_lock_doctor` and the booking lock run `SELECT id FROM users WHERE id = %s FOR UPDATE`. Two starts of an exam for one doctor, two days-off requests, or two bookings for the same doctor now run one after the other.
+- Conditional updates (`WHERE status = 'Pending'`, `WHERE status = 'Unpaid'`) prevent a request being handled twice or an invoice paid twice.
+- The email is sent **after** the transaction ends, so a mail problem never rolls back saved work.
 
 ## 13. Configuration
 
@@ -445,81 +429,106 @@ Everything comes from `source/.env` (see `CONTRIBUTING.md`, Step 6). The file is
 ## 14. Emails and logging
 
 - Emails are sent for **approved** and **disapproved** booking requests only.
-- With no `SMTP_HOST`, each email is printed to the backend console (including the recipient), which is enough for development. Treat those logs as sensitive.
+- With no `SMTP_HOST`, each email is printed to the backend console (including the recipient). Treat those logs as sensitive.
 - Logging uses the `appointmed` logger. Unexpected errors are logged with a stack trace. Passwords, tokens, and medical details must never be logged.
 
-## 15. Legacy files
+## 15. Admin database tools
 
-These files come from an earlier design. They are **not imported by the app** and would fail on import because they use names that no longer exist (`database.session`, `Session`, `ForbiddenError`). Delete them rather than fixing them.
+Files: `repositories/database_repository.py`, `services/database_service.py`, `services/backup_parser.py`, `routes/database_routes.py`, `schemas/database.py`. Only the `database` feature (Admin) reaches them.
 
-| File | Replaced by |
+**`AdminSession`.** One connection (an `Executor`) whose driver errors keep MySQL's own message (for example "Cannot delete a parent row") so an administrator can read it. `admin_session()` commits everything in its `with` block together, or rolls back.
+
+**Browsing and editing**
+
+| Rule | Detail |
 |---|---|
-| `core/deps.py` | `core/security.py` (`get_current_user`, `require_feature`, `RateLimiter`) |
-| `core/permissions.py` | `User.scope_doctor_id` in `models/domain.py` |
-| `repositories/booking_repository.py` | `appointment_repository.py` and `patient_repository.py` |
-| `repositories/visit_repository.py` | `appointment_repository.py` and `clinical_repository.py` |
-| `schemas/clinic.py` | `schemas/api.py` |
-| `services/visit_service.py` | `appointment_service.py` and `billing_service.py` |
+| Table names | Always checked against `information_schema` before use. Identifiers are backtick-quoted. |
+| Column names | Checked against the real column list. Generated and hidden columns cannot be set. |
+| Hidden columns | `password_hash` and `avatar` are never sent to the browser |
+| Read-only tables | `audit_logs` (append-only), and any table without a single-column primary key |
+| No manual insert | `users` (accounts must be created on the Users page so the password is hashed) |
+| Self-protection | An admin cannot change their own role or active status, or delete their own account |
+| Values | Blank means "use the default" on insert and `NULL` (or empty text) on edit. All values are parameters. |
+| Audit | `DB_INSERT_ROW`, `DB_UPDATE_ROW`, `DB_DELETE_ROW`, with the table name only (no values) |
+
+**SQL console** (`run_sql`): one statement at a time; only `SELECT`, `SHOW`, `DESCRIBE`, `EXPLAIN`, `INSERT`, `UPDATE`, `DELETE`; a semicolon in the middle is refused; anything mentioning `audit_logs` for a write is refused; `UPDATE` and `DELETE` need a `WHERE`. Reads run with a 5-second `MAX_EXECUTION_TIME`, show at most 500 rows, and mask result columns named `password_hash` or `avatar`. Writes are committed with an audit entry (`DB_RUN_SQL`, kind and row count).
+
+**Backup** (`dump`): every table's `SHOW CREATE TABLE` and rows as batched `INSERT` statements (100 rows each), parents first, generated columns left out. It starts with the header `-- AppointMed database backup`. It contains password hashes. Restoring with the `mysql` client needs the `root` user. Download is audited as `BACKUP_DATABASE`.
+
+**Import** (`import_backup`): the file is **parsed, never executed**.
+
+1. `parse_backup` accepts only `SET`, `DROP TABLE IF EXISTS`, `CREATE TABLE` (ignored: structure is not changed), and `INSERT`. Values are tokenized into Python objects.
+2. The backup must name every table of this database and no others, and every column must exist.
+3. In one transaction, foreign key checks are turned off, every table except `audit_logs` is emptied, and the rows are inserted with parameters (100 per statement).
+4. The import is refused (and rolled back) unless the backup keeps the importing administrator's own active admin account.
+5. Foreign key checks are switched back on, and `RESTORE_DATABASE` is audited.
 
 ## 16. Known issues and improvement ideas
 
-These are honest notes for the team. None stop the system from working.
+Honest notes for the team. None stop the system from working.
 
 | Area | Note |
 |---|---|
-| One exam at a time | `start_exam` checks for another exam in progress but does not lock the row, so two simultaneous starts for one doctor could both pass. A row lock (`SELECT ... FOR UPDATE`) inside the transaction would close the gap. |
-| Dead expression | In `PatientService.create`, the return line contains `... if False else self._load(...)`. It always runs `_load`, so it works, but the first half can be deleted. |
-| Schema file | `schema.sql` begins with `CREATE DATABASE appointmed;` although `CONTRIBUTING.md` already creates it in Step 4. Loading the schema after Step 4 would report that the database exists. Remove that line or use `CREATE DATABASE IF NOT EXISTS`. |
-| Setting not used | `default_slot_minutes` is stored and editable but slot length comes from the schedule blocks. |
-| Rate limits | In memory only, so they reset on restart and are not shared across processes. |
-| Audit outside transactions | Some single-step operations (such as `set_active`) write their audit entry on a separate connection, so a failure between the two could leave one without the other. |
-| No automated tests | Test by hand for now (see `DOCUMENTATION.md`, Section 20). Services accept their `Database` and `Mailer`, so unit tests with fakes are straightforward to add. |
+| Missing import | `BookingService.calendar` raises `ValidationFailedError` but `booking_service.py` does not import it. An invalid range (start after end, or over 62 days) would give a 500 instead of a clear 400. Add the import. |
+| Walk-in check-in | `check_in` needs a room, but a walk-in created with "check in now" skips that rule. Decide on one rule. |
+| Masking by name | The SQL console hides `password_hash` and `avatar` by result-column name, so `SELECT password_hash AS x` would show it. Block those columns in the statement or remove read access to `users`. |
+| Console power | An admin can run `UPDATE` or `DELETE` on any table except the audit log (including `users`). It is audited, but consider limiting it. |
+| Schema file | `schema.sql` has 13 tables. `departments` lives only in `landing_update.sql`, and the dev console reset skips it. Move it into `schema.sql`. |
+| Public calendar cost | `BookingService.calendar` calls `available_slots` for each day (up to 62 days, several queries each). Batch the queries or cache the result. |
+| Non-indexed date filter | Queries such as `DATE(scheduled_time) = %s` cannot use the time index. Use a `>= day AND < day + 1` range. |
+| Metadata queries | `DatabaseService.tables()` calls `table_names()` once per table. Fetch the list once. |
+| Setting not used | `default_slot_minutes` is stored and editable but slot length comes from schedule blocks. |
+| Rate limits | In memory only, so they reset on restart and are not shared across processes. Keys are never evicted. |
+| Audit outside transactions | `PatientService` and the failed-login entry write their audit row on a separate connection from the change. |
+| Department counting | A doctor is counted in a department only when `specialization` equals the department name exactly. |
+| Import and audit rows | After an import, old `audit_logs.user_id` values may point to ids that no longer match the restored users. |
+| No automated tests | Test by hand for now (`DOCUMENTATION.md`, Section 20). Services accept their `Database` and `Mailer`, so tests with fakes are straightforward to add. |
+
+**Resolved since the last update:** the one-exam-at-a-time race (now a row lock), the dead expression in `PatientService.create`, the `CREATE DATABASE` line in `schema.sql`, and the unused legacy files (`deps.py`, `permissions.py`, `visit_service.py`, and others), which were removed.
 
 ## 17. Compliance with the project instructions
 
 The CMSC 203 final project is graded on seven criteria. This section shows where the backend answers each one.
 
-> **Course-requirement note.** The instructions ask for a Python GUI application (Tkinter preferred, or another instructor-approved framework). AppointMed's backend is Python, and its interface is a web app. Confirm with the instructors that the web frontend counts as an approved framework, and keep that approval on record.
+> **Course-requirement note.** The instructions ask for a Python GUI application (Tkinter preferred, or another instructor-approved framework). AppointMed's backend is Python and its interface is a web app. Confirm with the instructors that the web frontend counts as an approved framework, and keep that approval on record.
 
 ### 17.1 Object-Oriented Programming (30 points)
 
 | Required concept | Where it appears |
 |---|---|
-| Classes and objects | `User`, `Doctor`, `Nurse`, `Admin`, `AppointmentWorkflow`, `Settings`, `Database`, `Transaction`, `Mailer`, `RateLimiter`, `WaitingQueue`, every repository and service |
+| Classes and objects | `User`, `Doctor`, `Nurse`, `Admin`, `AppointmentWorkflow`, `Settings`, `Database`, `Transaction`, `AdminSession`, `Mailer`, `RateLimiter`, `WaitingQueue`, every repository and service |
 | Constructors | `User.__init__` validates its arguments. Repositories take an `Executor`. Services take a `Database` and a `Mailer`. |
-| Encapsulation | `Settings` (frozen), `Database` (hides the pool, lock, and error translation), `User` (private fields behind properties), `RateLimiter` (private store and lock) |
-| Inheritance | `Doctor`/`Nurse`/`Admin` extend `User`. All repositories extend `BaseRepository`. All errors extend `AppError`. |
-| Polymorphism | Each role implements `scope_doctor_id` differently. `Database` and `Transaction` are interchangeable as `Executor`. |
-| Abstraction | `Executor`, `BaseRepository` (abstract `table` and `columns`), and `User.scope_doctor_id` |
-| Interfaces or abstract classes | `Executor`, `BaseRepository`, and `User` all use `ABC` and `@abstractmethod` |
-| Method overloading | Python has no overloading. The same effect is achieved with flexible parameters, for example `list_for_doctor(when)` accepts a keyword string or a `date`, and `consulting(doctor_id, exclude_id=None)` has an optional argument. Say this explicitly in the presentation. |
+| Encapsulation | `Settings` (frozen), `Database`, `User` (private fields behind properties), `RateLimiter` |
+| Inheritance | Roles extend `User`. Repositories extend `BaseRepository`. Errors extend `AppError`. |
+| Polymorphism | Each role implements `scope_doctor_id` differently. `Database`, `Transaction`, and `AdminSession` are interchangeable `Executor`s. |
+| Abstraction | `Executor`, `BaseRepository`, `User.scope_doctor_id` |
+| Interfaces or abstract classes | `Executor`, `BaseRepository`, `User` use `ABC` and `@abstractmethod` |
+| Method overloading | Python has no overloading. `list_for_doctor(when)` accepts a keyword string or a `date`, and `consulting(doctor_id, exclude_id=None)` has an optional argument. Say this in the presentation. |
 | Factory methods | `User.from_row`, `Settings.from_env` |
 
 ### 17.2 Functional features (20 points)
 
 | Required feature | Where it appears |
 |---|---|
-| User login | `AuthService.login` with bcrypt, JWT, rate limiting, and audit |
-| Add records | Users, patients, rooms, walk-in appointments, booking requests (public), examinations, prescriptions, invoices |
-| Edit records | Users, patients, rooms, profile, appointments (reschedule and room), schedules, settings |
-| Delete records | Patients (only if no history), rooms (only if unused). Users and appointments are deactivated or cancelled instead, to keep history. |
-| Search records | Users, patients, appointments, history, prescriptions, audit log |
-| Display records | Dashboards, lists, history, invoices, reports |
-| Save data | Everything is stored in MySQL. Transactions keep related saves together. |
-| Load data | Schema and seed SQL files, and every `GET` endpoint |
-
-Reports and the audit log can also be exported as CSV from the frontend.
+| User login | `AuthService.login` with bcrypt, JWT, rate limiting, audit |
+| Add records | Users, patients, rooms, days off, walk-ins, booking requests, examinations, prescriptions, invoices, database rows |
+| Edit records | Users, patients, rooms, profile, appointments, schedules, settings, database rows |
+| Delete records | Patients (no history), rooms (unused), days off, database rows. Users and appointments are deactivated or cancelled to keep history. |
+| Search records | Users, patients, appointments, history, prescriptions, audit log, database tables |
+| Display records | Dashboards, lists, history, invoices, reports, front page |
+| Save data | MySQL, with transactions |
+| Load data | Schema and seed SQL files, every `GET` endpoint, and backup import |
 
 ### 17.3 Exception handling and robustness (10 points)
 
 | Required error type | How it is handled |
 |---|---|
-| Invalid input | Pydantic schemas reject it with status 422 and a readable sentence |
-| Empty fields | `min_length` and required fields in the schemas, plus `blank_to_none` for optional text |
-| Invalid data types | Pydantic type coercion and validation. `Decimal` for money. Enum-like `Literal` types. |
-| File errors | The avatar is checked for format, base64 validity, size, and image signature. A missing `JWT_SECRET` stops startup with a clear message. SMTP and OS errors when emailing are caught and logged. |
-| Custom exceptions (at least one) | The 12-class `AppError` family, with handlers that return `{"detail": "..."}` |
-| Database failures | Driver errors are translated and never expose SQL |
+| Invalid input | Pydantic schemas reject it with 422 and a readable sentence |
+| Empty fields | `min_length`, required fields, and `blank_to_none` |
+| Invalid data types | Pydantic validation, `Decimal` for money, `Literal` types |
+| File errors | Avatar format, base64, size, and signature checks. Backup files are parsed and checked before anything changes. A missing `JWT_SECRET` stops startup. SMTP and OS errors are caught and logged. |
+| Custom exceptions | The 12-class `AppError` family |
+| Database failures | Driver errors are translated and never expose SQL (admin Database page excepted) |
 
 ### 17.4 Code quality (10 points)
 
@@ -527,42 +536,37 @@ Reports and the audit log can also be exported as CSV from the frontend.
 |---|---|
 | Naming conventions | `snake_case` functions, `PascalCase` classes, `UPPER_CASE` constants |
 | Modular programming | Routes, schemas, services, repositories, models, and core are separate packages |
-| Reusable methods | `BaseRepository` CRUD, `to_money`, `blank_to_none`, `AppointmentService._load`, `_check_room`, `_free_room`, `_ensure_patient` |
-| Comments | A docstring on every module, class, and public method, and comments that explain why |
-| Readability | Type hints throughout, short route functions, one responsibility per class |
-| Organization by packages | See [Section 2](#2-folder-layout) |
+| Reusable methods | `BaseRepository` CRUD, `to_money`, `blank_to_none`, `_load`, `_check_room`, `_free_room`, `_ensure_patient`, `_lock_doctor`, shared schema checks |
+| Comments | A docstring on every module, class, and public method |
+| Readability | Type hints, short route functions, one responsibility per class |
 
-### 17.5 Documentation (10 points)
+### 17.5 Documentation, presentation, and related courses
 
-The technical documentation in `source/documentation/DOCUMENTATION.md` covers the required sections (introduction, problem, objectives, scope and limitations, features, UML class diagram, flowcharts, screenshots, testing results, conclusion, references). This file and `FRONTEND.md` add the implementation detail. Remaining items for the team: related studies, screenshots, the conclusion, and the test results column.
+Documentation: `DOCUMENTATION.md` covers the required sections, and this file, `DATABASE.md`, `FRONTEND.md`, and `note.md` add detail. Remaining for the team: related studies, screenshots, the conclusion, and the test results column.
 
-### 17.6 Presentation and demonstration (10 points)
-
-Suggested demo order that touches every layer: book as a patient, approve as a nurse (show the email in the console), check in, examine as a doctor, pay, then show the audit log as admin. Be ready to explain any file, because the instructors may ask any member to walk through any part.
-
-### 17.7 Related course ideas
+Suggested demo order: book as a patient, approve as a nurse (show the email in the console), choose a room and check in, examine as a doctor, pay, mark a day off and show it on the booking calendar, then show the audit log and the Database page as admin. Be ready to explain any file.
 
 | Course | Backend evidence |
 |---|---|
-| ITEC 104 Data Structures and Algorithms | `WaitingQueue` (min-heap), `RateLimiter` (sliding window over a `deque`), `AppointmentWorkflow` (transition table), slot generation with a set lookup, overlap detection after sorting |
-| ITEC 105 Information Management | 12 normalized tables, keys, `CHECK` constraints, the generated `active_slot` unique index, transactions, parameterized queries, aggregate reports, audit log |
+| ITEC 104 Data Structures and Algorithms | `WaitingQueue` (min-heap), `RateLimiter` (deque window), `AppointmentWorkflow` (transition table), slot generation with a set lookup, overlap detection after sorting, the backup tokenizer |
+| ITEC 105 Information Management | 13 tables plus `departments`, keys, `CHECK` constraints, the generated `active_slot` unique index, row locks, transactions, parameterized queries, aggregate reports, audit log, backup and restore |
 
 ## 18. How to extend the backend
 
 **Add an endpoint**
 
-1. Add a request body to `schemas/api.py` if it receives data.
+1. Add a request body to `schemas/api.py` (reuse the shared checks).
 2. Add the query to the right repository.
 3. Add the rule to a service (scope check, transaction, audit entry).
 4. Add the route with `Depends(require_feature("..."))`.
 5. Try it at `http://127.0.0.1:8000/docs` with valid, invalid, and empty input, and as a role that should be refused.
 
-**Give a role a new feature:** add the feature name to that role's `features` set in `models/domain.py`, then use the same name in `require_feature(...)`.
+**Give a role a new feature:** add the name to that role's `features` set in `models/domain.py`, then use it in `require_feature(...)`.
 
-**Add a status or transition:** update the database enum in `schema.sql`, then `STATUSES` and `TRANSITIONS` in `AppointmentWorkflow`, then the frontend type and badge colors.
+**Add a status or transition:** update the database enum in `schema.sql`, then `STATUSES` and `TRANSITIONS`, then the frontend type and badge colors.
 
-**Change the database:** edit `schema.sql` (and `seed.sql` if needed), update the matching repository queries and the frontend types, and tell the team to reset their databases.
+**Change the database:** edit `schema.sql` (and `seed.sql`), update the repository queries and frontend types, and tell the team to reset their databases. Check that backup and import still list the table.
 
 ---
 
-*Last Updated: October 2026*
+*Last Updated: November 2026*
