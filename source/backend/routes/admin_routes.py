@@ -4,6 +4,8 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query
 
+from typing import Literal
+
 from backend.core.security import require_feature
 from backend.models.domain import User
 from backend.routes.database_routes import router as database_router
@@ -18,11 +20,14 @@ from backend.schemas.api import (
 )
 from backend.services.admin_service import AdminService
 from backend.services.dashboard_service import DashboardService
+from backend.schemas.site import SiteContentUpdate, SiteImageUpload
+from backend.services.site_service import SiteService
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 router.include_router(database_router)  # /api/admin/database/...
 admin_service = AdminService()
 dashboard_service = DashboardService()
+site_service = SiteService()
 
 
 @router.get("/dashboard")
@@ -116,3 +121,18 @@ def audit(
     user: User = Depends(require_feature("audit")),
 ) -> dict:
     return admin_service.audit(q, action, limit, offset)
+
+# ---------- website branding ----------
+@router.put("/site")
+def update_site(body: SiteContentUpdate, user: User = Depends(require_feature("settings"))) -> dict:
+    return site_service.update(user, body.values)
+
+
+@router.put("/site/image/{kind}")
+def set_site_image(kind: Literal["logo", "hero"], body: SiteImageUpload, user: User = Depends(require_feature("settings"))) -> dict:
+    return site_service.set_image(user, kind, body.image)
+
+
+@router.delete("/site/image/{kind}")
+def remove_site_image(kind: Literal["logo", "hero"], user: User = Depends(require_feature("settings"))) -> dict:
+    return site_service.remove_image(user, kind)
