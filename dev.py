@@ -59,7 +59,7 @@ FRONTEND_URL = f"http://localhost:{FRONTEND_PORT}"
 MIN_PYTHON = (3, 11)
 MIN_NODE = 20
 # Loaded in this order. seed.sql only runs on an empty database; the others are safe to repeat.
-SQL_FILES = ("schema.sql", "seed.sql", "landing_update.sql")
+SQL_FILES = ("schema.sql", "seed.sql", "landing_update.sql", "site_content.sql")
 CHARSET = "--default-character-set=utf8mb4"
 
 DEFAULT_ENV = """APP_ENV=development

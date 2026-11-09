@@ -1,5 +1,7 @@
 // The AppointMed logo with optional name. Used in the side panel and the booking page.
-// Uses the same mark as the landing page (frontend/public/logo-mark.png).
+// Uses the logo the admin uploaded in Settings, or else frontend/public/logo-mark.png.
+import { useSite } from "../hooks/useSite";
+
 interface LogoProps {
   size?: number; // image height in pixels
   showName?: boolean; // show the "AppointMed" text next to the image
@@ -7,9 +9,10 @@ interface LogoProps {
 }
 
 export default function Logo({ size = 36, showName = true, onDark = false }: LogoProps) {
+  const { logoSrc } = useSite();
   return (
     <span className="inline-flex items-center gap-2">
-      <img src="/logo-mark.png" alt={showName ? "" : "AppointMed"} style={{ height: size, width: "auto" }} />
+      <img src={logoSrc ?? "/logo-mark.png"} alt={showName ? "" : "AppointMed"} style={{ height: size, width: "auto" }} />
       {showName && (
         <span className={`text-lg font-semibold ${onDark ? "text-white" : "text-brand-700"}`}>AppointMed</span>
       )}

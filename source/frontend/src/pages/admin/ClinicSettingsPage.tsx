@@ -7,6 +7,8 @@ import { inputClass, primaryButton } from "../../components/ui";
 import type { SettingRow } from "../../types";
 import { formatDateTime } from "../../utils/format";
 import { cleanAddress, cleanClinicName, cleanInt, cleanMoney, isMoney } from "../../utils/input";
+import { useSite } from "../../hooks/useSite";
+import BrandingSettings from "../../components/BrandingSettings";
 
 interface FieldDef {
   key: string;
@@ -49,6 +51,7 @@ function problem(key: string, raw: string): string {
 const toMap = (rows: SettingRow[]): Record<string, string> => Object.fromEntries(rows.map((r) => [r.setting_key, r.setting_value]));
 
 export default function ClinicSettingsPage() {
+  const { logoSrc } = useSite();
   const [rows, setRows] = useState<SettingRow[] | null>(null);
   const [original, setOriginal] = useState<Record<string, string>>({});
   const [values, setValues] = useState<Record<string, string>>({});
@@ -102,50 +105,64 @@ export default function ClinicSettingsPage() {
   const lastChange = rows?.reduce<string | null>((latest, r) => (!latest || r.updated_at > latest ? r.updated_at : latest), null) ?? null;
 
   return (
-    <section className="max-w-2xl">
+    <section>
       <h1 className="text-2xl font-semibold">Clinic Settings</h1>
       <p className="mt-1 text-slate-600">Clinic name, fee, and online booking switch.</p>
       {!rows && !error && <p className="mt-6 text-slate-500">Loading...</p>}
 
       {rows && (
-        <form onSubmit={submit} className="mt-6 space-y-5 rounded-xl border border-slate-200 bg-white p-5">
-          {FIELDS.map((f) => (
-            <div key={f.key}>
-              {f.kind === "toggle" ? (
-                <label className="flex items-center gap-3 text-sm font-medium">
-                  <input
-                    type="checkbox"
-                    checked={(values[f.key] ?? "true") === "true"}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.checked ? "true" : "false" }))}
-                  />
-                  {f.label}: {(values[f.key] ?? "true") === "true" ? "open" : "closed"}
-                </label>
-              ) : (
-                <label className="block text-sm font-medium">
-                  {f.label}
-                  <input
-                    className={`${inputClass} mt-1`}
-                    type="text"
-                    inputMode={f.kind === "number" ? (f.key === "consultation_fee" ? "decimal" : "numeric") : undefined}
-                    autoComplete="off"
-                    maxLength={f.maxLength}
-                    value={values[f.key] ?? ""}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: f.clean ? f.clean(e.target.value) : e.target.value }))}
-                  />
-                </label>
-              )}
-              <p className="mt-1 text-xs text-slate-500">{f.help}</p>
+        <div className="mt-6 flex flex-col gap-6 lg:flex-row">
+          {/* Left: the white card with only the settings */}
+          <form
+            onSubmit={submit}
+            className="grid content-start gap-x-8 gap-y-8 rounded-xl border border-slate-200 bg-white p-6 md:grid-cols-2 lg:w-2/3 lg:p-10"
+          >
+            {FIELDS.map((f) => (
+              <div key={f.key}>
+                {f.kind === "toggle" ? (
+                  <label className="flex items-center gap-3 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={(values[f.key] ?? "true") === "true"}
+                      onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.checked ? "true" : "false" }))}
+                    />
+                    {f.label}: {(values[f.key] ?? "true") === "true" ? "open" : "closed"}
+                  </label>
+                ) : (
+                  <label className="block text-sm font-medium">
+                    {f.label}
+                    <input
+                      className={`${inputClass} mt-1`}
+                      type="text"
+                      inputMode={f.kind === "number" ? (f.key === "consultation_fee" ? "decimal" : "numeric") : undefined}
+                      autoComplete="off"
+                      maxLength={f.maxLength}
+                      value={values[f.key] ?? ""}
+                      onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: f.clean ? f.clean(e.target.value) : e.target.value }))}
+                    />
+                  </label>
+                )}
+                <p className="mt-1 text-xs text-slate-500">{f.help}</p>
+              </div>
+            ))}
+            <div className="md:col-span-2">
+              {lastChange && <p className="text-xs text-slate-500">Last changed {formatDateTime(lastChange)}.</p>}
+              {error && <Alert kind="error">{error}</Alert>}
+              {message && <Alert kind="success">{message}</Alert>}
+              <button type="submit" disabled={busy} className={`${primaryButton} mt-4`}>
+                {busy ? "Saving..." : "Save settings"}
+              </button>
             </div>
-          ))}
-          {lastChange && <p className="text-xs text-slate-500">Last changed {formatDateTime(lastChange)}.</p>}
-          {error && <Alert kind="error">{error}</Alert>}
-          {message && <Alert kind="success">{message}</Alert>}
-          <button type="submit" disabled={busy} className={primaryButton}>
-            {busy ? "Saving..." : "Save settings"}
-          </button>
-        </form>
+          </form>
+
+          {/* Right: the logo, outside the white card (hidden on small screens) */}
+          <div className="hidden items-center justify-center lg:flex lg:flex-1">
+            <img src={logoSrc ?? "/logo-mark.png"} alt="AppointMed logo" className="h-auto w-full max-w-md object-contain" />
+          </div>
+        </div>
       )}
       {!rows && error && <Alert kind="error">{error}</Alert>}
+      <BrandingSettings />
     </section>
   );
 }

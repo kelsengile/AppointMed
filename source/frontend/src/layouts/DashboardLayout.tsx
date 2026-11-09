@@ -4,6 +4,7 @@ import Logo from "../components/Logo";
 import { NAV } from "../config/Navigation";
 import { useAuth } from "../context/AuthContext";
 import type { NavItem, Role } from "../types";
+import Avatar from "../components/Avatar";
 
 const TITLE: Record<Role, string> = { doctor: "Doctor", nurse: "Nurse", admin: "Admin" };
 const DESKTOP_MIN_WIDTH = 768; // matches Tailwind's md breakpoint
@@ -45,7 +46,6 @@ export default function DashboardLayout({ role }: { role: Role }) {
   }
 
   const fullName = user?.fullName ?? user?.username ?? "";
-  const initial = fullName.replace(/^dr\.\s*/i, "").charAt(0).toUpperCase();
 
   // On phones the panel covers the page, so close it after choosing a page.
   const closeOnMobile = () => {
@@ -93,16 +93,7 @@ export default function DashboardLayout({ role }: { role: Role }) {
             onClick={closeOnMobile}
             aria-label="Open your profile"
           >
-            {user?.avatar ? (
-              <img src={user.avatar} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
-            ) : (
-              <span
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#365983] to-[#527DAA] text-base font-semibold text-white"
-                aria-hidden="true"
-              >
-                {initial}
-              </span>
-            )}
+            <Avatar avatar={user?.avatar} name={fullName} className="h-10 w-10" />
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold text-landing-heading">{fullName}</span>
               <span className="block text-xs text-landing-muted">{TITLE[role]}</span>
