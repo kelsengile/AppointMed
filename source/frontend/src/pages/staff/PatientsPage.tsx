@@ -109,8 +109,10 @@ export default function PatientsPage() {
   const [message, setMessage] = useState("");
   const [actionError, setActionError] = useState("");
   const patients = usePolling(() => staffApi.patients(search.trim()), 0, [search]);
-  const visits = usePolling(() => (selectedId ? staffApi.patientHistory(selectedId) : Promise.resolve([] as Encounter[])), 0, [selectedId]);
-  const selected: PatientItem | null = patients.data?.find((p) => p.id === selectedId) ?? null;
+  // The first patient in the list is open by default (also when a search changes the list).
+  const activeId = patients.data?.find((p) => p.id === selectedId)?.id ?? patients.data?.[0]?.id ?? null;
+  const visits = usePolling(() => (activeId ? staffApi.patientHistory(activeId) : Promise.resolve([] as Encounter[])), 0, [activeId]);
+  const selected: PatientItem | null = patients.data?.find((p) => p.id === activeId) ?? null;
 
   async function remove(p: PatientItem) {
     if (!window.confirm(`Delete ${p.full_name}'s record? This cannot be undone.`)) return;
@@ -159,7 +161,7 @@ export default function PatientsPage() {
                 <button
                   onClick={() => setSelectedId(p.id)}
                   className={`w-full rounded-xl border p-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                    selectedId === p.id ? "border-brand-600 bg-brand-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                    activeId === p.id ? "border-brand-600 bg-brand-50" : "border-slate-200 bg-white hover:bg-slate-50"
                   }`}
                 >
                   <p className="font-semibold">{p.full_name}</p>

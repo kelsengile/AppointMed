@@ -1,12 +1,119 @@
-// Change your own password. The backend checks the current password and enforces the password rules.
-import { useState, type FormEvent } from "react";
+// Settings. Everyone: appearance, account summary, change password.
+// Doctor and nurse: notification preference. Admin: website branding (logo, clinic name, hero picture, texts, links).
+import { useState, type FormEvent, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { authApi } from "../../api/endpoints";
 import Alert from "../../components/Alert";
 import PasswordRequirements from "../../components/PasswordRequirements";
-import { inputClass, primaryButton } from "../../components/ui";
+import { inputClass, primaryButton, secondaryButton } from "../../components/ui";
+import { useAuth } from "../../context/AuthContext";
+import { usePolling } from "../../hooks/usePolling";
+import { formatDateTime } from "../../utils/format";
 import { passwordProblem } from "../../utils/password";
+import { DEFAULT_PREFS, loadPrefs, updatePrefs, type Prefs, type TextSize, type Theme } from "../../utils/preferences";
 
-export default function SettingsPage() {
+function Card({ title, desc, children, className = "" }: { title: string; desc?: string; children: ReactNode; className?: string }) {
+  return (
+    <section className={`rounded-xl border border-slate-200 bg-white p-5 ${className}`}>
+      <h2 className="text-lg font-semibold">{title}</h2>
+      {desc && <p className="mt-1 text-sm text-slate-600">{desc}</p>}
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function Choice<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={`rounded-lg px-3 py-1.5 text-sm ${value === o.value ? "bg-brand-600 text-white" : "border border-slate-300 bg-white hover:bg-slate-50"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AppearanceCard() {
+  const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
+  const change = (patch: Partial<Prefs>) => setPrefs(updatePrefs(patch));
+  return (
+    <Card title="Appearance" desc="Saved in this browser only.">
+      <p className="text-sm font-medium">Theme</p>
+      <div className="mt-2">
+        <Choice<Theme>
+          label="Theme"
+          value={prefs.theme}
+          onChange={(theme) => change({ theme })}
+          options={[
+            { value: "light", label: "Light" },
+            { value: "dark", label: "Dark" },
+            { value: "system", label: "Match my device" },
+          ]}
+        />
+      </div>
+      <p className="mt-4 text-sm font-medium">Text size</p>
+      <div className="mt-2">
+        <Choice<TextSize>
+          label="Text size"
+          value={prefs.textSize}
+          onChange={(textSize) => change({ textSize })}
+          options={[
+            { value: "small", label: "Small" },
+            { value: "normal", label: "Normal" },
+            { value: "large", label: "Large" },
+          ]}
+        />
+      </div>
+      <button type="button" className={`${secondaryButton} mt-5`} onClick={() => change(DEFAULT_PREFS)}>
+        Reset to defaults
+      </button>
+    </Card>
+  );
+}
+
+function NotificationsCard() {
+  const { user } = useAuth();
+  const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
+  return (
+    <Card title="Notifications" desc="Saved in this browser only.">
+      {user?.role === "doctor" ? (
+        <label className="flex items-center gap-3 text-sm font-medium">
+          <input type="checkbox" checked={prefs.checkInAlert} onChange={(e) => setPrefs(updatePrefs({ checkInAlert: e.target.checked }))} />
+          Show a banner on the Appointments page when a patient checks in
+        </label>
+      ) : (
+        <p className="text-sm text-slate-600">Your doctor is notified when you check a patient in. You have no alerts to configure.</p>
+      )}
+    </Card>
+  );
+}
+
+function AccountCard() {
+  const { user } = useAuth();
+  const { data } = usePolling(() => authApi.me(), 0);
+  return (
+    <Card title="Account" desc="Change your name, email, and photo on the profile page.">
+      <dl className="space-y-1 text-sm">
+        <div><dt className="inline font-medium">Username: </dt><dd className="inline">{data?.username ?? user?.username}</dd></div>
+        <div><dt className="inline font-medium">Role: </dt><dd className="inline capitalize">{user?.role}</dd></div>
+        <div><dt className="inline font-medium">Last sign-in: </dt><dd className="inline">{formatDateTime(data?.last_login_at)}</dd></div>
+      </dl>
+      <Link to={`/${user?.role ?? "doctor"}/profile`} className={`${secondaryButton} mt-4 inline-block`}>
+        Open profile
+      </Link>
+    </Card>
+  );
+}
+
+function PasswordCard() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -38,10 +145,8 @@ export default function SettingsPage() {
   }
 
   return (
-    <section className="max-w-md">
-      <h1 className="text-2xl font-semibold">Settings</h1>
-      <p className="mt-1 text-slate-600">Change your password.</p>
-      <form onSubmit={submit} className="mt-6 space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+    <Card title="Change password">
+      <form onSubmit={submit} className="space-y-4">
         <label className="block text-sm font-medium">
           Current password
           <input type="password" autoComplete="current-password" className={`${inputClass} mt-1`} value={current} onChange={(e) => setCurrent(e.target.value)} />
@@ -63,6 +168,23 @@ export default function SettingsPage() {
           {busy ? "Saving..." : "Change password"}
         </button>
       </form>
+    </Card>
+  );
+}
+
+export default function SettingsPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  return (
+    <section>
+      <h1 className="text-2xl font-semibold">Settings</h1>
+      <p className="mt-1 text-slate-600">Appearance, your account, and your preferences.</p>
+      <div className={`mt-6 grid gap-6 lg:grid-cols-2 ${isAdmin ? "xl:grid-cols-3" : "2xl:grid-cols-4"}`}>
+        <AppearanceCard />
+        <AccountCard />
+        {!isAdmin && <NotificationsCard />}
+        <PasswordCard />
+      </div>
     </section>
   );
 }

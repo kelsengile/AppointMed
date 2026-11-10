@@ -173,3 +173,14 @@ body {
   background-position: center;
   background-repeat: no-repeat;
 }
+
+/* Dark mode (Settings > Appearance): invert the page, then flip pictures back. */
+html.dark {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+html.dark img,
+html.dark video,
+html.dark canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
