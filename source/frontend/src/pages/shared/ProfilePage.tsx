@@ -102,16 +102,16 @@ export default function ProfilePage() {
   }
 
   return (
-    <section className="max-w-2xl">
-      <h1 className="text-2xl font-semibold">Profile</h1>
-      <p className="mt-1 text-slate-600">Your name, role, photo, and the public details shown on the home page.</p>
+    <section className="mx-auto max-w-2xl">
+      <h1 className="text-center text-2xl font-semibold">Profile</h1>
+      <p className="mt-1 text-center text-slate-600">Your name, role, photo, and the public details shown on the home page.</p>
 
       {error && <Alert kind="error">{error}</Alert>}
       {loading && !profile && <p className="mt-6 text-slate-500">Loading...</p>}
 
       {profile && (
         <>
-          <div className="mt-6 flex flex-wrap items-center gap-5 rounded-xl border border-slate-200 bg-white p-5">
+          <div className="mt-6 flex flex-col items-center gap-5 rounded-xl border border-slate-200 bg-white p-5 text-center sm:flex-row sm:text-left">
             <Avatar avatar={profile.avatar} name={profile.full_name} className="h-24 w-24" />
             <div>
               <p className="text-lg font-semibold">{profile.full_name}</p>
@@ -120,7 +120,7 @@ export default function ProfilePage() {
                 {profile.specialization ? ` - ${profile.specialization}` : ""}
               </p>
               {profile.assigned_doctor_name && <p className="text-sm text-slate-600">Supports {profile.assigned_doctor_name}</p>}
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
                 <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={chooseFile} aria-label="Choose a photo" />
                 <button type="button" className={secondaryButton} disabled={busy} onClick={() => fileInput.current?.click()}>
                   Upload photo
