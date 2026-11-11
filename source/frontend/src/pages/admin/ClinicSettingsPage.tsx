@@ -9,6 +9,7 @@ import { formatDateTime } from "../../utils/format";
 import { cleanAddress, cleanClinicName, cleanInt, cleanMoney, isMoney } from "../../utils/input";
 import { useSite } from "../../hooks/useSite";
 import BrandingSettings from "../../components/BrandingSettings";
+import { DEFAULT_LOGO } from "../../config/branding";
 
 interface FieldDef {
   key: string;
@@ -157,7 +158,7 @@ export default function ClinicSettingsPage() {
 
           {/* Right: the logo, outside the white card (hidden on small screens) */}
           <div className="hidden items-center justify-center lg:flex lg:flex-1">
-            <img src={logoSrc ?? "/logo-mark.png"} alt="AppointMed logo" className="h-auto w-full max-w-md object-contain" />
+            <img src={logoSrc ?? DEFAULT_LOGO} alt="AppointMed logo" className="h-auto w-full max-w-md object-contain" />
           </div>
         </div>
       )}

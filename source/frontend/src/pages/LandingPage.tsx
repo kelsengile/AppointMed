@@ -19,6 +19,7 @@ import type { Catalog } from "../types";
 import type { DepartmentItem } from "../types/department";
 import type { StaffMember } from "../types/staff";
 import { useSite } from "../hooks/useSite";
+import { DEFAULT_LOGO, TEXT_LOGO } from "../config/branding";
 
 // Figma font for the whole landing page (already loaded in index.html).
 const pageFont = { fontFamily: "Poppins, system-ui, -apple-system, sans-serif" };
@@ -363,65 +364,69 @@ export default function LandingPage() {
     <div style={pageFont} className="relative bg-landing-pagebg text-landing-body">
       {/* ---------------- navbar (floating pill) ---------------- */}
       <header className="absolute inset-x-0 top-0 z-30 px-4 pt-4 sm:px-8">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 rounded-2xl bg-white/85 px-4 py-2.5 shadow-[0_10px_30px_rgba(53,88,130,0.12)] backdrop-blur">
-          <span className="inline-flex items-center gap-2">
-            <img src={logoSrc ?? "/logo-mark.png"} alt="" aria-hidden style={{ height: 40, width: "auto" }} />
-            <span className="text-lg font-semibold text-brand-700">AppointMed</span>
-          </span>
-          <nav className="flex items-center gap-1 text-sm" aria-label="Site">
-            <a href="#services" className="hidden rounded-lg px-3 py-1.5 font-medium text-landing-body hover:bg-brand-50 sm:inline-block">
-              Services
-            </a>
-            <a href="#about" className="hidden rounded-lg px-3 py-1.5 font-medium text-landing-body hover:bg-brand-50 sm:inline-block">
-              About
-            </a>
-            <a href="#staff" className="hidden rounded-lg px-3 py-1.5 font-medium text-landing-body hover:bg-brand-50 sm:inline-block">
-              Staff
-            </a>
-            <a href="#departments" className="hidden rounded-lg px-3 py-1.5 font-medium text-landing-body hover:bg-brand-50 md:inline-block">
-              Departments
-            </a>
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 rounded-2xl bg-white/85 px-4 py-2.5 shadow-[0_10px_30px_rgba(53,88,130,0.12)] backdrop-blur">
+          <a href="#top" aria-label="AppointMed home" className="shrink-0">
+            <img src={TEXT_LOGO} alt="AppointMed" style={{ height: 26, width: "auto" }} />
+          </a>
+          <nav className="hidden items-center gap-5 text-[13px] font-semibold md:flex" aria-label="Site">
+            <a href="#top" className="text-[#5B8BC9] hover:text-landing-heading">Home</a>
+            <a href="#about" className="text-landing-heading hover:text-[#5B8BC9]">About Us</a>
+            <a href="#services" className="text-landing-heading hover:text-[#5B8BC9]">Services</a>
+            <a href="#staff" className="text-landing-heading hover:text-[#5B8BC9]">Doctors</a>
+            <a href="#departments" className="text-landing-heading hover:text-[#5B8BC9]">Departments</a>
+            <a href="#contact" className="text-landing-heading hover:text-[#5B8BC9]">Contact</a>
           </nav>
-          {user ? (
-            <Link
-              to={`/${user.role}`}
-              className="rounded-xl border border-brand-200 px-4 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50"
-            >
-              Dashboard
-            </Link>
-          ) : (
-            <Link
-              to="/staff-login"
-              className="rounded-xl border border-brand-200 px-4 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50"
-            >
-              Staff login
-            </Link>
-          )}
+          <Link
+            to={user ? `/${user.role}` : "/staff-login"}
+            className="rounded-xl bg-white px-5 py-2 text-base font-bold text-landing-body shadow-[0_8px_18px_rgba(53,88,130,0.22)] transition-transform hover:-translate-y-0.5"
+          >
+            {user ? "Dashboard" : "Staff Login"}
+          </Link>
         </div>
       </header>
 
-      {/* ---------------- hero ---------------- */}
-      <section id="top" className="relative overflow-hidden bg-landing-pagebg">
+            {/* ---------------- hero ---------------- */}
+      {/* Everything inside is sized in vw, so the content scales with the section width. */}
+      <section id="top" className="relative overflow-hidden bg-white" style={{ minHeight: "min(62vw, 100vh)" }}>
         <img
           src={heroSrc ?? "/hero-building.png"}
           alt=""
           aria-hidden
-          className="absolute right-0 top-0 hidden h-full w-[62%] object-cover sm:block"
-          style={{
-            maskImage: "linear-gradient(to right, transparent 0%, black 55%)",
-            WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 55%)",
-          }}
+          className={`absolute inset-0 h-full w-full object-cover object-right ${heroSrc ? "opacity-70" : "opacity-30"}`}
         />
-        {/* soft white wash so text stays readable over the photo */}
-        <div className="absolute inset-0 bg-gradient-to-r from-landing-pagebg via-landing-pagebg/85 to-transparent" aria-hidden />
-        <div className="relative mx-auto w-full max-w-7xl px-6 pb-16 pt-32 sm:pt-36 lg:pt-40">
-          <h1 className="max-w-2xl text-4xl font-extrabold leading-tight text-landing-heading sm:text-6xl lg:text-7xl">
-            {site.hero_title}
-          </h1>
-          <p className="mt-5 max-w-xl text-base font-medium text-landing-body sm:text-lg">
-            {site.hero_text}
-          </p>
-          <BookButton className="mt-8" />
+        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/50 to-transparent" aria-hidden />
+
+        <div className="relative mx-auto flex w-full max-w-[1600px] px-[10vw] pb-[5vw] pt-[8vw]">
+          <div className="flex flex-col items-center text-center" style={{ width: "min(38vw, 620px)", minWidth: "300px" }}>
+            <img src={logoSrc ?? DEFAULT_LOGO} alt="AppointMed" className="h-auto w-full" />
+
+            <Link
+              to="/book"
+              className="flex w-[80%] items-center justify-center gap-[1vw] rounded-[1.3vw] bg-white px-[1.4vw] py-[0.9vw] shadow-[0_16px_36px_rgba(53,88,130,0.22)] transition-transform hover:-translate-y-0.5"
+              style={{ marginTop: "2vw" }}
+            >
+              <svg viewBox="0 0 48 48" fill="none" aria-hidden className="shrink-0" style={{ width: "max(2rem, 3.2vw)", height: "max(2rem, 3.2vw)" }}>
+                <rect x="5" y="8" width="30" height="30" rx="4" stroke="#527DAA" strokeWidth="2.5" />
+                <path d="M13 4v8M27 4v8M5 16h30" stroke="#527DAA" strokeWidth="2.5" strokeLinecap="round" />
+                <g fill="#527DAA">
+                  <rect x="10" y="21" width="4" height="4" rx="1" />
+                  <rect x="18" y="21" width="4" height="4" rx="1" />
+                  <rect x="26" y="21" width="4" height="4" rx="1" />
+                  <rect x="10" y="29" width="4" height="4" rx="1" />
+                  <rect x="18" y="29" width="4" height="4" rx="1" />
+                </g>
+                <circle cx="35" cy="35" r="9" fill="white" stroke="#527DAA" strokeWidth="2.5" />
+                <path d="M35 30v5.5l3.5 2" stroke="#527DAA" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="font-extrabold text-landing-body underline underline-offset-4" style={{ fontSize: "max(1.1rem, 2.1vw)" }}>
+                {site.hero_title}
+              </span>
+            </Link>
+
+            <p className="font-medium leading-relaxed text-landing-body" style={{ marginTop: "2vw", fontSize: "max(0.8rem, 1.2vw)" }}>
+              {site.hero_text}
+            </p>
+          </div>
         </div>
       </section>
 
@@ -518,7 +523,7 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-6xl px-6 pb-8 pt-14">
           <div className="grid gap-10 lg:grid-cols-[1.3fr_2fr]">
             <div>
-              <img src={logoSrc ?? "/footer-logo.png"} alt="AppointMed" className="h-28 w-auto" />
+              <img src={logoSrc ?? DEFAULT_LOGO} alt="AppointMed" className="h-28 w-auto" />
               <p className="mt-3 max-w-xs text-sm leading-relaxed text-landing-faint">
                 {site.footer_text}
               </p>

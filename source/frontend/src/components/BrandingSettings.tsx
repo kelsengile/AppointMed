@@ -5,6 +5,7 @@ import { publishSite, useSite } from "../hooks/useSite";
 import { fitImage } from "../utils/image";
 import Alert from "./Alert";
 import { inputClass, primaryButton, secondaryButton } from "./ui";
+import { DEFAULT_LOGO } from "../config/branding";
 
 function Card({ title, desc, children, className = "" }: { title: string; desc?: string; children: ReactNode; className?: string }) {
   return (
@@ -171,7 +172,7 @@ export default function BrandingSettings() {
         <Card title="Logo" desc="Shown in the navigation bar, side panel, and footer.">
           <ImagePicker
             kind="logo" title="Logo" hint="PNG, JPEG or WebP."
-            current={site.logoSrc} fallback="/logo-mark.png" box={[512, 512]} mime="image/png" maxBytes={280_000}
+            current={site.logoSrc} fallback={DEFAULT_LOGO} box={[512, 512]} mime="image/png" maxBytes={280_000}
             previewClass="h-16 w-auto max-w-[8rem] object-contain p-1" onDone={setMessage} onFail={setError}
           />
         </Card>
