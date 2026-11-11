@@ -14,6 +14,7 @@ import { useAuth } from "../../context/AuthContext";
 import { usePolling } from "../../hooks/usePolling";
 import type { AppointmentItem, RoomStatus } from "../../types";
 import { ageFrom, formatDate, formatTime, isoDate, toInputDateTime } from "../../utils/format";
+import { loadPrefs } from "../../utils/preferences";
 
 const ROOM_STATUSES: RoomStatus[] = ["Available", "Occupied", "Maintenance"];
 
@@ -119,7 +120,7 @@ export default function AppointmentsPage() {
     if (!board.data) return;
     const waiting = board.data.queue;
     const previous = seen.current;
-    if (previous && isDoctor) {
+    if (previous && isDoctor && loadPrefs().checkInAlert) {
       const fresh = waiting.filter((a) => !previous.has(a.id));
       if (fresh.length > 0) setNotice(`${fresh.map((a) => a.full_name).join(", ")} checked in and is waiting.`);
     }

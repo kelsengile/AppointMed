@@ -29,7 +29,7 @@ By the end of this section you will have three things running on your computer:
 | Backend | FastAPI (Python) | http://127.0.0.1:8000 |
 | Frontend | React web app (Vite) | http://localhost:5173 |
 
-Set aside about 30 minutes the first time. Do the steps in order, and use the **Verify** line at the end of each step before moving on. If something fails, check [Troubleshooting](#troubleshooting).
+Set aside about 30 minutes the first time. The quickest way is the [dev console](#quick-start-recommended-the-dev-console) (`python dev.py`), which does the setup for you. If you prefer to do it by hand, follow the steps in order and use the **Verify** line at the end of each step. If something fails, check [Troubleshooting](#troubleshooting).
 
 ### Prerequisites
 
@@ -45,8 +45,8 @@ Install these first, then confirm each one from a terminal.
 Notes:
 
 - **Windows, Python:** tick **Add python.exe to PATH** in the installer.
-- **Windows, MySQL:** if `mysql --version` says the command is not recognized, add the MySQL `bin` folder to your PATH (usually `C:\Program Files\MySQL\MySQL Server 8.0\bin`), then open a new terminal.
-- **Windows, terminals:** commands below work in Git Bash, PowerShell, and Command Prompt unless a step says otherwise.
+- **Windows, MySQL:** if `mysql --version` is not recognized, add the MySQL `bin` folder to your PATH (usually `C:\Program Files\MySQL\MySQL Server 8.0\bin`), then open a new terminal.
+- Commands below work in Git Bash, PowerShell, and Command Prompt unless a step says otherwise.
 - Write down the MySQL `root` password you chose during installation. You need it in Steps 4 and 5.
 - A code editor such as [VS Code](https://code.visualstudio.com/) is recommended.
 
@@ -55,20 +55,56 @@ Notes:
 ```bash
 git clone <repository-url>
 cd <repository-folder>
-```
-
-Tell Git who you are, so your commits are credited to you (skip if already set):
-
-```bash
 git config --global user.name "Your Name"
 git config --global user.email "you@example.com"
 ```
 
 **Verify:** `git status` prints `On branch main` and `nothing to commit, working tree clean`.
 
+### Quick start (recommended): the dev console
+
+`dev.py` in the project root is a terminal menu that does Steps 2 to 7 for you. It uses only Python's standard library, so it runs before anything else is installed. Finish [Prerequisites](#prerequisites) and Step 1, then run this from the project root:
+
+```bash
+python dev.py        # Windows: py dev.py
+```
+
+Press **f** for **First-time setup**. It asks for three things:
+
+1. **A database password** for the `appointmed_user` account. Press Enter to generate a random one. It is saved in `source/.env`.
+2. **Whether to send real emails.** Answer **No** for development. Emails are then printed in the backend terminal.
+3. **The MySQL `root` password**, used only to create the database and the app account. It is never saved.
+
+When it finishes, it offers to start the project. If you used the dev console, skip to [Verify the setup](#verify-the-setup). Steps 2 to 7 are the same work done by hand.
+
+| Option | What it does |
+|---|---|
+| `f` | First-time setup: runs options 1 to 4 in order, then offers to start the project |
+| `1` | Checks Python (3.11+), Git, Node.js (20+), npm, and the MySQL client |
+| `2` | Creates `source/.venv`, runs `pip install -r requirements.txt` and `npm install` |
+| `3` | Creates `source/.env` from `.env.example` with your database password and a fresh random `JWT_SECRET` |
+| `4` | Creates the database and app account, loads `schema.sql`, `seed.sql` (only if the database is empty), and `landing_update.sql` |
+| `5` | Reset database: drops and rebuilds it with `schema.sql` and `seed.sql` (you must type `RESET`) |
+| `6`, `7` | Start the backend or the frontend in a new terminal window that stays open |
+| `8` | Starts both, runs a health check, and opens the web app in your browser |
+| `9` | Health check: API, database, and frontend status |
+| `10` | Opens the web app, the status page, or the API docs in your browser |
+| `11` | Runs `npm run build` (the TypeScript check required before a pull request) |
+| `12` | Update from GitHub: `git pull`, reinstalls both sets of packages, and warns when the SQL files changed |
+
+The top of the menu shows a live checklist (virtual environment, packages, `.env`, backend, database, frontend). Each option also works as a command:
+
+```bash
+python dev.py start       # backend + frontend in new windows, then the browser
+python dev.py install     # reinstall dependencies
+python dev.py reset-db    # fresh database
+```
+
+Other commands: `setup`, `check`, `env`, `db`, `backend`, `frontend`, `health`, `open`, `build`, `sync`. To stop the servers, close their terminal windows or press `Ctrl + C` in them.
+
 ### Step 2: Install backend dependencies
 
-A virtual environment keeps this project's Python packages separate from the rest of your computer. From the project root:
+From the project root:
 
 ```bash
 cd source
@@ -96,32 +132,22 @@ pip install -r requirements.txt
 
 **Verify:** your prompt starts with `(.venv)`, and `pip list` shows `fastapi`, `uvicorn`, `pydantic`, `mysql-connector-python`, `python-dotenv`, `bcrypt`, and `PyJWT`.
 
-> **PowerShell says "running scripts is disabled"?** Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, then try activating again. Or use Command Prompt instead.
-
-To leave the virtual environment later, type `deactivate`.
+> **PowerShell says "running scripts is disabled"?** Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use Command Prompt.
 
 ### Step 3: Install frontend dependencies
-
-From the project root:
 
 ```bash
 cd source/frontend
 npm install
 ```
 
-This creates a `node_modules` folder. It is large and is gitignored, so never commit it.
-
-**Verify:** the command ends without `npm ERR!` lines, and `node_modules` exists inside `source/frontend`.
+**Verify:** no `npm ERR!` lines, and `node_modules` exists inside `source/frontend` (it is gitignored: never commit it).
 
 ### Step 4: Create the database and the app user
-
-Log in to MySQL as root and enter your root password when asked:
 
 ```bash
 mysql -u root -p
 ```
-
-Then run the following. Replace `change_this_password` with a password of your own, and use the same one in Step 6.
 
 ```sql
 CREATE DATABASE appointmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -131,72 +157,61 @@ FLUSH PRIVILEGES;
 EXIT;
 ```
 
-What each line does:
+Replace `change_this_password` with a password of your own, and use the same one in Step 6. The app account can read and write data but cannot create or drop tables. Only `root` changes the structure. The web app connects as `appointmed_user`, never as `root`.
 
-- `CREATE DATABASE` makes an empty database named `appointmed`. `utf8mb4` lets it store any character, including names with accents.
-- `CREATE USER` makes a limited account just for the web app.
-- `GRANT` lets that account read and write data inside `appointmed` only. It cannot create or drop tables, which is intentional. Only `root` changes the structure.
-- `FLUSH PRIVILEGES` applies the change right away.
-
-The web app connects as `appointmed_user`, never as `root`.
-
-**Verify:** log in again with `mysql -u root -p` and run `SHOW DATABASES;`. `appointmed` should be in the list.
+**Verify:** `mysql -u root -p`, then `SHOW DATABASES;` lists `appointmed`.
 
 ### Step 5: Load the schema and sample data
 
-The schema creates the 12 tables. The seed fills them with fictional sample data: staff are SpongeBob SquarePants characters and patients are cartoon characters. Run both from the **project root**, in this order.
+`schema.sql` creates the tables (it starts with `USE appointmed;`, so create the database in Step 4 first). `seed.sql` fills them with fictional sample data: staff are SpongeBob SquarePants characters and patients are cartoon characters. `landing_update.sql` adds the `departments` table and its sample departments for the front page. Run all three from the **project root**, in this order.
 
 **Git Bash, Command Prompt, macOS, or Linux:**
 
 ```bash
 mysql -u root -p appointmed < source/database/schema.sql
 mysql -u root -p appointmed < source/database/seed.sql
+mysql -u root -p appointmed < source/database/landing_update.sql
 ```
 
-**PowerShell** does not support the `<` operator. Use one of these instead:
+**PowerShell** does not support `<`. Use:
 
 ```powershell
 cmd /c "mysql -u root -p appointmed < source\database\schema.sql"
 cmd /c "mysql -u root -p appointmed < source\database\seed.sql"
+cmd /c "mysql -u root -p appointmed < source\database\landing_update.sql"
 ```
 
-or, from the project root, open MySQL and use `SOURCE`:
+Load `seed.sql` **once**. Running it twice causes `Duplicate entry` errors. `schema.sql` and `landing_update.sql` are safe to repeat. To start over, see [Resetting your database](#resetting-your-database).
+
+**Verify:**
 
 ```sql
-mysql -u root -p appointmed
-SOURCE source/database/schema.sql;
-SOURCE source/database/seed.sql;
+SHOW TABLES;                          -- 14 tables (13 from schema.sql + departments)
+SELECT username, role FROM users;     -- 10 users
 ```
 
-Load `seed.sql` **once**. Running it twice causes `Duplicate entry` errors. To start over, see [Resetting your database](#resetting-your-database).
-
-**Verify:** in the MySQL prompt, run:
-
-```sql
-SHOW TABLES;                          -- 12 tables
-SELECT username, role FROM users;     -- 5 users
-```
-
-The sample staff accounts (all fictional, for development only) are:
+The sample staff accounts (all fictional, for development only):
 
 | Username | Password | Role | Notes |
 |---|---|---|---|
 | `admin` | `admin123` | Admin | Eugene H. Krabs |
-| `dr.cheeks` | `doctor123` | Doctor | General Medicine, works Monday to Friday |
-| `dr.tentacles` | `doctor123` | Doctor | Pediatrics, works Monday, Wednesday, Friday |
-| `nurse.spongebob` | `nurse123` | Nurse | Supports `dr.cheeks` |
-| `nurse.patrick` | `nurse123` | Nurse | Supports `dr.tentacles` |
+| `dr.cheeks` | `doctor123` | Doctor | General Medicine, Monday to Friday |
+| `dr.tentacles` | `doctor123` | Doctor | Pediatrics, Monday, Wednesday, Friday (one sample day off, 10 days ahead) |
+| `dr.pearl` | `doctor123` | Doctor | Ophthalmology, Tuesday and Thursday |
+| `dr.squarepants` | `doctor123` | Doctor | Orthopedics, Monday to Thursday |
+| `dr.patrick` | `doctor123` | Doctor | Neurology, Tuesday, Thursday, Saturday |
+| `nurse.dora` | `nurse123` | Nurse | Supports `dr.cheeks` |
+| `nurse.blossom` | `nurse123` | Nurse | Supports `dr.cheeks` |
+| `nurse.bubbles` | `nurse123` | Nurse | Supports `dr.tentacles` |
+| `nurse.buttercup` | `nurse123` | Nurse | Supports `dr.pearl` |
 
-These passwords are public. Never use them outside your own computer. Appointment dates in the seed are relative to the day you load it, so "today" always has a live queue to test with. The top of `seed.sql` describes exactly what data it covers.
+These passwords are public. Never use them outside your own computer. They still work for login, but any **new** password you set (change password, reset password, new user) must be at least 8 characters with an uppercase letter, a lowercase letter, a number, and a special character. Appointment dates in the seed are relative to the day you load it, so "today" always has a live queue to test with.
 
 ### Step 6: Configure the environment
 
-Copy `source/.env.example` to `source/.env` and fill in your values. The template looks like this:
+Copy `source/.env.example` to `source/.env` and fill in your values:
 
 ```
-# AppointMed local configuration. Copy this file to .env (same folder) and change the placeholders.
-# .env is gitignored: never commit it.
-
 APP_ENV=development
 
 DB_HOST=localhost
@@ -207,46 +222,40 @@ DB_PASSWORD=change_this_password
 
 # Signs login tokens. Generate one with: python -c "import secrets; print(secrets.token_hex(32))"
 JWT_SECRET=change_this_secret
-# Minutes a login stays valid (default 480 = 8 hours)
 JWT_EXPIRE_MINUTES=480
 
-# Comma-separated list of origins allowed to call the API from a browser
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # OPTIONAL email. Leave SMTP_HOST empty and emails are written to the backend console instead.
-SMTP_HOST=smtp.gmail.com
+SMTP_HOST=
 SMTP_PORT=587
-SMTP_USER=no-reply@appointmed.example
-SMTP_PASSWORD=app password
+SMTP_USER=
+SMTP_PASSWORD=
 SMTP_FROM=no-reply@appointmed.example
 SMTP_TLS=true
 ```
 
-Set `DB_PASSWORD` to the password from Step 4, and generate your own `JWT_SECRET`. The `.env` file is gitignored. **Never commit it.**
-
-What each setting means:
-
 | Setting | Meaning |
 |---|---|
-| `APP_ENV` | `development` on your computer. Do not change it unless the team agrees. |
-| `DB_HOST`, `DB_PORT` | Where MySQL is running. Leave as is for a local install. |
-| `DB_NAME` | The database from Step 4. |
+| `APP_ENV` | `development` on your computer. |
+| `DB_HOST`, `DB_PORT`, `DB_NAME` | Where MySQL is and the database from Step 4. |
 | `DB_USER`, `DB_PASSWORD` | The app account from Step 4, **not** `root`. |
-| `JWT_SECRET` | A long random string used to sign login tokens. **Required:** the backend refuses to start without it, and warns if it is still `change_this_secret`. Each developer generates their own. |
+| `JWT_SECRET` | A long random string that signs login tokens. **Required:** the backend refuses to start without it. Each developer generates their own. |
 | `JWT_EXPIRE_MINUTES` | How long a login stays valid. |
-| `CORS_ORIGINS` | Websites allowed to call the API from a browser. Keep it to the two frontend addresses above. |
-| `SMTP_*` | Optional email settings. When `SMTP_HOST` is empty, booking confirmation and disapproval emails are written to the backend console instead of being sent. That is enough for development. |
+| `CORS_ORIGINS` | Websites allowed to call the API from a browser. Keep the two frontend addresses. |
+| `SMTP_*` | Optional email. When `SMTP_HOST` is empty, emails are printed in the backend console. |
 
 Common mistakes:
 
-- The file must be at `source/.env`, next to `main.py`. Not in `source/frontend` and not at the project root.
+- The file must be at `source/.env`, next to `main.py`.
 - No spaces around `=`, and no quotes around values.
-- The file name starts with a dot and has no extension. Make sure your editor did not save it as `.env.txt`.
+- The name starts with a dot and has no extension (not `.env.txt`).
 - Restart the backend after editing `.env`. It is read only at startup.
+- **Never commit `.env`.**
 
 ### Step 7: Run the project
 
-Use two terminals, and leave both running. **Start the backend first**, because the frontend dev server forwards every `/api` request to it.
+> **Shortcut:** `python dev.py start` (option **8**) opens both windows, waits for them, and opens the browser.
 
 **Terminal 1: Backend** (from `source`, with `(.venv)` active):
 
@@ -254,10 +263,7 @@ Use two terminals, and leave both running. **Start the backend first**, because 
 uvicorn main:app --reload
 ```
 
-You should see `Uvicorn running on http://127.0.0.1:8000`. With `--reload`, the server restarts by itself when you save a Python file. Run it from the `source` folder, otherwise Python cannot find the `backend` package.
-
-- Status page: http://127.0.0.1:8000
-- API docs (interactive): http://127.0.0.1:8000/docs
+Run it from the `source` folder, otherwise Python cannot find the `backend` package. Status page: http://127.0.0.1:8000. API docs: http://127.0.0.1:8000/docs.
 
 **Terminal 2: Frontend** (from `source/frontend`):
 
@@ -265,51 +271,49 @@ You should see `Uvicorn running on http://127.0.0.1:8000`. With `--reload`, the 
 npm run dev
 ```
 
-You should see `Local: http://localhost:5173/`. The page updates in the browser as you save files.
-
-- Web app: http://localhost:5173
-
-Stop either server with `Ctrl + C`.
+Web app: http://localhost:5173. Stop either server with `Ctrl + C`.
 
 ### Verify the setup
 
-1. Open http://127.0.0.1:8000. The status page should show **API: Online** and **Database: Connected**. Also check http://127.0.0.1:8000/api/health, which should show JSON with `"status":"ok"`.
-2. Open http://localhost:5173. You should see the AppointMed landing page. Click **Staff login** and sign in as `nurse.spongebob` / `nurse123`. You should land on the nurse dashboard.
-
-If the database shows **Not connected**, check that MySQL is running and that `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in `source/.env` match Step 4.
+1. Open http://127.0.0.1:8000. The status page shows **API: Online** and **Database: Connected**. http://127.0.0.1:8000/api/health returns `"status":"ok"`.
+2. Open http://localhost:5173. You see the AppointMed landing page with the staff list. Click **Staff login** and sign in as `nurse.dora` / `nurse123`. You land on the nurse dashboard.
 
 ### Try the main workflow
 
-A quick tour that touches every role and confirms the whole system works:
-
-1. **Book:** open http://localhost:5173/book, choose Dr. Sandy Cheeks, a weekday, and an open time, and submit a request with fictional details.
-2. **Approve:** log in as `nurse.spongebob`, open **Notifications**, and approve the request. With no SMTP configured, the confirmation email appears in the backend console.
-3. **Check in:** open **Appointments**. Only today's appointments can be checked in, so use today's seeded appointments (or **New appointment** with check-in) to continue.
+1. **Book:** open http://localhost:5173/book, choose a doctor, a date on the calendar, and an open time, and submit a request with fictional details.
+2. **Approve:** log in as `nurse.dora`, open **Notifications**, and approve the request. With no SMTP configured, the confirmation email appears in the backend console.
+3. **Check in:** open **Appointments**. Only today's appointments can be checked in, and **a room must be chosen first** (use the room dropdown on the card, then **Check in**).
 4. **Examine:** log in as `dr.cheeks`, start an examination for a checked-in patient, add a diagnosis and a prescription, and finish it.
 5. **Pay:** open **Invoice** and mark the invoice as paid. The visit moves to **History** and the patient's record.
-6. **Administer:** log in as `admin` to see **Users**, **Reports**, and the **Audit Logs** entries your actions created.
+6. **Day off:** as `dr.cheeks`, open the **Agenda for** calendar, press **Manage days off**, and mark a free date unavailable. Open `/book` and see that date turn red for that doctor.
+7. **Administer:** log in as `admin` to see **Users**, **Reports**, **Audit Logs**, and the **Database** page (backup, tables, SQL console).
 
 ### Troubleshooting
 
 | Problem | Likely cause | Fix |
 |---|---|---|
-| `RuntimeError: JWT_SECRET is missing` when the backend starts | `source/.env` is missing, in the wrong folder, or has no `JWT_SECRET` | Create `source/.env` (Step 6), then restart `uvicorn` |
+| `RuntimeError: JWT_SECRET is missing` | `source/.env` is missing, in the wrong folder, or has no `JWT_SECRET` | Create `source/.env` (Step 6), then restart `uvicorn` |
 | Status page shows **Database: Not connected** | MySQL is stopped, or the `DB_*` values do not match Step 4 | Start MySQL, check `.env`, restart the backend |
-| `Access denied for user 'appointmed_user'` in the backend log | Wrong password in `.env`, or the user was never created | Repeat the `CREATE USER` and `GRANT` lines in Step 4 and match the password |
+| `Access denied for user 'appointmed_user'` | Wrong password in `.env`, or the user was never created | Repeat Step 4 and match the password |
 | `ModuleNotFoundError: No module named 'backend'` | `uvicorn` was started from the wrong folder | `cd source`, then `uvicorn main:app --reload` |
-| `ModuleNotFoundError` for `bcrypt`, `jwt`, `fastapi`, and similar | The virtual environment is not active, or packages are not installed | Activate `.venv`, then `pip install -r requirements.txt` |
-| The web app says "Cannot reach the server. Check that the backend is running." | The backend is stopped, or not on port 8000 (Vite forwards `/api` to `127.0.0.1:8000`) | Start the backend, then reload the page |
-| `Port 5173 is already in use` | Another Vite server is open (the port is fixed on purpose) | Close the other terminal, then run `npm run dev` again |
+| `ModuleNotFoundError` for `bcrypt`, `jwt`, `fastapi` | The virtual environment is not active | Activate `.venv`, then `pip install -r requirements.txt` |
+| "Cannot reach the server. Check that the backend is running." | The backend is stopped or not on port 8000 | Start the backend, reload the page |
+| `Port 5173 is already in use` | Another Vite server is open (the port is fixed on purpose) | Close it, then `npm run dev` |
 | `Duplicate entry` while loading `seed.sql` | The seed was already loaded | [Reset your database](#resetting-your-database) |
-| "Too many failed attempts" at login | Five wrong passwords for that username within 5 minutes | Wait a few minutes (or restart the backend) and use the sample passwords above |
-| The booking page shows no available times | That doctor does not work that weekday (Dr. Tentacles works Monday, Wednesday, Friday only), the times already passed or are taken, the date is outside the booking window, or online booking is switched off in Clinic Settings | Try another date or doctor, or check **Clinic Settings** as `admin` |
-| No confirmation email arrives | `SMTP_HOST` is empty, so the email is printed in the backend console | Read the console, or configure SMTP in `.env` |
+| `ERROR 1146: Table 'appointmed.departments' doesn't exist` or the front page shows only six built-in departments | `landing_update.sql` was not loaded (the dev console reset skips it) | Run `mysql -u root -p appointmed < source/database/landing_update.sql` |
+| "Too many failed attempts" at login | Five wrong passwords for that username within 5 minutes | Wait a few minutes (or restart the backend) |
+| "Choose an exam room before checking the patient in." | Check-in requires a room | Pick a room on the appointment card, then press **Check in** |
+| The booking page shows no available times | The doctor does not work that weekday, marked it a day off, the times passed or are taken, the date is outside the window, or online booking is off | Try another date or doctor, or check **Clinic Settings** as `admin` |
+| No confirmation email arrives | `SMTP_HOST` is empty, so the email is printed in the backend console | Read the console, or configure SMTP |
+| "The password needs ..." when setting a password | New passwords must have 8+ characters, upper and lower case, a number, and a special character | Follow the checklist under the field |
 | `npm run build` fails with TypeScript errors | Strict mode is on, and unused variables and imports count as errors | Fix the lines the compiler reports |
-| PowerShell rejects `mysql ... < file.sql` | PowerShell does not support `<` | Use the `cmd /c` or `SOURCE` options in Step 5 |
+| `dev.py` says Python 3.11 or newer is needed | `dev.py` was started with an older Python | Run it with a newer one, for example `py -3.12 dev.py` |
+| `dev.py` says `Access denied for user 'root'` | Wrong MySQL root password, or (Linux) root uses socket login | Retype it. On Linux run `sudo mysql` and set one with `ALTER USER 'root'@'localhost' IDENTIFIED BY 'new_password';` |
+| `dev.py` prints "No supported terminal was found" | No desktop terminal, or no desktop session (SSH/WSL) | Open two terminals yourself and run the commands it prints |
 
 ### Resetting your database
 
-To start over with fresh sample data, log in as root and run:
+Run as root:
 
 ```sql
 DROP DATABASE appointmed;
@@ -317,7 +321,9 @@ CREATE DATABASE appointmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 GRANT SELECT, INSERT, UPDATE, DELETE ON appointmed.* TO 'appointmed_user'@'localhost';
 ```
 
-Then repeat Step 5. Never run `seed.sql` against a shared or production database.
+Then repeat Step 5, or choose **Reset database** in the dev console (type `RESET` to confirm). The dev console reset loads `schema.sql` and `seed.sql` only, so load `landing_update.sql` afterwards if you want the `departments` table. Never run `seed.sql` against a shared or production database.
+
+An administrator can also download and import a backup from the **Database** page (see [BACKEND.md](source/backend/BACKEND.md), Section 15).
 
 ### Staying up to date
 
@@ -327,10 +333,10 @@ Each time you start working, run `git pull`, then check what changed:
 |---|---|
 | `source/requirements.txt` | `pip install -r requirements.txt` (with `.venv` active) |
 | `source/frontend/package.json` or `package-lock.json` | `npm install` in `source/frontend` |
-| `source/database/schema.sql` or `seed.sql` | Reset your database (see above) so it matches the team's |
-| `source/.env.example` | Add any new variables to your own `source/.env`, then restart the backend |
+| `schema.sql`, `seed.sql`, or `landing_update.sql` | Reset your database so it matches the team's |
+| `source/.env.example` | Add new variables to your own `source/.env`, then restart the backend |
 
-Then start the backend and the frontend as in Step 7.
+The dev console's **Update from GitHub** option does the pull and the reinstalls, and warns you when the SQL files changed.
 
 ---
 
@@ -341,139 +347,112 @@ Then start the backend and the frontend as in Step 7.
 ├── .gitignore
 ├── CODE_OF_CONDUCT.md
 ├── CONTRIBUTING.md
+├── DOCUMENTATION.md          # technical documentation for the course
 ├── README.md
 ├── SECURITY.md
+├── note.md                   # study notes: structures, complexity, OOP, security, privacy
+├── dev.py                    # terminal console: install, set up the database, start the project
 └── source/
-    ├── .env                      # local secrets (gitignored)
-    ├── .env.example              # template for .env 
-    ├── main.py                   # FastAPI entry point: CORS, error handlers, routers, status page
-    ├── requirements.txt          # Python dependencies
-    ├── assets/                   # fonts, icons, and images
+    ├── .env                  # local secrets (gitignored)
+    ├── .env.example          # template for .env
+    ├── main.py               # FastAPI entry point: CORS, error handlers, routers, status page
+    ├── requirements.txt
+    ├── assets/               # fonts, icons, and images
     ├── backend/
-    │   ├── core/                 # config.py, database.py, exceptions.py, security.py, mailer.py, utils.py
-    │   ├── models/               # domain.py: User/Doctor/Nurse/Admin and AppointmentWorkflow
-    │   ├── schemas/              # api.py: Pydantic request bodies
-    │   ├── repositories/         # all SQL: base, user, patient, appointment, clinical, system
-    │   ├── services/             # business rules: auth, booking, scheduling, appointment,
-    │   │                         #   billing, patient, dashboard, admin, waiting_queue
-    │   └── routes/               # auth_routes, public_routes, staff_routes, admin_routes
+    │   ├── BACKEND.md
+    │   ├── core/             # config, database, exceptions, security, mailer, utils
+    │   ├── models/           # domain.py: User/Doctor/Nurse/Admin and AppointmentWorkflow
+    │   ├── schemas/          # api.py (request bodies), database.py (Database page bodies)
+    │   ├── repositories/     # base, user (+schedule, days off), patient, appointment (+notification),
+    │   │                     #   clinical, system, department, staff_directory, database
+    │   ├── services/         # auth, booking, scheduling, appointment, billing, patient, dashboard,
+    │   │                     #   admin, department, staff_directory, database, backup_parser, waiting_queue
+    │   └── routes/           # auth, public, staff, admin, database
     ├── database/
-    │   ├── schema.sql            # tables and constraints
-    │   └── seed.sql              # fictional sample data
-    ├── documentation/
-    │   ├── DOCUMENTATION.md      # technical documentation
-    │   ├── diagrams/             # UML class diagrams
-    │   ├── flowcharts/
-    │   └── screenshots/
-    └── frontend/                 # React + TypeScript web app (Vite + Tailwind)
-        ├── index.html
-        ├── package.json
-        ├── vite.config.ts        # dev server on :5173, proxies /api to the backend
-        ├── tailwind.config.js
-        ├── public/               # appointmed-logo.png, optional hero.jpg
+    │   ├── DATABASE.md
+    │   ├── schema.sql        # 13 tables and constraints
+    │   ├── seed.sql          # fictional sample data
+    │   └── landing_update.sql # departments table for the front page
+    ├── documentation/        # diagrams/, flowcharts/, screenshots/
+    └── frontend/             # React + TypeScript web app (Vite + Tailwind)
+        ├── FRONTEND.md
+        ├── public/           # logos, hero and service images, doctor art, department icons
         └── src/
-            ├── main.tsx
-            ├── app.tsx           # routes, and the map from navigation items to pages
-            ├── api/              # client.ts (the only fetch call) and endpoints.ts
-            ├── components/       # shared pieces: Badge, Modal, ExamPanel, EncounterCard, ...
-            ├── config/           # Navigation.ts: side-panel items per role
-            ├── context/          # AuthContext.tsx: signed-in user
-            ├── hooks/            # usePolling.ts
-            ├── layouts/          # DashboardLayout.tsx: side panel and page frame
-            ├── pages/            # LandingPage, BookingPage, plus staff/, admin/, shared/
-            ├── types/            # index.ts: types that match the backend JSON
-            └── utils/            # format.ts: dates, money, age
+            ├── app.tsx       # routes, and the map from navigation items to pages
+            ├── api/          # client.ts (the only fetch), endpoints.ts, databaseApi, departmentApi, staffDirectoryApi
+            ├── components/   # Badge, Modal, ExamPanel, AgendaCalendar, BookingCalendar, ...
+            ├── config/       # Navigation.ts: side-panel items per role
+            ├── context/      # AuthContext.tsx
+            ├── hooks/        # usePolling.ts
+            ├── layouts/      # DashboardLayout.tsx
+            ├── pages/        # LandingPage, BookingPage, StaffLoginPage, staff/, admin/, shared/
+            ├── types/        # index.ts, database.ts, department.ts, staff.ts
+            └── utils/        # format, csv, image, input (character filters), password (rules)
 ```
 
 ## Contributing
 
-Thank you for helping build AppointMed. This section explains how we plan work, write and review code, and keep the project consistent. Please also read the [Code of Conduct](CODE_OF_CONDUCT.md) and [SECURITY.md](SECURITY.md).
+Thank you for helping build AppointMed. This section explains how we plan work, write and review code, and keep the project consistent. Please also read the [Code of Conduct](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md), and the study notes in [note.md](note.md).
 
 ### Before you start
 
-1. **Get the app running.** Finish [Initialization](#initialization) first, so you can test your changes.
-2. **Pick or create an issue.** Every change should start from a GitHub issue describing what is needed. Comment on it (or tell the group) that you are taking it, so two people do not do the same work.
-3. **Keep the scope small.** One issue, one branch, one pull request. Split big features into pieces a teammate can review in about 15 minutes.
-4. **Ask early.** If the requirement is unclear or touches the database design, ask the team before writing a lot of code.
+1. **Get the app running.** Finish [Initialization](#initialization) first.
+2. **Pick or create an issue.** Every change should start from a GitHub issue. Comment on it so two people do not do the same work.
+3. **Keep the scope small.** One issue, one branch, one pull request that a teammate can review in about 15 minutes.
+4. **Ask early.** If the requirement is unclear or touches the database design, ask before writing a lot of code.
 
 ### Branching
 
-`main` always holds working code. Never commit directly to it. Create a branch for each piece of work, named `type/short-description` in lowercase with hyphens:
+`main` always holds working code. Never commit directly to it. Name branches `type/short-description`:
 
 | Prefix | Use for | Example |
 |---|---|---|
-| `feature/` | New functionality | `feature/appointment-booking` |
+| `feature/` | New functionality | `feature/doctor-days-off` |
 | `fix/` | Bug fixes | `fix/slot-conflict` |
 | `docs/` | Documentation, diagrams, screenshots | `docs/uml-diagram` |
-| `refactor/` | Restructuring code without changing behavior | `refactor/remove-unused-visit-files` |
+| `refactor/` | Restructuring without changing behavior | `refactor/slot-queries` |
 | `test/` | Adding or improving tests | `test/booking-validation` |
 | `chore/` | Dependencies, config, tooling | `chore/update-dependencies` |
 
 ### Step-by-step workflow
 
 ```bash
-# 1. Start from the latest main
 git switch main
 git pull
-
-# 2. Create your branch
 git switch -c feature/doctor-availability
-
-# 3. Do the work, running the app as you go (see "Testing your changes")
-
-# 4. Review what you changed before committing
+# ...do the work, running the app as you go...
 git status
 git diff
-
-# 5. Stage and commit
-git add source/backend/services/scheduling_service.py source/frontend/src/pages/BookingPage.tsx   # add specific files, not everything
+git add source/backend/services/scheduling_service.py source/frontend/src/pages/BookingPage.tsx
 git commit -m "Hide fully booked days on the booking page"
-
-# 6. Push your branch and open a pull request on GitHub
 git push -u origin feature/doctor-availability
 ```
 
-Tips:
-
-- Stage specific files instead of `git add .`, so you never commit `.env`, `node_modules`, or stray files by accident. Always read `git status` first.
-- Commit often in small steps. It is easier to review and to undo.
-- If you are mid-work and need to switch tasks, commit to your branch (or use `git stash`) before switching.
+- Stage specific files instead of `git add .`, so you never commit `.env`, `node_modules`, or stray files. Read `git status` first.
+- Commit often in small steps.
 
 ### Keeping your branch up to date
-
-If `main` moves on while you work, bring those changes into your branch before opening or merging your pull request:
 
 ```bash
 git fetch origin
 git merge origin/main
 ```
 
-If Git reports a **merge conflict**, it marks the clashing lines in the file with `<<<<<<<`, `=======`, and `>>>>>>>`. Edit the file to keep the correct version, remove the markers, then:
-
-```bash
-git add <the-fixed-file>
-git commit
-```
-
-Run the app again afterward to be sure nothing broke. When two people changed the same code in different ways, talk to each other rather than guessing which version wins. `package-lock.json` conflicts are best fixed by running `npm install` again rather than editing by hand.
+If Git reports a **merge conflict**, edit the file to keep the correct version, remove the `<<<<<<<`, `=======`, `>>>>>>>` markers, then `git add <file>` and `git commit`. Run the app again afterward. For `package-lock.json` conflicts, run `npm install` instead of editing by hand.
 
 ### Commit messages
 
-Write the subject line as a short command that says what the commit does, in 72 characters or fewer, with no period at the end. Add a blank line and a few sentences of explanation if the *why* is not obvious.
+Write the subject as a short command in 72 characters or fewer, with no period. Add a blank line and a few sentences if the *why* is not obvious.
 
 | Good | Not helpful |
 |---|---|
 | `Add conflict check when booking a slot` | `fixed stuff` |
 | `Validate phone number on booking request` | `update` |
-| `Fix nurse routing when no doctor is assigned` | `changes to appointment_service.py` |
-
-Each commit should do one thing and leave the app in a working state.
 
 ### Opening a pull request
 
-1. Push your branch and click **Compare & pull request** on GitHub, targeting `main`.
-2. Give it a clear title, like a commit subject.
-3. Fill in the description using this template:
+1. Push your branch and open a pull request targeting `main`, with a clear title.
+2. Use this description template:
 
 ```markdown
 ## What changed
@@ -482,8 +461,7 @@ A short summary of the change and why it is needed.
 Closes #<issue-number>
 
 ## How to test
-1. Steps a reviewer can follow to see it working.
-2. Include which user to log in as, if relevant.
+1. Steps a reviewer can follow. Say which user to log in as.
 
 ## Screenshots
 (For visible changes. Fictional data only.)
@@ -491,113 +469,112 @@ Closes #<issue-number>
 ## Checklist
 - [ ] The app runs and the change works as described
 - [ ] `npm run build` passes (no TypeScript errors)
-- [ ] Input is validated and errors are handled with clear messages
-- [ ] New endpoints check the user's role with `require_feature(...)` and stay inside the user's doctor scope
+- [ ] Input is validated on the server (Pydantic schema) and errors have clear messages
+- [ ] New endpoints use `require_feature(...)` and stay inside the user's doctor scope
 - [ ] SQL is parameterized and lives only in a repository
 - [ ] No secrets, `.env` contents, or real personal data included
-- [ ] Documentation updated if behavior or the database changed
+- [ ] Documentation (and note.md, if a concept changed) updated
 - [ ] I can explain every part of this code
 ```
 
 ### Reviewing a pull request
 
 - **At least one teammate** must approve before merging. You may not approve your own pull request.
-- Aim to review within **2 days**, so nobody is blocked for long.
-- Review for: does it do what the issue asks, is it readable, are errors handled, is input validated, is SQL parameterized, are roles and doctor scope checked on the backend, and does it follow these guidelines.
-- Comment on the code, not the person. Explain *why* and suggest an alternative. Mark small style points as optional ("nit:").
-- Authors respond to every comment, push fixes to the same branch, and ask for another look.
-- After approval, the author merges the pull request and deletes the branch.
+- Aim to review within **2 days**.
+- Review for: does it do what the issue asks, is it readable, are errors handled, is input validated on the server, is SQL parameterized, are roles and doctor scope checked on the backend.
+- Comment on the code, not the person. Explain *why* and mark small style points as optional ("nit:").
+- Authors respond to every comment and push fixes to the same branch. After approval, the author merges and deletes the branch.
 
 ### Where code belongs
 
-The backend is layered. A request flows downward, and each layer only calls the one below it.
+A request flows downward, and each layer only calls the one below it.
 
 | Layer | Role | Where it lives |
 |---|---|---|
-| **Routes** | Thin FastAPI endpoints. They declare who may call them with `require_feature("...")`, read a validated request body, call one service method, and return the result. | `source/backend/routes/` |
-| **Schemas** | Pydantic request bodies. Every input is validated here before it reaches a service. | `source/backend/schemas/api.py` |
-| **Services** | Business rules: booking conflicts, the status workflow, doctor scoping, transactions, audit logging, and emails. | `source/backend/services/` |
-| **Repositories** | The only place that contains SQL. Each one extends `BaseRepository` and uses parameterized queries. | `source/backend/repositories/` |
-| **Models** | Domain objects: `User` and its role subclasses, and the `AppointmentWorkflow` state machine. | `source/backend/models/domain.py` |
-| **Core** | Settings, the database pool and transactions, custom exceptions and their handlers, security (hashing, tokens, rate limiter, permission dependency), the mailer, and small utilities. | `source/backend/core/` |
+| **Routes** | Thin endpoints. Declare who may call with `require_feature("...")`, call one service method, return the result. | `source/backend/routes/` |
+| **Schemas** | Pydantic request bodies. Every input is validated here before it reaches a service. | `source/backend/schemas/` |
+| **Services** | Business rules: conflicts, the status workflow, doctor scoping, transactions, audit logging, emails. | `source/backend/services/` |
+| **Repositories** | The only place with SQL. Each extends `BaseRepository` and uses parameterized queries. | `source/backend/repositories/` |
+| **Models** | `User` and its role subclasses, and the `AppointmentWorkflow` state machine. | `source/backend/models/domain.py` |
+| **Core** | Settings, database pool and transactions, exceptions, security, mailer, utilities. | `source/backend/core/` |
 | **Frontend** | Pages, components, API calls, and shared types. | `source/frontend/src/` |
 
 Rules of thumb:
 
-- A route function should be short. It reads the request, calls a service, and returns the result.
-- Only repositories contain SQL. Only services contain business rules. Do not mix them.
+- A route function is short: read the request, call a service, return the result.
+- Only repositories contain SQL. Only services contain business rules.
 - When several changes must succeed together, wrap them in `with self._db.transaction() as tx:` and build repositories from `tx`.
-- Clinical data belongs to a doctor. Use `user.scope_doctor_id` and return `NotFoundError` for anything outside it, so a nurse can never reach another doctor's records.
+- Use `user.scope_doctor_id` and return `NotFoundError` for anything outside it.
 - Record important actions with `AuditRepository.record(...)`. Never put passwords or medical details in it.
-- Use `to_money` for prices and totals. Money is a `Decimal`, never a float.
-- In the frontend, put pages in `pages/`, reusable pieces in `components/`, all backend calls in `api/endpoints.ts`, and shared types in `types/index.ts`.
+- Use `to_money` for prices. Money is a `Decimal`, never a float.
+- When a doctor-wide rule must not run twice at once (one exam at a time, days off), lock the doctor row with `_lock_doctor` inside the transaction.
+- In the frontend, put pages in `pages/`, reusable pieces in `components/`, all backend calls in `api/`, and shared types in `types/`.
 
 ### Common tasks
 
 **Add a backend endpoint**
 
-1. Add a request body to `schemas/api.py` if the endpoint receives data.
-2. Add the query to the right repository in `repositories/`.
-3. Add the rule to a service in `services/` (scope check, transaction, audit entry).
-4. Add the route in `routes/` with `Depends(require_feature("..."))`.
-5. Try it at http://127.0.0.1:8000/docs with valid, invalid, and empty input.
+1. Add a request body to `schemas/api.py` if the endpoint receives data (use the shared checks such as `_person_name`, `_no_control`).
+2. Add the query to the right repository.
+3. Add the rule to a service (scope check, transaction, audit entry).
+4. Add the route with `Depends(require_feature("..."))`.
+5. Try it at http://127.0.0.1:8000/docs with valid, invalid, and empty input, and as a role that should be refused.
 
 **Give a role access to something new:** add the feature name to that role's `features` set in `models/domain.py`, then use the same name in `require_feature(...)`.
 
 **Add a frontend page**
 
 1. Create the page in `pages/staff/`, `pages/admin/`, or `pages/shared/`.
-2. Add an item to the role's list in `config/Navigation.ts` (the first item must stay the Dashboard).
-3. Map its `path` to the component in `pageFor()` in `app.tsx`. Until then, the page shows the placeholder.
-4. Add the API call to `api/endpoints.ts` and its types to `types/index.ts`.
+2. Add an item to the role's list in `config/Navigation.ts` (the first item stays the Dashboard).
+3. Map its `path` to the component in `pageFor()` in `app.tsx`.
+4. Add the API call and types. Use the character filters in `utils/input.ts` for text fields.
 
 **Change the database structure**
 
-1. Edit `source/database/schema.sql` (and `seed.sql` if sample data must change). Do not change tables by hand in MySQL without updating the file.
-2. Update the matching repository queries and the types in `types/index.ts`.
+1. Edit `source/database/schema.sql` (and `seed.sql` if sample data changes).
+2. Update the matching repository queries and the frontend types.
 3. Mention it clearly in your pull request.
-4. After merging, teammates reset their database (see [Staying up to date](#staying-up-to-date)).
+4. After merging, teammates reset their database. (If you add a table, check that the Database page backup and import still list it.)
 
 ### How the course concepts appear in the code
 
-The project counts for three courses, so use these ideas where they fit naturally, and note them in `DOCUMENTATION.md` so they are easy to point to during the presentation.
-
 | Concept | Where it lives in AppointMed |
 |---|---|
-| **Encapsulation** | `Settings` (a frozen dataclass that reads the environment once), `Database` (hides the connection pool, locking, and error translation), and `User` (private fields exposed through properties) |
-| **Abstraction** | `Executor` (an abstract way to run SQL), `BaseRepository` (abstract `table` and `columns`), and `User.scope_doctor_id` |
-| **Inheritance** | `Doctor`, `Nurse`, and `Admin` extend `User`. Every repository extends `BaseRepository`. Every business error extends `AppError`. |
-| **Polymorphism** | Each role answers `can_access(feature)` and `scope_doctor_id` in its own way. `Database` and `Transaction` are interchangeable `Executor`s, so a repository works inside or outside a transaction. |
-| **Constructors and factories** | `User.__init__` rejects a missing username or name. `User.from_row` builds the right subclass. `Settings.from_env` builds the settings. |
-| **Custom exceptions** | The `AppError` family: `AppointmentConflictError`, `InvalidScheduleError`, `InvalidStatusError`, `DuplicateEntryError`, `RateLimitError`, `DatabaseUnavailableError`, and others |
-| **Data structures and algorithms (ITEC 104)** | `WaitingQueue` (min-heap ordered by check-in time), `RateLimiter` (sliding window over a `deque`), `AppointmentWorkflow` (state machine with a transition table), slot generation and taken-slot sets in `SchedulingService`, and search and sorting in repositories |
-| **Information management (ITEC 105)** | 12 normalized tables with primary and foreign keys, `CHECK` constraints, a double-booking guard (a generated `active_slot` column with a unique index), transactions, parameterized queries, aggregate report queries, and an append-only audit log |
+| **Encapsulation** | `Settings` (frozen dataclass), `Database` (hides the pool, locking, error translation), `User` (private fields behind properties) |
+| **Abstraction** | `Executor`, `BaseRepository` (abstract `table` and `columns`), `User.scope_doctor_id` |
+| **Inheritance** | `Doctor`, `Nurse`, `Admin` extend `User`. Every repository extends `BaseRepository`. Every business error extends `AppError`. |
+| **Polymorphism** | Each role answers `can_access` and `scope_doctor_id` its own way. `Database`, `Transaction`, and `AdminSession` are interchangeable `Executor`s. |
+| **Constructors and factories** | `User.__init__` rejects a missing username or name. `User.from_row` and `Settings.from_env` are factories. |
+| **Custom exceptions** | The `AppError` family (`AppointmentConflictError`, `InvalidScheduleError`, `InvalidStatusError`, `DuplicateEntryError`, `RateLimitError`, `DatabaseUnavailableError`, and others) |
+| **Data structures and algorithms (ITEC 104)** | `WaitingQueue` (min-heap), `RateLimiter` (sliding window over a `deque`), `AppointmentWorkflow` (transition dictionary), slot generation with a taken-time set, sorted overlap detection |
+| **Information management (ITEC 105)** | 13 tables plus `departments`, keys, `CHECK` constraints, the `active_slot` double-booking guard, row locks, transactions, parameterized queries, report aggregates, an audit log, backup and restore |
+
+Study notes with code excerpts and complexity analysis are in [note.md](note.md).
 
 ### Coding standards
 
 **Python (backend)**
 
-- Follow [PEP 8](https://peps.python.org/pep-0008/): `snake_case` for functions and variables, `PascalCase` for classes, `UPPER_CASE` for constants, 4-space indentation.
-- Add type hints to function parameters and return values.
-- Give every class and public method a short docstring that says what it does.
-- Catch specific exceptions (`except MySQLError:`), never a bare `except:`.
-- Raise a subclass of `AppError` for business problems. The registered handlers turn it into `{"detail": "<plain message>"}` with the right status code.
-- Keep business logic in service classes, not in route functions.
+- Follow [PEP 8](https://peps.python.org/pep-0008/): `snake_case` functions and variables, `PascalCase` classes, `UPPER_CASE` constants, 4-space indentation.
+- Add type hints and a short docstring to every class and public method.
+- Catch specific exceptions, never a bare `except:`.
+- Raise a subclass of `AppError` for business problems.
+- Keep business logic in services, not in routes.
 - Read configuration from `settings`. Never hard-code passwords, hosts, or secrets.
 
 **TypeScript and React (frontend)**
 
-- TypeScript strict mode is on, and unused variables and imports fail the build. Avoid `any`; define a type or interface instead.
-- Components are function components in `PascalCase`. Variables and functions are `camelCase`.
-- Type your props. Keep each component focused on one job.
-- Keep all backend calls in `api/endpoints.ts` (which goes through `api/client.ts`) rather than scattering `fetch` calls across components.
-- Keep `types/index.ts` in step with the backend JSON. MySQL `DECIMAL` values arrive as text, so convert with `toNumber()` from `utils/format.ts` before doing arithmetic.
-- Style with Tailwind utility classes. Handle loading, empty, and error states on every screen that fetches data (the `usePolling` hook helps).
-- Check access on the backend. Hiding a button or a page is a convenience, not security.
+- Strict mode is on, and unused variables and imports fail the build. Avoid `any`.
+- Components are `PascalCase` function components. Type your props.
+- Keep all backend calls in `api/` (through `api/client.ts`).
+- Keep `types/` in step with the backend JSON. MySQL `DECIMAL` arrives as text, so use `toNumber()` before arithmetic.
+- Style with Tailwind utility classes and the shared strings in `components/ui.ts`.
+- Handle loading, empty, and error states (the `usePolling` hook helps).
+- Check access on the backend. Hiding a button is a convenience, not security.
 
 **SQL and database**
 
-Always use parameterized queries. Never build SQL by joining user input into a string.
+Always use parameterized queries:
 
 ```python
 # Good: the value is passed separately, so it cannot change the query
@@ -609,42 +586,34 @@ self._db.fetch_all(f"SELECT * FROM patients WHERE full_name LIKE '%{term}%'")
 
 **Errors and validation**
 
-- Validate every input with Pydantic before it reaches a service or the database.
-- Raise meaningful custom exceptions for business problems and let the exception handler turn them into clear responses.
-- Show users a plain message that says what went wrong and how to fix it. Never expose stack traces, SQL, or password hashes.
-
-```python
-class AppointmentConflictError(ConflictError):
-    """Raised when a doctor already has an active appointment at the requested time."""
-```
+- Validate every input with Pydantic before it reaches a service. The frontend repeats the rules for fast feedback, but the server is the authority.
+- Raise meaningful custom exceptions and let the handler turn them into clear responses.
+- Never expose stack traces, SQL, or password hashes.
 
 **API conventions**
 
-- All endpoints live under `/api`: `/api/auth` (login and profile), `/api/public` (booking page, no login), `/api/staff` (doctors and nurses), and `/api/admin`. Use lowercase plural nouns and exchange JSON.
+- All endpoints live under `/api`: `/api/auth`, `/api/public` (no login), `/api/staff`, `/api/admin` (including `/api/admin/database`). Use lowercase plural nouns and JSON.
 - Errors always look like `{"detail": "..."}`.
-- Use proper status codes: `200` OK, `201` created, `400` or `422` invalid input, `401` not signed in, `403` not allowed, `404` not found, `409` conflict (such as a double booking), `429` too many attempts, `503` database unavailable.
+- Status codes: `200` OK, `201` created, `400` or `422` invalid input, `401` not signed in, `403` not allowed, `404` not found, `409` conflict, `429` too many attempts, `503` database unavailable.
 
 **Comments and naming**
 
-Explain *why*, not *what*. Use descriptive names (`available_slots`, not `x`). Remove dead code and debugging prints before committing.
+Explain *why*, not *what*. Use descriptive names. Remove dead code and debugging prints before committing.
 
 ### Testing your changes
 
-The project does not have automated tests yet, so test by hand, and add automated tests as the backend grows.
+There are no automated tests yet, so test by hand.
 
-- **Backend:** open http://127.0.0.1:8000/docs and try your endpoint with valid input, invalid input, and empty fields. Try it as a role that should be refused, too.
-- **Frontend:** use the page as each affected role would. Try the unhappy paths too: empty form, wrong values, backend turned off.
-- **Type check:** run `npm run build` in `source/frontend`. It must finish with no errors.
-- **Database:** if you touched the schema, reset your database and reload both SQL files from scratch to confirm they run cleanly.
-- Record notable test cases in the Testing Results section of `DOCUMENTATION.md`.
+- **Backend:** use http://127.0.0.1:8000/docs with valid, invalid, and empty input, and as a role that should be refused.
+- **Frontend:** use the page as each affected role would, including the unhappy paths (empty form, wrong values, backend off).
+- **Type check:** `npm run build` in `source/frontend` must finish with no errors.
+- **Database:** if you touched the schema, reset your database and reload the SQL files from scratch.
+- Record notable cases in the Testing Results section of `DOCUMENTATION.md`.
 
 ### Documentation
 
-The technical documentation is part of the grade in each course, so keep it current as you build.
-
-- Update `source/documentation/DOCUMENTATION.md` when you add or change a feature.
-- Save UML diagrams in `diagrams/`, flowcharts in `flowcharts/`, and screenshots in `screenshots/`, all inside `source/documentation/`.
-- Use fictional data in every screenshot.
+- Update `source/documentation/DOCUMENTATION.md`, the area documents (`BACKEND.md`, `DATABASE.md`, `FRONTEND.md`), and [note.md](note.md) when you add or change a feature.
+- Save UML diagrams in `diagrams/`, flowcharts in `flowcharts/`, and screenshots in `screenshots/` (fictional data only).
 - Update this file or the README if you change how the project is set up or run.
 
 ### Reporting bugs and suggesting features
@@ -652,16 +621,16 @@ The technical documentation is part of the grade in each course, so keep it curr
 Open a GitHub issue with:
 
 - **Bug:** what you expected, what happened, steps to reproduce, the role you were using, and a screenshot or error text (no secrets).
-- **Feature:** the problem it solves, who uses it (patient, nurse, doctor, admin), and a short description of how it should work.
+- **Feature:** the problem it solves, who uses it, and how it should work.
 
 Report security problems privately as described in [SECURITY.md](SECURITY.md), never in a public issue.
 
 ### Data and secrets
 
 - Use only fictional or anonymized data in code, screenshots, and demos.
-- Never commit `.env`, database dumps with real data, or credentials.
-- **If you commit a secret by mistake,** tell the team right away and change that secret (new database password, new `JWT_SECRET`). Deleting the file in a later commit is not enough because it stays in Git history.
-- Read [SECURITY.md](SECURITY.md) before touching authentication, roles, or public booking endpoints.
+- Never commit `.env`, database backups or dumps (they contain password hashes and records), or credentials.
+- **If you commit a secret by mistake,** tell the team right away and change that secret. Deleting the file in a later commit is not enough because it stays in Git history.
+- Read [SECURITY.md](SECURITY.md) before touching authentication, roles, public endpoints, or the Database page.
 
 ### Definition of done
 
@@ -834,7 +803,6 @@ Submit the following:
 | Presentation and Demonstration | 10 pts |
 | **Total** | **100 pts** |
 
-
 ---
 
-*Last Updated: October 2026*
+*Last Updated: November 2026*

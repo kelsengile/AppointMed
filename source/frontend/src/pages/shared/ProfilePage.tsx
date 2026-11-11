@@ -9,6 +9,7 @@ import type { Role } from "../../types";
 import { formatDateTime } from "../../utils/format";
 import { resizeImage } from "../../utils/image";
 import { cleanEmail, cleanName, isEmail, isName } from "../../utils/input";
+import Avatar from "../../components/Avatar";
 
 const ROLE_LABEL: Record<Role, string> = { doctor: "Doctor", nurse: "Nurse", admin: "Administrator" };
 
@@ -95,13 +96,7 @@ export default function ProfilePage() {
       {profile && (
         <>
           <div className="mt-6 flex flex-wrap items-center gap-5 rounded-xl border border-slate-200 bg-white p-5">
-            {profile.avatar ? (
-              <img src={profile.avatar} alt="Your profile" className="h-24 w-24 rounded-full object-cover" />
-            ) : (
-              <span className="grid h-24 w-24 place-items-center rounded-full bg-brand-600 text-3xl font-semibold text-white" aria-hidden="true">
-                {profile.full_name.replace(/^dr\.\s*/i, "").charAt(0).toUpperCase()}
-              </span>
-            )}
+            <Avatar avatar={profile.avatar} name={profile.full_name} className="h-24 w-24" />
             <div>
               <p className="text-lg font-semibold">{profile.full_name}</p>
               <p className="text-sm text-slate-600">

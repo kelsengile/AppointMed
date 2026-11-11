@@ -110,6 +110,19 @@ class Database(Executor):
         self._pool: pooling.MySQLConnectionPool | None = None
         self._lock = threading.Lock()
 
+    def _reset_pool(self) -> None:
+        """Forget the pool so the next call builds a fresh one (for example after the database was recreated)."""
+        with self._lock:
+            self._pool = None
+
+    def _retry(self, call):
+        """Run one autocommit call. If the database is unavailable, rebuild the pool and try once more."""
+        try:
+            return call()
+        except DatabaseUnavailableError:
+            self._reset_pool()
+            return call()
+
     def _get_pool(self) -> pooling.MySQLConnectionPool:
         with self._lock:
             if self._pool is None:
@@ -159,16 +172,25 @@ class Database(Executor):
                 raise
 
     def fetch_all(self, sql: str, params: Params = ()) -> list[Row]:
-        with self.connection() as conn:
-            return Transaction(conn).fetch_all(sql, params)
+        def call() -> list[Row]:
+            with self.connection() as conn:
+                return Transaction(conn).fetch_all(sql, params)
+
+        return self._retry(call)
 
     def execute(self, sql: str, params: Params = ()) -> int:
-        with self.connection() as conn:
-            return Transaction(conn).execute(sql, params)
+        def call() -> int:
+            with self.connection() as conn:
+                return Transaction(conn).execute(sql, params)
+
+        return self._retry(call)
 
     def update(self, sql: str, params: Params = ()) -> int:
-        with self.connection() as conn:
-            return Transaction(conn).update(sql, params)
+        def call() -> int:
+            with self.connection() as conn:
+                return Transaction(conn).update(sql, params)
+
+        return self._retry(call)
 
     def is_reachable(self) -> bool:
         """True when a trivial query succeeds. Used by the health check."""
@@ -176,6 +198,5 @@ class Database(Executor):
             return self.fetch_one("SELECT 1 AS ok") is not None
         except DatabaseUnavailableError:
             return False
-
 
 database = Database()

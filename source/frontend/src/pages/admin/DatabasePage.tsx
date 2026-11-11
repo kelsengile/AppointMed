@@ -1,5 +1,5 @@
 // Admin: browse and edit table rows, run one SQL statement, and download a full SQL backup.
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { databaseApi } from "../../api/databaseApi";
 import Alert from "../../components/Alert";
 import Badge from "../../components/Badge";
@@ -7,6 +7,7 @@ import Modal from "../../components/Modal";
 import { dangerButton, inputClass, primaryButton, secondaryButton } from "../../components/ui";
 import { usePolling } from "../../hooks/usePolling";
 import type { DbCell, DbColumn, DbQueryResult, DbRow, DbTableData } from "../../types/database";
+
 
 const PAGE_SIZE = 25;
 const MAX_IMPORT_BYTES = 25_000_000;
@@ -217,6 +218,10 @@ export default function DatabasePage() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const importInput = useRef<HTMLInputElement>(null);
+  // Open the first table (appointments) by default.
+  useEffect(() => {
+    if (!selected && tables.data && tables.data.length > 0) setSelected(tables.data[0].name);
+  }, [tables.data, selected]);
 
   const table = data.data;
   const visibleColumns = table?.columns.filter((c) => !c.hidden) ?? [];

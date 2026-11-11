@@ -18,16 +18,12 @@ import type { Role } from "../types";
 import type { Catalog } from "../types";
 import type { DepartmentItem } from "../types/department";
 import type { StaffMember } from "../types/staff";
+import { useSite } from "../hooks/useSite";
 
 // Figma font for the whole landing page (already loaded in index.html).
 const pageFont = { fontFamily: "Poppins, system-ui, -apple-system, sans-serif" };
 
 // ---------------- sample content from the design ----------------
-
-const ABOUT_LEAD =
-  "At AppointMed, we believe that accessing quality healthcare should be seamless, transparent, and centered around you. Our modern clinic brings together a dedicated team of experienced medical professionals, cutting-edge diagnostics, and patient-first values to deliver comprehensive care for individuals and families.";
-const ABOUT_SECOND =
-  "From routine checkups and chronic condition management to effortless online booking, we are committed to making your healthcare journey as smooth as possible—ensuring you receive the right attention, right when you need it.";
 
 const SERVICES: { title: string; text: string; image: string }[] = [
   {
@@ -102,11 +98,26 @@ function weekdayLabel(weekdays: number[]): string {
 
 // The five character cutouts from the design. A person gets the cutout whose keyword is in their name
 // (so the same character looks the same in every role); anyone else gets one round-robin.
-const ART_KEYS = ["spongebob", "sandy", "krabs", "squidward", "patrick"];
+const ART_KEYS = ["spongebob", "sandy", "krabs", "squidward", "patrick", "pearl", "blossom", "bubbles", "buttercup", "dora"];
 
 function staffArt(member: StaffMember, index: number): { bg: string; figure: string } {
-  const name = member.full_name.toLowerCase();
-  const found = ART_KEYS.findIndex((key) => name.includes(key));
+  const words = member.full_name
+    .toLowerCase()
+    .replace(/^(dr|mr|mrs|ms)\.?\s+/, "") // drop a leading title
+    .split(/\s+/);
+
+  // 1) exact word match, first name first (so "Pearl Krabs" -> pearl, "Mr. Krabs" -> krabs)
+  let found = -1;
+  for (const word of words) {
+    found = ART_KEYS.indexOf(word);
+    if (found >= 0) break;
+  }
+
+  // 2) fallback: substring match, in case a name is spelled slightly differently
+  if (found < 0) {
+    found = ART_KEYS.findIndex((key) => words.some((w) => w.includes(key)));
+  }
+
   const slot = (found >= 0 ? found : index % ART_KEYS.length) + 1;
   return { bg: `/doctor-${slot}.png`, figure: `/docchar-${slot}.png` };
 }
@@ -285,6 +296,8 @@ const SOCIALS: { label: string; href: string; icon: string }[] = [
   },
 ];
 
+const SOCIAL_KEYS: Record<string, string> = { Facebook: "social_facebook", "X (Twitter)": "social_x", LinkedIn: "social_linkedin", YouTube: "social_youtube" };
+
 function FooterColumn({ title, links }: { title: string; links: { label: string; to: string }[] }) {
   return (
     <div>
@@ -304,6 +317,7 @@ function FooterColumn({ title, links }: { title: string; links: { label: string;
 
 export default function LandingPage() {
   const { user } = useAuth();
+  const { values: site, logoSrc, heroSrc } = useSite();
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
   const [staffError, setStaffError] = useState("");
@@ -350,7 +364,7 @@ export default function LandingPage() {
       <header className="absolute inset-x-0 top-0 z-30 px-4 pt-4 sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 rounded-2xl bg-white/85 px-4 py-2.5 shadow-[0_10px_30px_rgba(53,88,130,0.12)] backdrop-blur">
           <span className="inline-flex items-center gap-2">
-            <img src="/logo-mark.png" alt="" aria-hidden style={{ height: 40, width: "auto" }} />
+            <img src={logoSrc ?? "/logo-mark.png"} alt="" aria-hidden style={{ height: 40, width: "auto" }} />
             <span className="text-lg font-semibold text-brand-700">AppointMed</span>
           </span>
           <nav className="flex items-center gap-1 text-sm" aria-label="Site">
@@ -388,7 +402,7 @@ export default function LandingPage() {
       {/* ---------------- hero ---------------- */}
       <section id="top" className="relative overflow-hidden bg-landing-pagebg">
         <img
-          src="/hero-building.png"
+          src={heroSrc ?? "/hero-building.png"}
           alt=""
           aria-hidden
           className="absolute right-0 top-0 hidden h-full w-[62%] object-cover sm:block"
@@ -401,11 +415,10 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-landing-pagebg via-landing-pagebg/85 to-transparent" aria-hidden />
         <div className="relative mx-auto w-full max-w-7xl px-6 pb-16 pt-32 sm:pt-36 lg:pt-40">
           <h1 className="max-w-2xl text-4xl font-extrabold leading-tight text-landing-heading sm:text-6xl lg:text-7xl">
-            Booked in a click!
+            {site.hero_title}
           </h1>
           <p className="mt-5 max-w-xl text-base font-medium text-landing-body sm:text-lg">
-            Enjoy effortless scheduling on your own timeline. Simply choose your doctor and a convenient time; our clinical
-            team will confirm your details so your room is fully prepared upon your arrival.
+            {site.hero_text}
           </p>
           <BookButton className="mt-8" />
         </div>
@@ -414,10 +427,10 @@ export default function LandingPage() {
       {/* ---------------- about us ---------------- */}
       <section id="about" className="bg-gradient-to-b from-[#8FC1EC] to-[#EAF5FD] px-6 py-14 sm:py-16">
         <div className="mx-auto max-w-4xl text-center">
-          <h2 className="text-3xl font-extrabold text-landing-heading sm:text-5xl">About us</h2>
-          <p className="mt-3 text-xl font-bold text-landing-body sm:text-2xl">Your Partner in Health and Wellness</p>
-          <p className="mt-5 text-sm font-normal leading-relaxed text-landing-body sm:text-base">{ABOUT_LEAD}</p>
-          <p className="mt-4 text-sm font-normal leading-relaxed text-landing-body sm:text-base">{ABOUT_SECOND}</p>
+          <h2 className="text-3xl font-extrabold text-landing-heading sm:text-5xl">{site.about_title}</h2>
+          <p className="mt-3 text-xl font-bold text-landing-body sm:text-2xl">{site.about_subtitle}</p>
+          <p className="mt-5 text-sm font-normal leading-relaxed text-landing-body sm:text-base">{site.about_lead}</p>
+          <p className="mt-4 text-sm font-normal leading-relaxed text-landing-body sm:text-base">{site.about_second}</p>
         </div>
       </section>
 
@@ -503,16 +516,15 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-6xl px-6 pb-8 pt-14">
           <div className="grid gap-10 lg:grid-cols-[1.3fr_2fr]">
             <div>
-              <img src="/footer-logo.png" alt="AppointMed" className="h-28 w-auto" />
+              <img src={logoSrc ?? "/footer-logo.png"} alt="AppointMed" className="h-28 w-auto" />
               <p className="mt-3 max-w-xs text-sm leading-relaxed text-landing-faint">
-                AppointMed is your trusted partner for clinical appointment booking. Connecting patients with certified
-                specialists for world-class healthcare.
+                {site.footer_text}
               </p>
               <div className="mt-4 flex gap-3">
                 {SOCIALS.map((s) => (
                   <a
                     key={s.label}
-                    href={s.href}
+                    href={site[SOCIAL_KEYS[s.label]]}
                     aria-label={s.label}
                     target="_blank"
                     rel="noreferrer"
@@ -557,15 +569,19 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-center gap-2">
                     <ContactIcon kind="phone" />
-                    <a href="tel:+12345678900" className="transition-colors hover:text-landing-body">+1 (234) 567-8900</a>
+                    <a href={"tel:" + site.contact_phone.replace(/[^+\d]/g, "")} className="transition-colors hover:text-landing-body">
+                      {site.contact_phone}
+                    </a>
                   </li>
                   <li className="flex items-center gap-2">
                     <ContactIcon kind="mail" />
-                    <a href="mailto:info@appointmed.com" className="transition-colors hover:text-landing-body">info@appointmed.com</a>
+                    <a href={"mailto:" + site.contact_email} className="transition-colors hover:text-landing-body">
+                      {site.contact_email}
+                    </a>
                   </li>
                   <li className="flex items-center gap-2">
                     <ContactIcon kind="clock" />
-                    <span>Mon - Sat: 8:00 AM – 8:00 PM</span>
+                    <span>{site.contact_hours}</span>
                   </li>
                 </ul>
               </div>

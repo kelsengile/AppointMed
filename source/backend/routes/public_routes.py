@@ -4,18 +4,23 @@ from datetime import date
 
 from fastapi import APIRouter, Request
 
+from typing import Literal
+
+from fastapi.responses import Response
+
 from backend.core.exceptions import RateLimitError
 from backend.core.security import booking_limiter
 from backend.schemas.api import BookingRequest
 from backend.services.booking_service import BookingService
 from backend.services.department_service import DepartmentService
 from backend.services.staff_directory_service import StaffDirectoryService
+from backend.services.site_service import SiteService
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 service = BookingService()
 department_service = DepartmentService()
 staff_service = StaffDirectoryService()
-
+site_service = SiteService()
 
 @router.get("/catalog")
 def catalog() -> dict:
@@ -56,3 +61,15 @@ def book(body: BookingRequest, request: Request) -> dict:
     receipt = service.book(body)
     booking_limiter.record(key)
     return receipt
+
+@router.get("/site")
+def site() -> dict:
+    """Editable front-page texts, links, and whether a custom logo or hero picture exists."""
+    return site_service.public()
+
+
+@router.get("/site-image/{kind}")
+def site_image(kind: Literal["logo", "hero"]) -> Response:
+    """The custom logo or hero picture."""
+    data, mime = site_service.image(kind)
+    return Response(content=data, media_type=mime, headers={"Cache-Control": "no-cache"})
