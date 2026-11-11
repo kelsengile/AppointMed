@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { DEFAULT_LOGO } from "../config/branding";
 import LandingPage from "./LandingPage";
 
 const REMEMBER_KEY = "appointmed.remembered-username";
@@ -90,7 +91,7 @@ export default function StaffLoginPage() {
               className="pointer-events-none absolute max-w-none select-none"
               style={{ width: "410%", height: "118.9%", left: "-44.4%", top: "-11.5%" }}
             />
-            <img src="/staff-login-logo.png" alt="" className="relative w-32 drop-shadow-xl sm:w-40 lg:w-44 xl:w-52" />
+            <img src={DEFAULT_LOGO} alt="" className="relative w-32 drop-shadow-xl sm:w-40 lg:w-44 xl:w-52" />
           </div>
 
           {/* Right panel: the sign-in form, centred vertically inside a card that is about 80% of the window height. */}
