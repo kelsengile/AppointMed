@@ -61,11 +61,6 @@ const FALLBACK_DEPARTMENTS: DepartmentItem[] = [
 const DEFAULT_ADDRESS = "123 Medical Center Drive, Healthcare City, HC 45678";
 
 const ROLE_LABEL: Record<Role, string> = { doctor: "Doctor", nurse: "Nurse", admin: "Administrator" };
-const ROLE_BADGE: Record<Role, string> = {
-  doctor: "bg-brand-50 text-landing-body",
-  nurse: "bg-green-100 text-landing-leaf",
-  admin: "bg-slate-100 text-slate-700",
-};
 
 // Small line icons for the footer contact list.
 function ContactIcon({ kind }: { kind: "pin" | "phone" | "mail" | "clock" }) {
@@ -184,48 +179,54 @@ function BookButton({ className = "" }: { className?: string }) {
 
 function StaffArt({ member, art }: { member: StaffMember; art: { bg: string; figure: string } }) {
   return (
-    <div className="relative h-40 w-full overflow-hidden sm:h-44">
-      <img src={art.bg} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
+    <div className="relative h-48 w-full sm:h-52">
+      {/* Background photo: fills the full card width, rounded only on the top corners. */}
+      <div className="absolute inset-0 overflow-hidden rounded-t-3xl">
+        <img src={art.bg} alt="" aria-hidden className="h-full w-full object-cover" />
+      </div>
+      {/* Character: taller than the photo, so its head pops out above the card. */}
       <img
         src={art.figure}
         alt={member.full_name}
         loading="lazy"
-        className="absolute bottom-0 left-1/2 h-[96%] max-w-none -translate-x-1/2 object-contain"
+        className="absolute bottom-0 left-1/2 h-[128%] max-w-none -translate-x-1/2 object-contain drop-shadow-[0_10px_14px_rgba(31,54,85,0.25)]"
       />
     </div>
   );
 }
 
 function StaffCard({ member, art }: { member: StaffMember; art: { bg: string; figure: string } }) {
-  // Green "Available" badge only when a doctor works today (1 = Monday).
+  // Green "Available" badge only when the person works today (1 = Monday).
   const todayIdx = ((new Date().getDay() + 6) % 7) + 1;
+  const hasSchedule = (member.weekdays ?? []).length > 0;
   const availableToday = (member.weekdays ?? []).includes(todayIdx);
 
+  // NOTE: no overflow-hidden here, otherwise the character could not stick out of the card.
   return (
-    <article className="flex flex-col overflow-hidden rounded-3xl bg-white shadow-[0_18px_40px_rgba(53,88,130,0.14)] transition-shadow hover:shadow-[0_24px_50px_rgba(53,88,130,0.22)]">
+    <article className="relative flex flex-col rounded-3xl bg-gradient-to-b from-white to-[#F1F6FC] shadow-[0_18px_40px_rgba(53,88,130,0.18)] ring-1 ring-white/80 transition-shadow hover:shadow-[0_24px_50px_rgba(53,88,130,0.26)]">
       <StaffArt member={member} art={art} />
-      <div className="flex flex-1 flex-col px-4 pb-4 pt-3 text-left">
-        <h3 className="text-sm font-bold text-landing-ink sm:text-[15px]">{member.full_name}</h3>
-        <p className="mt-0.5 text-xs font-medium text-landing-muted">
-          {ROLE_LABEL[member.role]} · {staffDetail(member)}
-        </p>
-        <div className="mt-2.5 flex flex-wrap items-center gap-2">
-          <span className={`rounded-md px-2.5 py-1 text-[10px] font-semibold ${ROLE_BADGE[member.role]}`}>
-            {ROLE_LABEL[member.role]}
-          </span>
-          {member.role === "doctor" && (
-            <>
-              <span className="rounded-md bg-brand-50 px-2.5 py-1 text-[10px] font-semibold text-landing-body">
-                {weekdayLabel(member.weekdays)}
-              </span>
-              <span
-                className={`rounded-md px-2.5 py-1 text-[10px] font-semibold ${
-                  availableToday ? "bg-green-100 text-landing-leaf" : "bg-amber-100 text-amber-700"
-                }`}
-              >
-                {availableToday ? "Available" : "Off today"}
-              </span>
-            </>
+
+      <div className="flex flex-1 flex-col px-5 pb-5 pt-4 text-left">
+        <h3 className="text-[17px] font-extrabold leading-snug text-[#1F3655]">{member.full_name}</h3>
+        <p className="mt-0.5 text-sm font-semibold text-[#3F6AA6]">{ROLE_LABEL[member.role]}</p>
+        <p className="mt-2 text-[13px] font-medium text-[#8A9BB5]">{staffDetail(member)}</p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {hasSchedule && (
+            <span className="rounded-lg border border-[#C9D9EE] bg-gradient-to-b from-white to-[#E6EFFA] px-3.5 py-1.5 text-xs font-bold text-[#2F4F7F] shadow-[0_6px_12px_rgba(53,88,130,0.18)]">
+              {weekdayLabel(member.weekdays)}
+            </span>
+          )}
+          {hasSchedule && (
+            <span
+              className={`rounded-lg border px-3.5 py-1.5 text-xs font-bold shadow-[0_6px_12px_rgba(53,88,130,0.15)] ${
+                availableToday
+                  ? "border-green-200 bg-gradient-to-b from-white to-green-100 text-green-600"
+                  : "border-amber-200 bg-gradient-to-b from-white to-amber-100 text-amber-700"
+              }`}
+            >
+              {availableToday ? "Available" : "Off today"}
+            </span>
           )}
         </div>
       </div>
@@ -237,12 +238,12 @@ function StaffSkeletons() {
   return (
     <>
       {Array.from({ length: 5 }).map((_, i) => (
-        <article key={i} className="animate-pulse overflow-hidden rounded-3xl bg-white shadow-[0_18px_40px_rgba(53,88,130,0.1)]">
-          <div className="h-40 w-full bg-brand-100 sm:h-44" />
-          <div className="px-4 pb-5 pt-3">
-            <div className="h-3.5 w-3/4 rounded bg-brand-100" />
+        <article key={i} className="animate-pulse rounded-3xl bg-white shadow-[0_18px_40px_rgba(53,88,130,0.1)]">
+          <div className="h-48 w-full rounded-t-3xl bg-brand-100 sm:h-52" />
+          <div className="px-5 pb-5 pt-4">
+            <div className="h-4 w-3/4 rounded bg-brand-100" />
             <div className="mt-2 h-3 w-1/2 rounded bg-brand-100" />
-            <div className="mt-4 h-6 rounded-lg bg-brand-100" />
+            <div className="mt-4 h-7 w-2/3 rounded-lg bg-brand-100" />
           </div>
         </article>
       ))}
@@ -462,7 +463,8 @@ export default function LandingPage() {
               <p className="text-sm font-medium text-landing-body">{staffError}</p>
             </div>
           ) : (
-            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            // Extra top margin and row gap leave room for the characters that stick out above each card.
+            <div className="mt-20 grid gap-x-5 gap-y-24 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {staff ? (
                 staff.length ? (
                   staff.map((m, i) => <StaffCard key={m.id} member={m} art={staffArt(m, i)} />)
@@ -477,8 +479,8 @@ export default function LandingPage() {
             </div>
           )}
 
-          {/* One booking button for the whole list, below the last card. */}
-          <div className="mt-10 flex justify-center">
+          {/* One booking button for the whole list, centered below the last card. */}
+          <div className="mt-16 flex justify-center">
             <BookButton />
           </div>
         </div>
@@ -585,7 +587,7 @@ export default function LandingPage() {
                   </li>
                 </ul>
               </div>
-            </div>  
+            </div>
           </div>
 
           <div className="mt-10 border-t border-[#B9D3EA] pt-4">
