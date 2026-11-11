@@ -37,7 +37,7 @@ System Project Assigned: Clinic Appointment System
 
 ## 1. Overview
 
-AppointMed stores everything in **one MySQL 8 database named `appointmed`**. `schema.sql` creates **13 tables**, and `landing_update.sql` adds a 14th (`departments`) for the front page. Nobody connects to it directly: the React app and the public pages talk to the FastAPI backend, and only the backend runs SQL.
+AppointMed stores everything in **one MySQL 8 database named `appointmed`**. `schema.sql` creates the normal app tables, including `departments` for the front page. Nobody connects to it directly: the React app and the public pages talk to the FastAPI backend, and only the backend runs SQL.
 
 | Fact | Value |
 |---|---|
@@ -64,7 +64,7 @@ AppointMed stores everything in **one MySQL 8 database named `appointmed`**. `sc
 |---|---|
 | `source/database/schema.sql` | Structure only: tables, keys, constraints, indexes. Starts with `USE appointmed;` and uses `CREATE TABLE IF NOT EXISTS`, so it is safe to repeat. |
 | `source/database/seed.sql` | Fictional sample data. Load **once**. |
-| `source/database/landing_update.sql` | Creates the `departments` table and its sample rows. Safe to repeat. |
+| `source/database/schema.sql` | Creates the `departments` table and the rest of the app schema. Safe to repeat. |
 | `source/.env` | Connection settings (`DB_*`). Never committed. |
 | `backend/core/config.py` | Reads `.env` once into the frozen `Settings` object |
 | `backend/core/database.py` | Pool, transactions, retry, and error translation |
@@ -72,7 +72,7 @@ AppointMed stores everything in **one MySQL 8 database named `appointmed`**. `sc
 Setup order (details in `CONTRIBUTING.md`, Steps 4 to 6):
 
 1. As `root`, create the database and the limited `appointmed_user`.
-2. As `root`, load `schema.sql`, then `seed.sql` (once), then `landing_update.sql`.
+2. As `root`, load `schema.sql`, then `seed.sql` (once).
 3. Put the same password in `source/.env` as `DB_PASSWORD`.
 
 The pool is **created on the first query**, so the backend starts even when MySQL is down. In that case `/api/health/db` reports `connected: false` and API calls return a clean 503. If the database is rebuilt while the backend runs, the next failing call rebuilds the pool once and retries.

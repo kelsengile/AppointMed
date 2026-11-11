@@ -10,10 +10,10 @@ from backend.core.database import Row
 
 from .base_repository import BaseRepository, placeholders
 
-_PUBLIC = "id, username, full_name, role, email, specialization, assigned_doctor_id, is_active, last_login_at, created_at"
+_PUBLIC = "id, username, full_name, role, email, specialization, bio, education, years_experience, languages, assigned_doctor_id, is_active, last_login_at, created_at"
 _LISTING = """
-SELECT u.id, u.username, u.full_name, u.role, u.email, u.specialization, u.assigned_doctor_id,
-       d.full_name AS assigned_doctor_name, u.is_active, u.last_login_at, u.created_at
+SELECT u.id, u.username, u.full_name, u.role, u.email, u.specialization, u.bio, u.education, u.years_experience, u.languages,
+       u.assigned_doctor_id, d.full_name AS assigned_doctor_name, u.is_active, u.last_login_at, u.created_at
 FROM users u LEFT JOIN users d ON d.id = u.assigned_doctor_id
 """
 
@@ -35,7 +35,10 @@ class UserRepository(BaseRepository):
     """Queries for the users table. Password hashes are only returned by dedicated methods."""
 
     table = "users"
-    columns = ("username", "password_hash", "full_name", "role", "email", "specialization", "assigned_doctor_id", "is_active")
+    columns = (
+        "username", "password_hash", "full_name", "role", "email", "specialization", "bio", "education",
+        "years_experience", "languages", "assigned_doctor_id", "is_active",
+    )
     select_columns = _PUBLIC
 
     def get(self, record_id: int) -> Row | None:
@@ -81,7 +84,9 @@ class UserRepository(BaseRepository):
     def public_doctors(self) -> list[Row]:
         """Active doctors who have a schedule, with the weekdays they work (for the booking page)."""
         doctors = self._db.fetch_all(
-            "SELECT id, full_name, specialization FROM users WHERE role = 'doctor' AND is_active = 1 ORDER BY full_name"
+            "SELECT id, full_name, specialization, (avatar IS NOT NULL) AS has_photo, "
+            "COALESCE(LENGTH(avatar), 0) AS photo_version "
+            "FROM users WHERE role = 'doctor' AND is_active = 1 ORDER BY full_name"
         )
         days: dict[int, list[int]] = defaultdict(list)
         for row in self._db.fetch_all("SELECT doctor_id, weekday FROM doctor_schedules ORDER BY weekday"):
@@ -89,6 +94,8 @@ class UserRepository(BaseRepository):
                 days[row["doctor_id"]].append(row["weekday"])
         for doctor in doctors:
             doctor["weekdays"] = days.get(doctor["id"], [])
+            doctor["has_photo"] = bool(doctor["has_photo"])
+            doctor["photo_version"] = int(doctor["photo_version"])
         return [d for d in doctors if d["weekdays"]]
 
     def nurses_for_doctor(self, doctor_id: int) -> list[Row]:

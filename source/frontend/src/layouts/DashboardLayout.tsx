@@ -58,7 +58,7 @@ export default function DashboardLayout({ role }: { role: Role }) {
     }`;
 
   const profileLink = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 rounded-xl px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+    `flex flex-col items-center gap-2 rounded-xl px-3 py-4 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
       isActive ? "bg-brand-100" : "hover:bg-brand-50"
     }`;
 
@@ -101,8 +101,8 @@ export default function DashboardLayout({ role }: { role: Role }) {
             onClick={closeOnMobile}
             aria-label="Open your profile"
           >
-            <Avatar avatar={user?.avatar} name={fullName} className="h-10 w-10" />
-            <span className="min-w-0">
+            <Avatar avatar={user?.avatar} name={fullName} className="h-20 w-20 shadow-md ring-4 ring-white" />
+            <span className="block w-full min-w-0">
               <span className="block truncate text-sm font-semibold text-landing-heading">{fullName}</span>
               <span className="block text-xs text-landing-muted">{TITLE[role]}</span>
             </span>

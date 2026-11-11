@@ -59,7 +59,7 @@ FRONTEND_URL = f"http://localhost:{FRONTEND_PORT}"
 MIN_PYTHON = (3, 11)
 MIN_NODE = 20
 # Loaded in this order. seed.sql only runs on an empty database; the others are safe to repeat.
-SQL_FILES = ("schema.sql", "seed.sql", "landing_update.sql", "site_content.sql")
+SQL_FILES = ("schema.sql", "seed.sql", "site_content.sql")
 CHARSET = "--default-character-set=utf8mb4"
 
 DEFAULT_ENV = """APP_ENV=development
@@ -434,12 +434,6 @@ def setup_database(reset: bool = False) -> bool:
             return False
     else:
         info(f"The database already has {existing} user(s), so seed.sql was skipped.")
-    if reset:
-        info("Reset loads schema.sql and seed.sql only, so landing_update.sql was skipped.")
-    elif mysql_step("Load landing_update.sql (departments and extra doctors)", cfg, root_password,
-                    args=[CHARSET], sql=sql_for(DB_DIR / "landing_update.sql", name)) is None:
-        return False
-
     # Prove the data really loaded, so a silent problem cannot hide.
     check = mysql_step("Count staff accounts", cfg, root_password,
                        args=["-N", "-B", name, "-e", "SELECT COUNT(*) FROM users"], quiet=True)

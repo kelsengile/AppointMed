@@ -9,6 +9,7 @@ from backend.core.exceptions import ConflictError, DuplicateEntryError, NotFound
 from backend.core.security import hash_password
 from backend.core.utils import blank_to_none, to_money
 from backend.models.domain import User
+from backend.repositories.department_repository import DepartmentRepository
 from backend.repositories.system_repository import AuditRepository, RoomRepository, SettingsRepository
 from backend.repositories.user_repository import ScheduleRepository, UserRepository
 from backend.schemas.api import ScheduleBlock, UserCreate, UserUpdate
@@ -35,6 +36,19 @@ class AdminService:
             raise ValidationFailedError("The chosen doctor is not available.")
         return doctor_id
 
+    @staticmethod
+    def _specialization(tx: Executor, role: str, value: str | None) -> str | None:
+        """Doctors must use one of the departments listed in Clinic Settings."""
+        if role != "doctor":
+            return None
+        name = blank_to_none(value)
+        if name is None:
+            raise ValidationFailedError("Choose the doctor's specialization (a department).")
+        match = DepartmentRepository(tx).find_by_name(name)
+        if match is None:
+            raise ValidationFailedError("The specialization must be one of the departments listed in Clinic Settings.")
+        return match["name"]
+
     def list_users(self, role: str | None, term: str | None) -> list[Row]:
         return UserRepository(self._db).list_users(role, blank_to_none(term))
 
@@ -47,7 +61,7 @@ class AdminService:
                     {
                         "username": data.username, "password_hash": hash_password(data.password), "full_name": data.full_name,
                         "role": data.role, "email": blank_to_none(data.email),
-                        "specialization": blank_to_none(data.specialization) if data.role == "doctor" else None,
+                        "specialization": self._specialization(tx, data.role, data.specialization),
                         "assigned_doctor_id": assigned, "is_active": 1,
                     }
                 )
@@ -66,7 +80,7 @@ class AdminService:
                 user_id,
                 {
                     "full_name": data.full_name, "email": blank_to_none(data.email),
-                    "specialization": blank_to_none(data.specialization) if row["role"] == "doctor" else None,
+                    "specialization": self._specialization(tx, row["role"], data.specialization),
                     "assigned_doctor_id": self._assignment(users, row["role"], data.assigned_doctor_id),
                 },
             )

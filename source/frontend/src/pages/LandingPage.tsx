@@ -8,18 +8,20 @@
  * Image assets were exported from the Figma file into frontend/public/.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { departmentApi } from "../api/departmentApi";
 import { publicApi } from "../api/endpoints";
 import { staffDirectoryApi } from "../api/staffDirectoryApi";
 import DepartmentsModal from "../components/DepartmentsModal";
+import Logo from "../components/Logo";
 import { useAuth } from "../context/AuthContext";
 import type { Role } from "../types";
 import type { Catalog } from "../types";
 import type { DepartmentItem } from "../types/department";
-import type { StaffMember } from "../types/staff";
+import type { StaffDetail, StaffMember } from "../types/staff";
 import { useSite } from "../hooks/useSite";
 import { DEFAULT_LOGO, TEXT_LOGO } from "../config/branding";
+import { staffPhotoUrl } from "../utils/staffArt";
 
 const NAV_LINKS = [
   { href: "#top", label: "Home" },
@@ -188,6 +190,19 @@ function BookButton({ className = "" }: { className?: string }) {
 }
 
 function StaffArt({ member, art }: { member: StaffMember; art: { bg: string; figure: string } }) {
+  // A picture the person uploaded in their profile replaces the character art.
+  if (member.has_photo) {
+    return (
+      <div className="relative h-48 w-full sm:h-52">
+        <img
+          src={staffPhotoUrl(member.id, member.photo_version)}
+          alt={member.full_name}
+          loading="lazy"
+          className="absolute inset-0 h-full w-full rounded-t-3xl object-cover object-top"
+        />
+      </div>
+    );
+  }
   return (
     <div className="relative h-48 w-full sm:h-52">
       {/* Background photo: fills the full card width, rounded only on the top corners. */}
@@ -213,7 +228,11 @@ function StaffCard({ member, art }: { member: StaffMember; art: { bg: string; fi
 
   // NOTE: no overflow-hidden here, otherwise the character could not stick out of the card.
   return (
-    <article className="relative flex flex-col rounded-3xl bg-gradient-to-b from-white to-[#F1F6FC] shadow-[0_18px_40px_rgba(53,88,130,0.18)] ring-1 ring-white/80 transition-shadow hover:shadow-[0_24px_50px_rgba(53,88,130,0.26)]">
+    <Link
+      to={`/staff/${member.id}`}
+      aria-label={`View the profile of ${member.full_name}`}
+      className="relative flex flex-col rounded-3xl bg-gradient-to-b from-white to-[#F1F6FC] shadow-[0_18px_40px_rgba(53,88,130,0.18)] ring-1 ring-white/80 transition-shadow hover:shadow-[0_24px_50px_rgba(53,88,130,0.26)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+    >
       <StaffArt member={member} art={art} />
 
       <div className="flex flex-1 flex-col px-5 pb-5 pt-4 text-left">
@@ -240,7 +259,7 @@ function StaffCard({ member, art }: { member: StaffMember; art: { bg: string; fi
           )}
         </div>
       </div>
-    </article>
+    </Link>
   );
 }
 
@@ -265,7 +284,7 @@ function DeptCard({ department, onOpen }: { department: DepartmentItem; onOpen: 
   return (
     <article className="rounded-3xl bg-white p-5 text-left shadow-[0_14px_30px_rgba(53,88,130,0.1)] transition-shadow hover:shadow-[0_20px_44px_rgba(53,88,130,0.18)]">
       {department.icon ? (
-        <img src={department.icon} alt="" aria-hidden className="h-12 w-12 rounded-xl shadow-sm" />
+        <img src={department.icon} alt="" aria-hidden className="h-12 w-12 rounded-xl object-contain shadow-sm" />
       ) : (
         <span aria-hidden className="grid h-12 w-12 place-items-center rounded-xl bg-brand-100 text-xl font-bold text-brand-700">
           {department.name.charAt(0).toUpperCase()}
@@ -334,8 +353,8 @@ export default function LandingPage() {
   const [staffError, setStaffError] = useState("");
   const [departments, setDepartments] = useState<DepartmentItem[] | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  // null = popup closed; a string = open, with that text pre-filled in the search box.
-  const [popupQuery, setPopupQuery] = useState<string | null>(null);
+  // null = popup closed. `open` is a department name to show straight away ("" = the full list).
+  const [popup, setPopup] = useState<{ query: string; open: string } | null>(null);
 
   // Clinic name and address for the footer. A failure here is not shown; the page uses defaults.
   useEffect(() => {
@@ -547,13 +566,13 @@ export default function LandingPage() {
           />
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {featured.map((d) => (
-              <DeptCard key={d.id} department={d} onOpen={(name) => setPopupQuery(name)} />
+              <DeptCard key={d.id} department={d} onOpen={(name) => setPopup({ query: "", open: name })} />
             ))}
           </div>
           <div className="mt-10 flex justify-center">
             <button
               type="button"
-              onClick={() => setPopupQuery("")}
+              onClick={() => setPopup({ query: "", open: "" })}
               aria-haspopup="dialog"
               className="rounded-xl bg-white px-6 py-3 text-sm font-semibold text-landing-body shadow-[0_10px_24px_rgba(53,88,130,0.12)] transition-transform hover:-translate-y-0.5"
             >
@@ -650,9 +669,183 @@ export default function LandingPage() {
       </footer>
 
       {/* ---------------- departments popup ---------------- */}
-      {popupQuery !== null && (
-        <DepartmentsModal departments={allDepartments} initialQuery={popupQuery} onClose={() => setPopupQuery(null)} />
+      {popup !== null && (
+        <DepartmentsModal
+          departments={allDepartments}
+          staff={staff ?? []}
+          initialQuery={popup.query}
+          initialOpen={popup.open}
+          onClose={() => setPopup(null)}
+        />
       )}
+    </div>
+  );
+}
+
+// ---------------- staff profile page (/staff/:id) ----------------
+
+export function StaffProfilePage() {
+  const { id } = useParams();
+  const [member, setMember] = useState<StaffDetail | null>(null);
+  const [index, setIndex] = useState(0); // position in the public list, so the character art matches the front page
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setMember(null);
+    setError("");
+    Promise.all([staffDirectoryApi.get(Number(id)), staffDirectoryApi.list().catch(() => [] as StaffMember[])])
+      .then(([detail, list]) => {
+        if (cancelled) return;
+        setMember(detail);
+        const position = list.findIndex((m) => m.id === detail.id);
+        setIndex(position >= 0 ? position : 0);
+      })
+      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : "Could not load this profile."));
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const art = member ? staffArt(member, index) : null;
+  const todayIdx = ((new Date().getDay() + 6) % 7) + 1;
+  const availableToday = !!member?.weekdays.includes(todayIdx);
+
+  return (
+    <div style={pageFont} className="min-h-screen bg-gradient-to-b from-[#EAF5FD] via-[#F4F9FE] to-[#EAF4FC] text-landing-body">
+      <header className="px-4 pt-4 sm:px-8">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-2 rounded-2xl bg-white/85 px-4 py-2.5 shadow-[0_10px_30px_rgba(53,88,130,0.12)] backdrop-blur">
+          <Link to="/" aria-label="Back to AppointMed home">
+            <Logo size={36} />
+          </Link>
+          <Link to="/" className="rounded-xl border border-brand-200 px-4 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">
+            Back to home
+          </Link>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-4xl px-6 pb-16 pt-8">
+        {error && (
+          <p className="rounded-2xl bg-red-50 p-4 text-red-800" role="alert">
+            {error}
+          </p>
+        )}
+        {!member && !error && <p className="text-slate-500">Loading...</p>}
+
+        {member && art && (
+          <article className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_40px_rgba(53,88,130,0.15)]">
+            <div className="grid md:grid-cols-[18rem_1fr]">
+              {/* Picture: the uploaded photo, or the character art */}
+              <div className="relative h-72 overflow-hidden md:h-auto md:min-h-[24rem]">
+                {member.has_photo ? (
+                  <img
+                    src={staffPhotoUrl(member.id, member.photo_version)}
+                    alt={member.full_name}
+                    className="absolute inset-0 h-full w-full object-cover object-top"
+                  />
+                ) : (
+                  <>
+                    <img src={art.bg} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
+                    <img src={art.figure} alt={member.full_name} className="absolute bottom-0 left-1/2 h-[95%] max-w-none -translate-x-1/2 object-contain" />
+                  </>
+                )}
+              </div>
+
+              <div className="p-6 sm:p-8">
+                <h1 className="text-3xl font-extrabold text-landing-heading">{member.full_name}</h1>
+                <p className="mt-1 text-base font-semibold text-[#3F6AA6]">{ROLE_LABEL[member.role]}</p>
+                <p className="mt-1 text-sm font-medium text-[#8A9BB5]">{staffDetail(member)}</p>
+
+                {member.role === "doctor" && member.weekdays.length > 0 && (
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <span className="rounded-lg border border-[#C9D9EE] bg-gradient-to-b from-white to-[#E6EFFA] px-3.5 py-1.5 text-xs font-bold text-[#2F4F7F]">
+                      {weekdayLabel(member.weekdays)}
+                    </span>
+                    <span
+                      className={`rounded-lg border px-3.5 py-1.5 text-xs font-bold ${
+                        availableToday ? "border-green-200 bg-green-50 text-green-600" : "border-amber-200 bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {availableToday ? "Available today" : "Off today"}
+                    </span>
+                  </div>
+                )}
+
+                {member.bio && (
+                  <section className="mt-6">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-landing-soft">About</h2>
+                    <p className="mt-1 whitespace-pre-line text-sm leading-relaxed">{member.bio}</p>
+                  </section>
+                )}
+
+                <dl className="mt-6 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+                  {member.years_experience !== null && member.years_experience !== undefined && (
+                    <div>
+                      <dt className="font-semibold text-landing-heading">Experience</dt>
+                      <dd>
+                        {member.years_experience} year{member.years_experience === 1 ? "" : "s"}
+                      </dd>
+                    </div>
+                  )}
+                  {member.education && (
+                    <div>
+                      <dt className="font-semibold text-landing-heading">Education and training</dt>
+                      <dd>{member.education}</dd>
+                    </div>
+                  )}
+                  {member.languages && (
+                    <div>
+                      <dt className="font-semibold text-landing-heading">Languages</dt>
+                      <dd>{member.languages}</dd>
+                    </div>
+                  )}
+                </dl>
+
+                {/* Doctors show their assigned nurses. Nurses show the doctor they support. */}
+                {member.role === "doctor" && (
+                  <section className="mt-6">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-landing-soft">Assigned nurse{member.nurses.length === 1 ? "" : "s"}</h2>
+                    {member.nurses.length === 0 && <p className="mt-1 text-sm text-landing-muted">No nurse is assigned yet.</p>}
+                    <ul className="mt-2 flex flex-wrap gap-3">
+                      {member.nurses.map((n) => (
+                        <li key={n.id}>
+                          <Link
+                            to={`/staff/${n.id}`}
+                            className="flex items-center gap-2 rounded-xl border border-[#DCE9FB] bg-[#F4F9FE] px-3 py-2 text-sm font-semibold text-landing-heading hover:bg-brand-50"
+                          >
+                            {n.has_photo ? (
+                              <img src={staffPhotoUrl(n.id, n.photo_version)} alt="" className="h-8 w-8 rounded-full object-cover" />
+                            ) : (
+                              <span aria-hidden className="grid h-8 w-8 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
+                                {n.full_name.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                            {n.full_name}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+                {member.role === "nurse" && member.assigned_doctor_id && (
+                  <section className="mt-6">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-landing-soft">Supports</h2>
+                    <Link to={`/staff/${member.assigned_doctor_id}`} className="mt-1 inline-block text-sm font-semibold text-brand-700 hover:underline">
+                      {member.assigned_doctor_name}
+                    </Link>
+                  </section>
+                )}
+
+                {member.role === "doctor" && (
+                  <Link to={`/book?doctor=${member.id}`} className="book-btn mt-8 inline-block rounded-xl px-6 py-3 font-semibold text-white">
+                    Book an appointment
+                  </Link>
+                )}
+              </div>
+            </div>
+          </article>
+        )}
+      </main>
     </div>
   );
 }

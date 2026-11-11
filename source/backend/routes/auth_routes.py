@@ -25,8 +25,8 @@ def me(user: User = Depends(get_current_user)) -> dict:
 
 @router.put("/me")
 def update_me(body: ProfileUpdate, user: User = Depends(get_current_user)) -> dict:
-    """Change own name and email."""
-    return service.update_profile(user.id, body.full_name, body.email)
+    """Change own name, email, and public profile details."""
+    return service.update_profile(user.id, body)
 
 
 @router.put("/me/avatar")
