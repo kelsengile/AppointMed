@@ -61,6 +61,18 @@ CREATE TABLE IF NOT EXISTS users (
 ) ENGINE=InnoDB;
 
 -- ============================================================
+-- SITE_CONTENT: website text and uploaded logo/hero images.
+-- MEDIUMTEXT accommodates base64 data URLs up to 16 MB.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS site_content (
+    content_key   VARCHAR(50) PRIMARY KEY,
+    content_value MEDIUMTEXT NOT NULL,
+    updated_by    INT NULL,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_site_content_updated_by FOREIGN KEY (updated_by) REFERENCES users(id)
+) ENGINE=InnoDB;
+
+-- ============================================================
 -- DOCTOR_SCHEDULES: weekly working hours per doctor. The website
 -- and the booking screen use this to compute available slots.
 -- A doctor with a lunch break gets two rows for the same weekday.
@@ -301,4 +313,3 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     INDEX idx_audit_created (created_at),
     INDEX idx_audit_user (user_id)
 ) ENGINE=InnoDB;
-

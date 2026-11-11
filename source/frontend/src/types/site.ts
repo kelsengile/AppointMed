@@ -7,7 +7,7 @@ export interface SiteContent {
 
 // Shown until the admin changes them (and whenever a field is cleared).
 export const SITE_DEFAULTS: Record<string, string> = {
-  hero_title: "Booked in a click!",
+  hero_title: "Book in a Click!",
   hero_text:
     "Enjoy effortless scheduling on your own timeline. Simply choose your doctor and a convenient time; our clinical team will confirm your details so your room is fully prepared upon your arrival.",
   about_title: "About us",
