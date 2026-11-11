@@ -21,6 +21,15 @@ import type { StaffMember } from "../types/staff";
 import { useSite } from "../hooks/useSite";
 import { DEFAULT_LOGO, TEXT_LOGO } from "../config/branding";
 
+const NAV_LINKS = [
+  { href: "#top", label: "Home" },
+  { href: "#about", label: "About Us" },
+  { href: "#services", label: "Services" },
+  { href: "#staff", label: "Doctors" },
+  { href: "#departments", label: "Departments" },
+  { href: "#contact", label: "Contact" },
+];
+
 // Figma font for the whole landing page (already loaded in index.html).
 const pageFont = { fontFamily: "Poppins, system-ui, -apple-system, sans-serif" };
 
@@ -324,6 +333,7 @@ export default function LandingPage() {
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
   const [staffError, setStaffError] = useState("");
   const [departments, setDepartments] = useState<DepartmentItem[] | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   // null = popup closed; a string = open, with that text pre-filled in the search box.
   const [popupQuery, setPopupQuery] = useState<string | null>(null);
 
@@ -363,72 +373,108 @@ export default function LandingPage() {
   return (
     <div style={pageFont} className="relative bg-landing-pagebg text-landing-body">
       {/* ---------------- navbar (floating pill) ---------------- */}
-      <header className="absolute inset-x-0 top-0 z-30 px-4 pt-4 sm:px-8">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 rounded-2xl bg-white/85 px-4 py-2.5 shadow-[0_10px_30px_rgba(53,88,130,0.12)] backdrop-blur">
-          <a href="#top" aria-label="AppointMed home" className="shrink-0">
-            <img src={TEXT_LOGO} alt="AppointMed" style={{ height: 26, width: "auto" }} />
-          </a>
-          <nav className="hidden items-center gap-5 text-[13px] font-semibold md:flex" aria-label="Site">
-            <a href="#top" className="text-[#5B8BC9] hover:text-landing-heading">Home</a>
-            <a href="#about" className="text-landing-heading hover:text-[#5B8BC9]">About Us</a>
-            <a href="#services" className="text-landing-heading hover:text-[#5B8BC9]">Services</a>
-            <a href="#staff" className="text-landing-heading hover:text-[#5B8BC9]">Doctors</a>
-            <a href="#departments" className="text-landing-heading hover:text-[#5B8BC9]">Departments</a>
-            <a href="#contact" className="text-landing-heading hover:text-[#5B8BC9]">Contact</a>
-          </nav>
-          <Link
-            to={user ? `/${user.role}` : "/staff-login"}
-            className="rounded-xl bg-white px-5 py-2 text-base font-bold text-landing-body shadow-[0_8px_18px_rgba(53,88,130,0.22)] transition-transform hover:-translate-y-0.5"
-          >
-            {user ? "Dashboard" : "Staff Login"}
-          </Link>
+      <header className="absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-8 sm:pt-4">
+        <div className="mx-auto max-w-5xl rounded-2xl bg-white/90 shadow-[0_10px_30px_rgba(53,88,130,0.12)] backdrop-blur">
+          <div className="flex items-center justify-between gap-3 px-3 py-2 sm:px-4 sm:py-2.5">
+            <a href="#top" aria-label="AppointMed home" className="shrink-0">
+              <img src={TEXT_LOGO} alt="AppointMed" style={{ height: 24, width: "auto" }} />
+            </a>
+
+            <nav className="hidden items-center gap-5 text-[13px] font-semibold md:flex" aria-label="Site">
+              {NAV_LINKS.map((l, i) => (
+                <a key={l.href} href={l.href} className={i === 0 ? "text-[#5B8BC9] hover:text-landing-heading" : "text-landing-heading hover:text-[#5B8BC9]"}>
+                  {l.label}
+                </a>
+              ))}
+            </nav>
+
+            <div className="flex items-center gap-2">
+              <Link
+                to={user ? `/${user.role}` : "/staff-login"}
+                className="rounded-xl bg-white px-3 py-1.5 text-sm font-bold text-landing-body shadow-[0_8px_18px_rgba(53,88,130,0.22)] transition-transform hover:-translate-y-0.5 sm:px-5 sm:py-2 sm:text-base"
+              >
+                {user ? "Dashboard" : "Staff Login"}
+              </Link>
+              <button
+                type="button"
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-expanded={menuOpen}
+                aria-label={menuOpen ? "Close menu" : "Open menu"}
+                className="rounded-xl p-2 text-landing-heading hover:bg-brand-50 md:hidden"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                  {menuOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {menuOpen && (
+            <nav className="border-t border-[#DCE9FB] px-3 py-2 md:hidden" aria-label="Site (mobile)">
+              {NAV_LINKS.map((l) => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="block rounded-xl px-3 py-2.5 text-sm font-semibold text-landing-heading hover:bg-brand-50"
+                >
+                  {l.label}
+                </a>
+              ))}
+            </nav>
+          )}
         </div>
       </header>
 
-            {/* ---------------- hero ---------------- */}
-      {/* Everything inside is sized in vw, so the content scales with the section width. */}
-      <section id="top" className="relative overflow-hidden bg-white" style={{ minHeight: "min(62vw, 100vh)" }}>
-        <img
-          src={heroSrc ?? "/hero-building.png"}
-          alt=""
-          aria-hidden
-          className={`absolute inset-0 h-full w-full object-cover object-right ${heroSrc ? "opacity-70" : "opacity-30"}`}
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/50 to-transparent" aria-hidden />
+        {/* ---------------- hero ---------------- */}
+        <section id="top" className="relative overflow-hidden bg-white">
+          <img
+            src={heroSrc ?? "/hero-building.png"}
+            alt=""
+            aria-hidden
+            className={`absolute inset-0 h-full w-full object-cover object-center md:object-right ${heroSrc ? "opacity-70" : "opacity-30"}`}
+          />
+          {/* Phones: an even white wash so the text stays readable. Larger screens: fade from the left. */}
+          <div className="absolute inset-0 bg-white/70 md:hidden" aria-hidden />
+          <div className="absolute inset-0 hidden bg-gradient-to-r from-white via-white/50 to-transparent md:block" aria-hidden />
 
-        <div className="relative mx-auto flex w-full max-w-[1600px] px-[10vw] pb-[5vw] pt-[8vw]">
-          <div className="flex flex-col items-center text-center" style={{ width: "min(38vw, 620px)", minWidth: "300px" }}>
-            <img src={logoSrc ?? DEFAULT_LOGO} alt="AppointMed" className="h-auto w-full" />
+          {/* The top padding clears the floating navbar. */}
+          <div className="relative mx-auto flex min-h-[32rem] w-full max-w-7xl items-center justify-center px-5 pb-14 pt-28 sm:min-h-[36rem] sm:px-8 md:justify-start lg:min-h-[min(46rem,100svh)] lg:px-12 lg:pt-32">
+            <div className="flex w-full max-w-sm flex-col items-center text-center sm:max-w-md md:max-w-[clamp(24rem,42vw,34rem)]">
+              <img
+                src={logoSrc ?? DEFAULT_LOGO}
+                alt="AppointMed"
+                className="h-auto w-full max-w-[14rem] sm:max-w-[18rem] md:max-w-full"
+              />
 
-            <Link
-              to="/book"
-              className="flex w-[80%] items-center justify-center gap-[1vw] rounded-[1.3vw] bg-white px-[1.4vw] py-[0.9vw] shadow-[0_16px_36px_rgba(53,88,130,0.22)] transition-transform hover:-translate-y-0.5"
-              style={{ marginTop: "2vw" }}
-            >
-              <svg viewBox="0 0 48 48" fill="none" aria-hidden className="shrink-0" style={{ width: "max(2rem, 3.2vw)", height: "max(2rem, 3.2vw)" }}>
-                <rect x="5" y="8" width="30" height="30" rx="4" stroke="#527DAA" strokeWidth="2.5" />
-                <path d="M13 4v8M27 4v8M5 16h30" stroke="#527DAA" strokeWidth="2.5" strokeLinecap="round" />
-                <g fill="#527DAA">
-                  <rect x="10" y="21" width="4" height="4" rx="1" />
-                  <rect x="18" y="21" width="4" height="4" rx="1" />
-                  <rect x="26" y="21" width="4" height="4" rx="1" />
-                  <rect x="10" y="29" width="4" height="4" rx="1" />
-                  <rect x="18" y="29" width="4" height="4" rx="1" />
-                </g>
-                <circle cx="35" cy="35" r="9" fill="white" stroke="#527DAA" strokeWidth="2.5" />
-                <path d="M35 30v5.5l3.5 2" stroke="#527DAA" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span className="font-extrabold text-landing-body underline underline-offset-4" style={{ fontSize: "max(1.1rem, 2.1vw)" }}>
-                {site.hero_title}
-              </span>
-            </Link>
+              <Link
+                to="/book"
+                className="mt-6 flex w-full max-w-xs items-center justify-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-[0_16px_36px_rgba(53,88,130,0.22)] transition-transform hover:-translate-y-0.5 sm:max-w-sm sm:px-5 sm:py-3.5"
+              >
+                <svg viewBox="0 0 48 48" fill="none" aria-hidden className="h-9 w-9 shrink-0 sm:h-11 sm:w-11">
+                  <rect x="5" y="8" width="30" height="30" rx="4" stroke="#527DAA" strokeWidth="2.5" />
+                  <path d="M13 4v8M27 4v8M5 16h30" stroke="#527DAA" strokeWidth="2.5" strokeLinecap="round" />
+                  <g fill="#527DAA">
+                    <rect x="10" y="21" width="4" height="4" rx="1" />
+                    <rect x="18" y="21" width="4" height="4" rx="1" />
+                    <rect x="26" y="21" width="4" height="4" rx="1" />
+                    <rect x="10" y="29" width="4" height="4" rx="1" />
+                    <rect x="18" y="29" width="4" height="4" rx="1" />
+                  </g>
+                  <circle cx="35" cy="35" r="9" fill="white" stroke="#527DAA" strokeWidth="2.5" />
+                  <path d="M35 30v5.5l3.5 2" stroke="#527DAA" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="text-lg font-extrabold text-landing-body underline underline-offset-4 sm:text-xl lg:text-2xl">
+                  {site.hero_title}
+                </span>
+              </Link>
 
-            <p className="font-medium leading-relaxed text-landing-body" style={{ marginTop: "2vw", fontSize: "max(0.8rem, 1.2vw)" }}>
-              {site.hero_text}
-            </p>
+              <p className="mt-5 text-sm font-medium leading-relaxed text-landing-body sm:text-base lg:text-lg">
+                {site.hero_text}
+              </p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
       {/* ---------------- about us ---------------- */}
       <section id="about" className="bg-gradient-to-b from-[#8FC1EC] to-[#EAF5FD] px-6 py-14 sm:py-16">
