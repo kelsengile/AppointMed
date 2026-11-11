@@ -13,6 +13,7 @@ from backend.core.security import create_token, hash_password, login_limiter, ve
 from backend.core.utils import blank_to_none, trim
 from backend.repositories.system_repository import AuditRepository
 from backend.repositories.user_repository import UserRepository
+from backend.schemas.api import ProfileUpdate
 
 _MAX_AVATAR_BYTES = 300_000
 # Checked when the username does not exist, so the response time does not reveal which usernames are real.
@@ -71,10 +72,20 @@ class AuthService:
         row["avatar"] = f"data:{mime};base64,{base64.b64encode(raw).decode()}" if raw and mime else None
         return row
 
-    def update_profile(self, user_id: int, full_name: str, email: str | None) -> dict[str, Any]:
-        """Change the user's own name and email."""
+    def update_profile(self, user_id: int, body: ProfileUpdate) -> dict[str, Any]:
+        """Change the user's own name, email, and public profile details."""
         with self._db.transaction() as tx:
-            UserRepository(tx).update(user_id, {"full_name": full_name, "email": blank_to_none(email)})
+            UserRepository(tx).update(
+                user_id,
+                {
+                    "full_name": body.full_name,
+                    "email": blank_to_none(body.email),
+                    "bio": blank_to_none(body.bio),
+                    "education": blank_to_none(body.education),
+                    "years_experience": body.years_experience,
+                    "languages": blank_to_none(body.languages),
+                },
+            )
             AuditRepository(tx).record(user_id, "UPDATE_PROFILE", "users", user_id, "Updated own profile")
         return self.profile(user_id)
 

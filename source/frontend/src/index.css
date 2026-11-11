@@ -184,3 +184,21 @@ html.dark video,
 html.dark canvas {
   filter: invert(1) hue-rotate(180deg);
 }
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Stops a stray wide element from creating a sideways scrollbar, without breaking sticky panels. */
+body {
+  overflow-x: clip;
+}
+
+/* iPhones zoom into any field smaller than 16px, which makes forms jump around. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

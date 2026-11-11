@@ -17,7 +17,9 @@ class SiteContentRepository(BaseRepository):
 
     def texts(self) -> dict[str, str]:
         rows = self._db.fetch_all(
-            "SELECT content_key, content_value FROM site_content WHERE content_key NOT IN (%s, %s)", IMAGE_KEYS
+            "SELECT content_key, content_value FROM site_content "
+            "WHERE content_key NOT IN (%s, %s) AND LEFT(content_key, 10) <> 'dept_icon_'",
+            IMAGE_KEYS,
         )
         return {r["content_key"]: r["content_value"] for r in rows}
 

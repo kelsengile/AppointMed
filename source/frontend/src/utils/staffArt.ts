@@ -20,3 +20,6 @@ export function staffArt(fullName: string, index = 0): StaffArt {
   const slot = (found >= 0 ? found : index % ART_KEYS.length) + 1;
   return { bg: `/doctor-${slot}.png`, figure: `/docchar-${slot}.png` };
 }
+
+/** The profile picture a staff member uploaded (see backend /api/public/staff/{id}/photo). */
+export const staffPhotoUrl = (id: number, version: number): string => `/api/public/staff/${id}/photo?v=${version}`;

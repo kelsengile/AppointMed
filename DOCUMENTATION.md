@@ -2,7 +2,7 @@
 
 AppointMed is a web-based clinic appointment and management system. Patients request appointments on a public booking page. Clinic staff (doctors, nurses, and administrators) use a role-based browser portal that takes each visit from request to payment. A Python (FastAPI) backend serves both, and every record lives in one shared MySQL database.
 
-This document describes the problem the system addresses, how it is designed and built, how the object-oriented, data-structure, and information-management concepts appear in the code, and how it is tested. Short study notes with code excerpts are in [note.md](note.md).
+This document describes the problem the system addresses, how it is designed and built, how the object-oriented, data-structure, and information-management concepts appear in the code, and how it is tested. Short study notes with code excerpts are in [NOTES.md](NOTES.md).
 
 **Developers**
 
@@ -109,8 +109,7 @@ Many small clinics still rely on paper logbooks, phone calls, and scattered spre
 - No patient portal for viewing records.
 - The `default_slot_minutes` setting is stored for reference. Slot length comes from each doctor's schedule blocks.
 - Rate limiting is in memory, so it resets when the backend restarts and is not shared between processes.
-- Part of the landing page (about text, service cards, contact phone and email, built-in fallback departments) is fixed in the code. Staff, departments, clinic name, and address come from the database.
-- The `departments` table is created by `landing_update.sql`, not `schema.sql`.
+- The four service cards and footer link columns are fixed in the code. All other front page text, the logo, hero picture, and social links are editable by an admin.
 - The SQL console and backup are powerful admin tools. They are audited but not limited further (see Section 17).
 - There are no automated tests yet. Testing is done by hand (Section 20).
 - Uses fictional sample data only and is not designed or certified for real medical records. See `SECURITY.md`.
@@ -129,6 +128,7 @@ Many small clinics still rely on paper logbooks, phone calls, and scattered spre
 | Feature | Description | Primary role |
 |---|---|---|
 | Front page | Services, live staff list, departments with a search popup, clinic name and address | Public |
+| Staff profiles | Public `/staff/:id` page with photo, bio, education, experience, languages, assigned nurses, and a Book button | Public |
 | Online booking | Pick a doctor, a date on a calendar, and an open slot. No account needed. Rate-limited. | Public |
 | Booking calendar | Red days: doctor unavailable. Amber days: fully booked. Past days and days outside the window cannot be chosen. | Public |
 | Slot generation | Open times come from the doctor's weekly schedule, minus days off, taken appointments, pending requests, and past times | System |
@@ -148,10 +148,13 @@ Many small clinics still rely on paper logbooks, phone calls, and scattered spre
 | Dashboards | Today's numbers, exam room, queue, upcoming appointments. Refreshes automatically. | Doctor, Nurse |
 | User management | Create, edit, deactivate, reset passwords, set weekly schedules | Admin |
 | Rooms, settings | Manage rooms (used rooms cannot be deleted) and clinic settings | Admin |
+| Branding | Admin edits logo, hero picture, front page texts, contact details, and social links | Admin |
+| Departments | Admin manages department text, icon, order, featured and visible state; doctors choose specialization from these departments | Admin |
+| Appearance | Light, dark or device theme, and three text sizes saved per browser | All staff |
 | Reports | Status counts, per-doctor totals, day-by-day revenue, with CSV download | Admin |
 | Audit log | Searchable, filterable, paged log with CSV download | Admin |
 | Database page | Browse and edit rows, run one SQL statement, download a backup, import a backup | Admin |
-| Profile and settings | Edit name, email, and photo. Change password (strength checklist). | All staff |
+| Profile and settings | Edit name, email, photo, public profile details, and appearance. Change password (strength checklist). | All staff |
 | Help | Short guides for each role | All staff |
 | Authentication | bcrypt, JWT, server-side role checks, login rate limiting, timing-equalized login | All staff |
 
@@ -195,7 +198,8 @@ In development, the Vite dev server on port 5173 forwards every `/api` request t
 | `PatientService` | Patient search, create, update, delete |
 | `DashboardService` | Staff and admin dashboards and reports |
 | `AdminService` | Users, schedules, rooms, settings, audit |
-| `DepartmentService`, `StaffDirectoryService` | Read-only public lists for the front page |
+| `SiteService` | Website texts, logo, and hero picture |
+| `DepartmentService`, `StaffDirectoryService` | Public lists. `DepartmentService` also manages departments and icons. |
 | `DatabaseService`, `backup_parser` | Admin Database page: tables, SQL console, backup, import |
 | `WaitingQueue` | The check-in priority queue (a data structure rather than a service) |
 
@@ -203,15 +207,15 @@ In development, the Vite dev server on port 5173 forwards every `/api` request t
 
 | Folder | Contents |
 |---|---|
-| `api/` | `client.ts` (the only `fetch`, adds the token, `ApiError`, file download) and `endpoints.ts`, `databaseApi.ts`, `departmentApi.ts`, `staffDirectoryApi.ts` |
-| `components/` | `Badge`, `Modal`, `Alert`, `ExamPanel`, `EncounterCard`, `ScheduleEditor`, `WalkInModal`, `AgendaCalendar`, `BookingCalendar`, `DepartmentsModal`, `PasswordRequirements`, `StatCard`, `ProtectedRoute` |
-| `config/Navigation.ts` | Side-panel items per role |
+| `api/` | `client.ts` (the only `fetch`, adds the token, `ApiError`, file download), `endpoints.ts`, `databaseApi.ts`, `departmentApi.ts`, `staffDirectoryApi.ts`, `siteApi` |
+| `components/` | `Avatar`, `BrandingSettings`, `Badge`, `Modal`, `Alert`, `ExamPanel`, `EncounterCard`, `ScheduleEditor`, `WalkInModal`, `AgendaCalendar`, `BookingCalendar`, `DepartmentsModal`, `PasswordRequirements`, `StatCard`, `ProtectedRoute` |
+| `config/` | `Navigation.ts`, `branding` |
 | `context/AuthContext.tsx` | The signed-in user. The token is kept in `sessionStorage`. |
-| `hooks/usePolling.ts` | Loads data now and on an interval. Only the newest request may update the screen. |
+| `hooks/` | `usePolling`, `useSite`, `useStaffArt` |
 | `layouts/DashboardLayout.tsx` | Side panel and page frame |
 | `pages/` | `LandingPage`, `BookingPage`, `StaffLoginPage`, plus `staff/`, `admin/`, `shared/` |
 | `types/` | Types matching the backend JSON |
-| `utils/` | `format`, `csv`, `image`, `input` (character filters), `password` (strength rules) |
+| `utils/` | `format`, `csv`, `image`, `input` (character filters), `password` (strength rules), `preferences`, `staffArt` |
 
 `ProtectedRoute` and hidden menu items are conveniences only. The backend enforces every role rule.
 
@@ -271,7 +275,7 @@ stateDiagram-v2
 
 ## 10. Database Design
 
-`schema.sql` creates 13 tables. `landing_update.sql` adds `departments` (14 in total). Sample data is in `seed.sql`. Details are in `DATABASE.md`.
+`schema.sql` creates all 15 tables. Sample data is in `seed.sql`. Details are in `DATABASE.md`.
 
 ### 10.1 Entity relationship diagram
 
@@ -285,6 +289,7 @@ erDiagram
     users ||--o{ examinations : "records"
     users ||--o{ prescriptions : "writes"
     users ||--o{ audit_logs : "performs"
+    users ||--o{ site_content : "updates"
     patients ||--o{ appointments : "attends"
     patients ||--o{ examinations : "undergoes"
     patients ||--o{ prescriptions : "receives"
@@ -297,13 +302,13 @@ erDiagram
     prescriptions ||--o{ prescription_items : "lists"
 ```
 
-`clinic_settings` and `departments` are standalone tables (`clinic_settings.updated_by` points to `users`).
+`clinic_settings`, `departments`, and `site_content` are standalone tables.
 
 ### 10.2 Tables
 
 | Table | Purpose | Notable columns and rules |
 |---|---|---|
-| `users` | Clinic staff only | `role` enum, `password_hash` (bcrypt), `assigned_doctor_id` (nurses), `avatar`, `is_active` |
+| `users` | Clinic staff only | `role` enum, `password_hash` (bcrypt), `assigned_doctor_id` (nurses), `avatar`, public profile columns `bio`, `education`, `years_experience`, `languages`, `is_active` |
 | `doctor_schedules` | Weekly working hours | ISO `weekday`, `start_time`, `end_time`, `slot_minutes`. `CHECK` end > start. Two rows on a day make a lunch break. |
 | `doctor_days_off` | Single unavailable dates | `UNIQUE (doctor_id, off_date)`, optional private `reason` |
 | `rooms` | Exam room board | Unique name, `status` enum |
@@ -316,6 +321,7 @@ erDiagram
 | `clinic_settings` | Admin key/value settings | Six keys (name, address, fee, slot minutes, booking switch, booking window) |
 | `audit_logs` | Append-only activity log | `user_id` (null for system actions), `action`, `entity`, `details` |
 | `departments` | Front-page departments | `name`, `description`, `icon`, `is_featured`, `is_active`, `sort_order` |
+| `site_content` | Website texts and pictures (key/value) | `content_key` PK, `content_value` MEDIUMTEXT; also holds department icons |
 
 ### 10.3 Double-booking guard
 
@@ -347,7 +353,7 @@ All endpoints are under `/api`. Errors look like `{"detail": "..."}`. Interactiv
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/login` | Sign in and receive a token |
-| GET, PUT | `/me` | Read or change own name and email |
+| GET, PUT | `/me` | Read or change own name, email, bio, education, years of experience, and languages |
 | PUT, DELETE | `/me/avatar` | Upload or remove a profile picture |
 | POST | `/change-password` | Change own password (strength rules apply) |
 
@@ -358,6 +364,11 @@ All endpoints are under `/api`. Errors look like `{"detail": "..."}`. Interactiv
 | GET | `/catalog` | Clinic info, booking switch, booking window, bookable doctors |
 | GET | `/departments` | Active departments with doctor counts |
 | GET | `/staff` | Active staff: names, roles, specialization, weekdays |
+| GET | `/staff/{id}` | One active staff profile |
+| GET | `/staff/{id}/photo` | Staff photo |
+| GET | `/site` | Website texts and image URLs |
+| GET | `/site-image/{logo|hero}` | Uploaded site logo or hero image |
+| GET | `/department-icon/{id}` | Department icon |
 | GET | `/slots?doctor_id=&day=` | Open times for a doctor on a day |
 | GET | `/calendar?doctor_id=&date_from=&date_to=` | Working weekdays, fully booked days, and days off (dates only) |
 | POST | `/bookings` | Submit a request (rate-limited per visitor) |
@@ -401,6 +412,11 @@ All endpoints are under `/api`. Errors look like `{"detail": "..."}`. Interactiv
 | GET, POST | `/rooms` | `rooms` | List or add rooms |
 | PUT, DELETE | `/rooms/{id}` | `rooms` | Edit or delete a room |
 | GET, PUT | `/settings` | `settings` | Read or save clinic settings |
+| PUT | `/site` | `settings` | Save front-page texts and links |
+| PUT, DELETE | `/site/image/{logo|hero}` | `settings` | Upload or reset the logo or hero |
+| GET, POST | `/departments` | `settings` | List (including hidden) or add departments |
+| PUT, DELETE | `/departments/{id}` | `settings` | Edit or delete (refused while doctors use it) |
+| PUT, DELETE | `/departments/{id}/icon` | `settings` | Upload or remove a department icon |
 | GET | `/reports` | `reports` | Summaries for a date range (up to one year) |
 | GET | `/audit` | `audit` | A page of audit entries |
 | GET | `/database/tables`, `/database/tables/{table}` | `database` | Table list and a page of rows |
@@ -696,7 +712,7 @@ flowchart TD
 
 ## 15. Data Structures and Algorithms
 
-Full explanations with code and complexity are in [note.md](note.md).
+Full explanations with code and complexity are in [NOTES.md](NOTES.md).
 
 | Item | Where | Notes |
 |---|---|---|
@@ -725,6 +741,7 @@ Full explanations with code and complexity are in [note.md](note.md).
 | **Aggregates** | `ReportRepository`: `GROUP BY`, `SUM`, `COUNT`, `COALESCE`, joins |
 | **Audit trail** | `audit_logs`: rows are only ever added by the app |
 | **Backup and restore** | `DatabaseAdminRepository.dump()` writes structure and data. Import parses the file and reloads the rows in one transaction. |
+| **Key/value content** | `site_content` and `clinic_settings` allow new editable fields without a schema change. |
 | **Referential safety** | Users are deactivated, not deleted. Patients and rooms with history cannot be deleted. |
 | **Money** | `Decimal` in Python, `DECIMAL(10,2)` in MySQL |
 | **Server clock** | `Executor.server_now()` reads `NOW()` from MySQL |
@@ -739,9 +756,9 @@ The full policy and known gaps are in `SECURITY.md`. Summary:
 - **Server-side role checks and doctor scope:** every protected route uses `require_feature(...)`.
 - **Server-side input validation:** Pydantic allowlists, length limits, control-character rejection, and business rules in services.
 - **Rate limiting:** logins and public bookings.
-- **Public endpoints:** limited to clinic info, doctor and staff names, roles, specializations, weekdays, open times, and unavailable dates. They never return clinical data.
+- **Public endpoints:** include bio, education, years of experience, languages, profile photos, and department icons, as well as clinic info, doctor and staff names, roles, specializations, weekdays, open times, and unavailable dates. They never return clinical data.
 - **Database:** parameterized SQL, a least-privilege account, and generic error messages. Admin-only Database page: `password_hash` and `avatar` columns are never sent to the browser, the audit log is append-only, and every change is audited without the values.
-- **Uploads:** PNG, JPEG, or WebP only (checked by file signature), at most 300 KB.
+- **Uploads:** PNG, JPEG, or WebP (checked by file signature): profile 300 KB, logo 300 KB, hero 1.5 MB, department icon 150 KB.
 - **Data:** only fictional sample data. Sample passwords are public.
 
 ## 18. Exception Handling and Validation
@@ -843,7 +860,7 @@ There are no automated tests yet. Test by hand using the sample logins in `CONTR
 | T-44 | Password | Change password to the same value as the current one | "Choose a password that is different..." | | |
 | T-45 | Error handling | Turn the backend off and use any page | "Cannot reach the server. Check that the backend is running." | | |
 | T-46 | Build | `npm run build` in `source/frontend` | No TypeScript errors | | |
-| T-47 | Database | Reset, then load `schema.sql`, `seed.sql`, `landing_update.sql` | 14 tables, 10 users | | |
+| T-47 | Database | Reset, then load `schema.sql`, `seed.sql` | 15 tables, 10 users, 9 departments | | |
 | T-48 | Day off | As a doctor, mark a free future date unavailable | Saved. The date turns red on `/book`. | | |
 | T-49 | Day off | Mark a day that has an open appointment | Refused with the counts of open appointments and requests | | |
 | T-50 | Day off | Approve a request, or reschedule, onto a day off | "The doctor is not available on that day." | | |
@@ -855,6 +872,15 @@ There are no automated tests yet. Test by hand using the sample logins in `CONTR
 | T-56 | Database page | Run a statement that mentions `audit_logs` to change it | "The audit log is append-only and cannot be changed." | | |
 | T-57 | Database page | As a nurse, call `GET /api/admin/database/tables` | 403 | | |
 | T-58 | Landing page | Deactivate a doctor, reload `/` | That person disappears from Meet Our Staff | | |
+| T-59 | Branding | As admin, upload a logo and a text change | Landing page, side panel, and footer update | | |
+| T-60 | Branding | As a nurse, call `PUT /api/admin/site` | 403 | | |
+| T-61 | Branding | Upload a 3 MB hero picture | "The image is too large." | | |
+| T-62 | Departments | Delete a department that has doctors | 409 with the doctor count | | |
+| T-63 | Departments | Rename a department with doctors | Doctors' specialization follows the new name | | |
+| T-64 | Users | Create a doctor with a specialization not in departments | "The specialization must be one of the departments..." | | |
+| T-65 | Staff profile | Open `/staff/{id}` for a deactivated user | 404 "Staff member not found." | | |
+| T-66 | Profile | Save years of experience as 99 | 422 (at most 70) | | |
+| T-67 | Settings | Choose Dark theme and reload | Theme persists | | |
 
 ## 21. Conclusion
 

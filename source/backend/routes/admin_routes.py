@@ -11,6 +11,7 @@ from backend.models.domain import User
 from backend.routes.database_routes import router as database_router
 from backend.schemas.api import (
     ActiveToggle,
+    DepartmentIn,
     PasswordReset,
     RoomIn,
     ScheduleUpdate,
@@ -21,12 +22,14 @@ from backend.schemas.api import (
 from backend.services.admin_service import AdminService
 from backend.services.dashboard_service import DashboardService
 from backend.schemas.site import SiteContentUpdate, SiteImageUpload
+from backend.services.department_service import DepartmentService
 from backend.services.site_service import SiteService
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 router.include_router(database_router)  # /api/admin/database/...
 admin_service = AdminService()
 dashboard_service = DashboardService()
+department_service = DepartmentService()
 site_service = SiteService()
 
 
@@ -136,3 +139,34 @@ def set_site_image(kind: Literal["logo", "hero"], body: SiteImageUpload, user: U
 @router.delete("/site/image/{kind}")
 def remove_site_image(kind: Literal["logo", "hero"], user: User = Depends(require_feature("settings"))) -> dict:
     return site_service.remove_image(user, kind)
+
+
+# ---------- departments and specialties ----------
+@router.get("/departments")
+def list_departments(user: User = Depends(require_feature("settings"))) -> list:
+    return department_service.list_admin()
+
+
+@router.post("/departments", status_code=201)
+def create_department(body: DepartmentIn, user: User = Depends(require_feature("settings"))) -> list:
+    return department_service.create(user, body)
+
+
+@router.put("/departments/{department_id}")
+def update_department(department_id: int, body: DepartmentIn, user: User = Depends(require_feature("settings"))) -> list:
+    return department_service.update(user, department_id, body)
+
+
+@router.delete("/departments/{department_id}")
+def delete_department(department_id: int, user: User = Depends(require_feature("settings"))) -> list:
+    return department_service.delete(user, department_id)
+
+
+@router.put("/departments/{department_id}/icon")
+def set_department_icon(department_id: int, body: SiteImageUpload, user: User = Depends(require_feature("settings"))) -> list:
+    return department_service.set_icon(user, department_id, body.image)
+
+
+@router.delete("/departments/{department_id}/icon")
+def remove_department_icon(department_id: int, user: User = Depends(require_feature("settings"))) -> list:
+    return department_service.remove_icon(user, department_id)
