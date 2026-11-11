@@ -1,12 +1,15 @@
-// Admin: clinic name and address, default fee, slot length, booking window, and the online-booking switch.
-// Only changed values are sent, so the audit log stays clean.
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { adminApi } from "../../api/endpoints";
 import Alert from "../../components/Alert";
-import { inputClass, primaryButton } from "../../components/ui";
+import Badge from "../../components/Badge";
+import Modal from "../../components/Modal";
+import { dangerButton, inputClass, primaryButton, secondaryButton } from "../../components/ui";
+import { usePolling } from "../../hooks/usePolling";
 import type { SettingRow } from "../../types";
+import type { DepartmentItem, DepartmentPayload } from "../../types/department";
 import { formatDateTime } from "../../utils/format";
-import { cleanAddress, cleanClinicName, cleanInt, cleanMoney, isMoney } from "../../utils/input";
+import { fitImage } from "../../utils/image";
+import { cleanAddress, cleanClinicName, cleanInt, cleanMoney, cleanText, isMoney } from "../../utils/input";
 import { useSite } from "../../hooks/useSite";
 import BrandingSettings from "../../components/BrandingSettings";
 import { DEFAULT_LOGO } from "../../config/branding";
@@ -50,6 +53,244 @@ function problem(key: string, raw: string): string {
 }
 
 const toMap = (rows: SettingRow[]): Record<string, string> => Object.fromEntries(rows.map((r) => [r.setting_key, r.setting_value]));
+
+// Add or edit one department (specialty). `department` is null when adding.
+function DepartmentForm({ department, onClose, onSaved }: { department: DepartmentItem | null; onClose: () => void; onSaved: (message: string) => void }) {
+  const [name, setName] = useState(department?.name ?? "");
+  const [description, setDescription] = useState(department?.description ?? "");
+  const [featured, setFeatured] = useState(department?.is_featured ?? false);
+  const [active, setActive] = useState(department?.is_active ?? true);
+  const [order, setOrder] = useState(String(department?.sort_order ?? 100));
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (name.trim().length < 2) return setError("Enter the department name.");
+    if (description.trim().length < 3) return setError("Enter a short description.");
+    const body: DepartmentPayload = {
+      name: name.trim(),
+      description: description.trim(),
+      is_featured: featured,
+      is_active: active,
+      sort_order: Number(order) || 0,
+    };
+    setBusy(true);
+    setError("");
+    try {
+      if (department) await adminApi.updateDepartment(department.id, body);
+      else await adminApi.createDepartment(body);
+      onSaved(department ? "Department updated." : "Department added.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save the department.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={department ? "Edit department" : "Add department"} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <label className="block text-sm font-medium">
+          Name
+          <input className={`${inputClass} mt-1`} maxLength={100} autoComplete="off" value={name} onChange={(e) => setName(cleanClinicName(e.target.value))} />
+        </label>
+        <label className="block text-sm font-medium">
+          Description
+          <textarea className={`${inputClass} mt-1`} rows={3} maxLength={255} value={description} onChange={(e) => setDescription(cleanText(e.target.value, 255))} />
+        </label>
+        <label className="block text-sm font-medium">
+          Order (lower numbers come first)
+          <input className={`${inputClass} mt-1 w-28`} inputMode="numeric" maxLength={4} value={order} onChange={(e) => setOrder(cleanInt(e.target.value, 4))} />
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
+          Featured (shown as a card on the front page)
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+          Visible on the website
+        </label>
+        <p className="text-xs text-slate-500">
+          Doctors pick their specialization from this list on the Users page. Renaming a department updates its doctors automatically,
+          and a department that still has doctors cannot be deleted.
+        </p>
+        {error && <Alert kind="error">{error}</Alert>}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={secondaryButton}>
+            Cancel
+          </button>
+          <button type="submit" disabled={busy} className={primaryButton}>
+            {busy ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// Departments and specialties shown on the front page: text, icon, order, and visibility.
+function DepartmentsSettings() {
+  const list = usePolling(() => adminApi.departments(), 0);
+  const [editing, setEditing] = useState<DepartmentItem | "new" | null>(null);
+  const [message, setMessage] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const iconTarget = useRef<number | null>(null);
+
+  async function chooseIcon(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    const id = iconTarget.current;
+    if (!file || id === null) return;
+    setBusyId(id);
+    setActionError("");
+    setMessage("");
+    try {
+      await adminApi.setDepartmentIcon(id, await fitImage(file, 128, 128, "image/png", 140_000));
+      setMessage("Icon updated.");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not upload the icon.");
+    } finally {
+      setBusyId(null);
+      await list.reload();
+    }
+  }
+
+  async function removeIcon(d: DepartmentItem) {
+    setBusyId(d.id);
+    setActionError("");
+    setMessage("");
+    try {
+      await adminApi.removeDepartmentIcon(d.id);
+      setMessage("Icon removed.");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not remove the icon.");
+    } finally {
+      setBusyId(null);
+      await list.reload();
+    }
+  }
+
+  async function remove(d: DepartmentItem) {
+    if (!window.confirm(`Delete the ${d.name} department? Doctors are not deleted.`)) return;
+    setBusyId(d.id);
+    setActionError("");
+    setMessage("");
+    try {
+      await adminApi.deleteDepartment(d.id);
+      setMessage(`${d.name} was deleted.`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not delete the department.");
+    } finally {
+      setBusyId(null);
+      await list.reload();
+    }
+  }
+
+  return (
+    <section className="mt-10">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Departments and specialties</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Managed here, shown on the front page. "Learn More" lists the doctors whose specialization matches the department name.
+          </p>
+        </div>
+        <button type="button" className={primaryButton} onClick={() => setEditing("new")}>
+          Add department
+        </button>
+      </div>
+
+      <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={chooseIcon} aria-label="Choose a department icon" />
+      {message && <Alert kind="success" onClose={() => setMessage("")}>{message}</Alert>}
+      {(actionError || list.error) && <Alert kind="error">{actionError || list.error}</Alert>}
+      {list.loading && !list.data && <p className="mt-4 text-slate-500">Loading...</p>}
+
+      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 text-xs text-slate-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">Icon</th>
+              <th className="px-3 py-2 font-medium">Department</th>
+              <th className="px-3 py-2 font-medium">Doctors</th>
+              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.data && list.data.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-3 py-4 text-slate-500">No departments yet.</td>
+              </tr>
+            )}
+            {list.data?.map((d) => (
+              <tr key={d.id} className="border-t border-slate-100 align-top">
+                <td className="px-3 py-2">
+                  {d.icon ? (
+                    <img src={d.icon} alt="" className="h-10 w-10 rounded-lg object-contain" />
+                  ) : (
+                    <span aria-hidden className="grid h-10 w-10 place-items-center rounded-lg bg-brand-100 font-bold text-brand-700">
+                      {d.name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  <p className="font-medium">{d.name}</p>
+                  <p className="max-w-md text-xs text-slate-500">{d.description}</p>
+                </td>
+                <td className="px-3 py-2">{d.doctor_count}</td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-wrap gap-1">
+                    <Badge tone={d.is_active ? "green" : "red"}>{d.is_active ? "Visible" : "Hidden"}</Badge>
+                    {d.is_featured && <Badge tone="blue">Featured</Badge>}
+                  </div>
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-wrap gap-1">
+                    <button className="rounded-lg border border-slate-300 px-2 py-1 hover:bg-slate-50" onClick={() => setEditing(d)}>
+                      Edit
+                    </button>
+                    <button
+                      className="rounded-lg border border-slate-300 px-2 py-1 hover:bg-slate-50 disabled:opacity-60"
+                      disabled={busyId === d.id}
+                      onClick={() => {
+                        iconTarget.current = d.id;
+                        fileInput.current?.click();
+                      }}
+                    >
+                      Upload icon
+                    </button>
+                    {d.icon && (
+                      <button className="rounded-lg border border-slate-300 px-2 py-1 hover:bg-slate-50 disabled:opacity-60" disabled={busyId === d.id} onClick={() => void removeIcon(d)}>
+                        Remove icon
+                      </button>
+                    )}
+                    <button className={`${dangerButton} !px-2 !py-1`} disabled={busyId === d.id} onClick={() => void remove(d)}>
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {editing && (
+        <DepartmentForm
+          department={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+          onSaved={(text) => {
+            setEditing(null);
+            setMessage(text);
+            void list.reload();
+          }}
+        />
+      )}
+    </section>
+  );
+}
 
 export default function ClinicSettingsPage() {
   const { logoSrc } = useSite();
@@ -164,6 +405,7 @@ export default function ClinicSettingsPage() {
       )}
       {!rows && error && <Alert kind="error">{error}</Alert>}
       <BrandingSettings />
+      <DepartmentsSettings />
     </section>
   );
 }

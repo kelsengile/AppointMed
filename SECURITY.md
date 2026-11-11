@@ -1,6 +1,6 @@
 # Security Policy
 
-AppointMed is a web-based system that manages patient, doctor, and appointment records in a shared MySQL database. It is a coursework project for CMSC 203, ITEC 104, and ITEC 105 at Laguna State Polytechnic University, and it is **not yet ready to hold real patient data**. Even so, we treat security seriously and ask contributors to do the same. This document explains how the system protects data today, where its known gaps are, and how to report a problem. The reasoning behind the main controls (hashing, validation, credentials, privacy) is explained in [note.md](note.md).
+AppointMed is a web-based system that manages patient, doctor, and appointment records in a shared MySQL database. It is a coursework project for CMSC 203, ITEC 104, and ITEC 105 at Laguna State Polytechnic University, and it is **not yet ready to hold real patient data**. Even so, we treat security seriously and ask contributors to do the same. This document explains how the system protects data today, where its known gaps are, and how to report a problem. The reasoning behind the main controls (hashing, validation, credentials, privacy) is explained in [NOTES.md](NOTES.md).
 
 ## Supported Versions
 
@@ -106,7 +106,7 @@ These gaps are acceptable for a coursework demo, but each must be addressed befo
 - **Interactive API docs and health endpoints are public.** `/docs` is on, and `/api/health/db` reports whether the database is reachable and its name.
 - **No HTTPS in development,** and no data is encrypted at rest in MySQL. The database password sits in plain text in `source/.env`.
 - **No automated tests or dependency scanning yet.**
-- **Compliance.** Real patient data is covered by laws such as the Philippine Data Privacy Act of 2012 (RA 10173). AppointMed has not been reviewed to meet them (see "Respect Data Privacy" in [note.md](note.md)).
+- **Compliance.** Real patient data is covered by laws such as the Philippine Data Privacy Act of 2012 (RA 10173). AppointMed has not been reviewed to meet them (see "Respect Data Privacy" in [NOTES.md](NOTES.md)).
 
 ## Before Any Real Deployment
 
@@ -117,7 +117,7 @@ These gaps are acceptable for a coursework demo, but each must be addressed befo
 5. Keep MySQL off the public internet, restrict it to trusted machines, enable encryption at rest, and set up encrypted backups.
 6. Move rate limiting to shared storage (for example Redis) if you run more than one backend process.
 7. Configure SMTP with a dedicated account, and keep logs private.
-8. Review the data privacy checklist in [note.md](note.md) with a qualified adviser.
+8. Review the data privacy checklist in [NOTES.md](NOTES.md) with a qualified adviser.
 
 ## Rules for Contributors
 

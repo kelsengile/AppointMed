@@ -69,7 +69,7 @@ AppointMed is developed as the final project for CMSC 203, ITEC 104, and ITEC 10
 |---|---|
 | **CMSC 203** (OOP) | Role classes (`Doctor`, `Nurse`, `Admin`) extending an abstract `User`, abstract `Executor` and `BaseRepository`, encapsulated `Settings` and `Database`, and a family of custom exceptions |
 | **ITEC 104** (Data Structures and Algorithms) | A min-heap waiting queue, a sliding-window rate limiter on a `deque`, an appointment state machine, hash-set slot lookups, and sorted overlap detection |
-| **ITEC 105** (Information Management) | A normalized MySQL schema (13 tables plus `departments`) with keys, `CHECK` constraints, and a double-booking guard, plus transactions, parameterized queries, reports, an audit log, and backup and restore |
+| **ITEC 105** (Information Management) | A normalized MySQL schema (15 tables) with keys, `CHECK` constraints, and a double-booking guard, plus transactions, parameterized queries, reports, an audit log, and backup and restore |
 
 ---
 

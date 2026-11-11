@@ -5,7 +5,7 @@ import { AuthProvider } from "./context/AuthContext";
 import DashboardLayout from "./layouts/DashboardLayout";
 import StaffLoginPage from "./pages/StaffLoginPage";
 import BookingPage from "./pages/BookingPage";
-import LandingPage from "./pages/LandingPage";
+import LandingPage, { StaffProfilePage } from "./pages/LandingPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
 import AuditPage from "./pages/admin/AuditPage";
@@ -82,6 +82,7 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/book" element={<BookingPage />} />
           <Route path="/staff-login" element={<StaffLoginPage />} />
+          <Route path="/staff/:id" element={<StaffProfilePage />} />
           {ROLES.map((role) => (
             <Route
               key={role}

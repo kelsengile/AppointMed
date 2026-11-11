@@ -19,6 +19,7 @@ import type {
   PatientPayload,
   PrescriptionRecord,
   Profile,
+  ProfilePayload,
   ReportData,
   RoomItem,
   RoomStatus,
@@ -29,6 +30,7 @@ import type {
   UserRecord,
   UserUpdatePayload,
 } from "../types";
+import type { DepartmentItem, DepartmentPayload } from "../types/department";
 import { request } from "./client";
 
 type Query = Record<string, string | number | null | undefined>;
@@ -49,8 +51,7 @@ export const authApi = {
   login: (username: string, password: string) =>
     request<LoginResponse>("/api/auth/login", { method: "POST", body: { username, password } }),
   me: () => request<Profile>("/api/auth/me"),
-  updateMe: (full_name: string, email: string | null) =>
-    request<Profile>("/api/auth/me", { method: "PUT", body: { full_name, email } }),
+  updateMe: (body: ProfilePayload) => request<Profile>("/api/auth/me", { method: "PUT", body }),
   setAvatar: (image: string) => request<Profile>("/api/auth/me/avatar", { method: "PUT", body: { image } }),
   removeAvatar: () => request<Profile>("/api/auth/me/avatar", { method: "DELETE" }),
   changePassword: (current_password: string, new_password: string) =>
@@ -155,4 +156,15 @@ export const adminApi = {
     request<ReportData>(`/api/admin/reports${qs({ date_from: dateFrom, date_to: dateTo })}`),
   audit: (q: string, action: string, limit: number, offset: number) =>
     request<AuditPage>(`/api/admin/audit${qs({ q, action, limit, offset })}`),
+
+  departments: () => request<DepartmentItem[]>("/api/admin/departments"),
+  createDepartment: (body: DepartmentPayload) =>
+    request<DepartmentItem[]>("/api/admin/departments", { method: "POST", body }),
+  updateDepartment: (id: number, body: DepartmentPayload) =>
+    request<DepartmentItem[]>(`/api/admin/departments/${id}`, { method: "PUT", body }),
+  deleteDepartment: (id: number) => request<DepartmentItem[]>(`/api/admin/departments/${id}`, { method: "DELETE" }),
+  setDepartmentIcon: (id: number, image: string) =>
+    request<DepartmentItem[]>(`/api/admin/departments/${id}/icon`, { method: "PUT", body: { image } }),
+  removeDepartmentIcon: (id: number) =>
+    request<DepartmentItem[]>(`/api/admin/departments/${id}/icon`, { method: "DELETE" }),
 };
