@@ -67,19 +67,27 @@ export default function DashboardLayout({ role }: { role: Role }) {
 
   return (
     <div className="app-theme min-h-screen bg-gradient-to-b from-[#F4F9FE] to-[#EAF4FC] md:flex">
+      {open && (
+        <button
+          type="button"
+          aria-label="Close side panel"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-30 bg-[#1F3655]/40 md:hidden"
+        />
+      )}
       <aside
         className={`${open ? "flex" : "hidden"} fixed inset-y-3 left-3 z-40 w-64 flex-col rounded-3xl border border-white/70 bg-white/90 p-4 shadow-[0_18px_40px_rgba(53,88,130,0.18)] backdrop-blur md:sticky md:top-3 md:m-3 md:h-[calc(100vh-1.5rem)] md:shrink-0`}
       >
         {/* Brand: logo and name link to the landing page, with the close button on the right */}
         <div className="flex items-center justify-between gap-2 px-3 pb-3">
-          <Link
-            to="/"
-            aria-label="Go to the AppointMed home page"
-            title="Go to the home page"
-            className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          >
-            <Logo size={32} />
-          </Link>
+            <Link
+              to="/"
+              aria-label="Go to the AppointMed home page"
+              title="Go to the home page"
+              className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              <Logo size={32} showName={false} />
+            </Link>
           <button type="button" onClick={() => setOpen(false)} className={toggleButton} aria-label="Close side panel" title="Close side panel">
             <PanelIcon />
           </button>
