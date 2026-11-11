@@ -11,6 +11,8 @@ import type {
   CalendarData,
   DoctorRef,
   Encounter,
+  EmailPreferences,
+  EmailPreferencesResponse,
   ExamPayload,
   InvoiceItem,
   LoginResponse,
@@ -56,6 +58,11 @@ export const authApi = {
   removeAvatar: () => request<Profile>("/api/auth/me/avatar", { method: "DELETE" }),
   changePassword: (current_password: string, new_password: string) =>
     request<Ok>("/api/auth/change-password", { method: "POST", body: { current_password, new_password } }),
+  emailPreferences: () => request<EmailPreferencesResponse>("/api/auth/me/email-preferences"),
+  saveEmailPreferences: (body: EmailPreferences) =>
+    request<EmailPreferencesResponse>("/api/auth/me/email-preferences", { method: "PUT", body }),
+  sendTestEmail: () =>
+    request<{ ok: boolean; smtp_enabled: boolean }>("/api/auth/me/email-preferences/test", { method: "POST" }),
 };
 
 export const publicApi = {

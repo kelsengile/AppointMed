@@ -117,3 +117,4 @@ class RateLimiter:
 
 login_limiter = RateLimiter(max_events=5, window_seconds=300)
 booking_limiter = RateLimiter(max_events=6, window_seconds=600)
+test_email_limiter = RateLimiter(max_events=3, window_seconds=600)

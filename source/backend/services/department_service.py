@@ -15,6 +15,7 @@ from backend.repositories.site_repository import SiteContentRepository
 from backend.repositories.system_repository import AuditRepository
 from backend.schemas.api import DepartmentIn
 from backend.services.auth_service import _detect_mime
+from backend.services.notifier import Notifier, notifier
 
 _MAX_ICON_BYTES = 150_000
 
@@ -26,8 +27,9 @@ def _icon_key(department_id: int) -> str:
 class DepartmentService:
     """Public reads, and admin-only changes."""
 
-    def __init__(self, db: Database = database) -> None:
+    def __init__(self, db: Database = database, notify: Notifier = notifier) -> None:
         self._db = db
+        self._notifier = notify
 
     # ------------------------------------------------------------ public
     def list_public(self) -> list[Row]:
@@ -61,6 +63,12 @@ class DepartmentService:
             except DuplicateEntryError as exc:
                 raise ConflictError("A department with that name already exists.") from exc
             AuditRepository(tx).record(admin.id, "CREATE_DEPARTMENT", "departments", new_id, data.name)
+        self._notifier.clinic_changed(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="Departments were changed",
+            lines=[("New department", data.name)],
+        )
         return self.list_admin()
 
     def update(self, admin: User, department_id: int, data: DepartmentIn) -> list[Row]:
@@ -76,6 +84,12 @@ class DepartmentService:
             if old["name"] != data.name:
                 departments.rename_specialization(old["name"], data.name)  # doctors follow the rename
             AuditRepository(tx).record(admin.id, "UPDATE_DEPARTMENT", "departments", department_id, data.name)
+        self._notifier.clinic_changed(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="Departments were changed",
+            lines=[("Department updated", data.name)],
+        )
         return self.list_admin()
 
     def delete(self, admin: User, department_id: int) -> list[Row]:
@@ -90,6 +104,12 @@ class DepartmentService:
             departments.delete(department_id)
             SiteContentRepository(tx).remove(_icon_key(department_id))
             AuditRepository(tx).record(admin.id, "DELETE_DEPARTMENT", "departments", department_id, row["name"])
+        self._notifier.clinic_changed(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="Departments were changed",
+            lines=[("Department removed", row["name"])],
+        )
         return self.list_admin()
 
     def set_icon(self, admin: User, department_id: int, image: str) -> list[Row]:

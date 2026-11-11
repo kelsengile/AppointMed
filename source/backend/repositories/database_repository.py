@@ -25,7 +25,7 @@ logger = logging.getLogger("appointmed")
 
 # Dump order: parents before children (foreign key checks are also switched off while loading).
 _TABLE_ORDER = (
-    "users", "doctor_schedules", "rooms", "notifications", "patients", "appointments", "examinations",
+    "users", "email_preferences", "doctor_schedules", "rooms", "notifications", "patients", "appointments", "examinations",
     "prescriptions", "prescription_items", "invoices", "clinic_settings", "audit_logs",
 )
 _ESCAPES = {"\\": "\\\\", "'": "\\'", "\0": "\\0", "\n": "\\n", "\r": "\\r", "\x1a": "\\Z"}

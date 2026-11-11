@@ -171,6 +171,14 @@ class PasswordChange(Schema):
         return _check_password_strength(value)
 
 
+class EmailPreferencesUpdate(Schema):
+    notify_requests: bool
+    notify_appointments: bool
+    notify_billing: bool
+    notify_account: bool
+    notify_clinic: bool
+
+
 # ---------- public booking ----------
 class BookingRequest(Schema):
     full_name: str = Field(min_length=2, max_length=100)
