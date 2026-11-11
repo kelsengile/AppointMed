@@ -14,6 +14,7 @@ from backend.models.domain import User
 from backend.repositories.site_repository import SiteContentRepository
 from backend.repositories.system_repository import AuditRepository
 from backend.services.auth_service import _detect_mime
+from backend.services.notifier import Notifier, notifier
 
 # key -> (max length, kind)
 TEXT_FIELDS: dict[str, tuple[int, str]] = {
@@ -39,8 +40,9 @@ IMAGES = {"logo": ("logo_image", 300_000), "hero": ("hero_image", 1_500_000)}
 class SiteService:
     """Public reads and admin-only changes to the website's look and text."""
 
-    def __init__(self, db: Database = database) -> None:
+    def __init__(self, db: Database = database, notify: Notifier = notifier) -> None:
         self._db = db
+        self._notifier = notify
 
     @staticmethod
     def _clean(key: str, value: str) -> str:
@@ -91,6 +93,12 @@ class SiteService:
                 else:
                     repo.remove(key)  # back to the built-in default
             AuditRepository(tx).record(admin.id, "UPDATE_SITE_CONTENT", "site_content", None, f"Changed {len(cleaned)} website field(s)")
+        self._notifier.clinic_changed(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="The website was updated",
+            lines=[("Website text", f"{len(cleaned)} field(s) changed")],
+        )
         return self.public()
 
     def set_image(self, admin: User, kind: str, image: str) -> dict[str, Any]:
@@ -112,6 +120,12 @@ class SiteService:
         with self._db.transaction() as tx:
             SiteContentRepository(tx).upsert(spec[0], f"data:{mime};base64,{base64.b64encode(raw).decode()}", admin.id)
             AuditRepository(tx).record(admin.id, "UPDATE_SITE_IMAGE", "site_content", None, f"Changed the {kind} picture")
+        self._notifier.clinic_changed(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="The website was updated",
+            lines=[("Picture", f"The {kind} picture was changed")],
+        )
         return self.public()
 
     def remove_image(self, admin: User, kind: str) -> dict[str, Any]:
@@ -121,4 +135,10 @@ class SiteService:
         with self._db.transaction() as tx:
             SiteContentRepository(tx).remove(spec[0])
             AuditRepository(tx).record(admin.id, "REMOVE_SITE_IMAGE", "site_content", None, f"Removed the {kind} picture")
+        self._notifier.clinic_changed(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="The website was updated",
+            lines=[("Picture", f"The {kind} picture was changed")],
+        )
         return self.public()

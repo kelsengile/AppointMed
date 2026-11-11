@@ -1,9 +1,9 @@
-// Settings. Everyone: appearance, account summary, change password.
-// Doctor and nurse: notification preference. Admin: website branding (logo, clinic name, hero picture, texts, links).
+// Settings. Everyone: appearance, account summary, change password and email preferences.
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { authApi } from "../../api/endpoints";
 import Alert from "../../components/Alert";
+import EmailPreferencesCard from "../../components/EmailPreferences";
 import PasswordRequirements from "../../components/PasswordRequirements";
 import { inputClass, primaryButton, secondaryButton } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
@@ -80,18 +80,13 @@ function AppearanceCard() {
 }
 
 function NotificationsCard() {
-  const { user } = useAuth();
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   return (
-    <Card title="Notifications" desc="Saved in this browser only.">
-      {user?.role === "doctor" ? (
-        <label className="flex items-center gap-3 text-sm font-medium">
-          <input type="checkbox" checked={prefs.checkInAlert} onChange={(e) => setPrefs(updatePrefs({ checkInAlert: e.target.checked }))} />
-          Show a banner on the Appointments page when a patient checks in
-        </label>
-      ) : (
-        <p className="text-sm text-slate-600">Your doctor is notified when you check a patient in. You have no alerts to configure.</p>
-      )}
+    <Card title="In-app alerts" desc="Saved in this browser only.">
+      <label className="flex items-center gap-3 text-sm font-medium">
+        <input type="checkbox" checked={prefs.checkInAlert} onChange={(e) => setPrefs(updatePrefs({ checkInAlert: e.target.checked }))} />
+        Show a banner on the Appointments page when a patient checks in
+      </label>
     </Card>
   );
 }
@@ -174,16 +169,23 @@ function PasswordCard() {
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isDoctor = user?.role === "doctor";
   return (
     <section>
       <h1 className="text-2xl font-semibold">Settings</h1>
       <p className="mt-1 text-slate-600">Appearance, your account, and your preferences.</p>
-      <div className={`mt-6 grid gap-6 lg:grid-cols-2 ${isAdmin ? "xl:grid-cols-3" : "2xl:grid-cols-4"}`}>
+
+      {/* Row 1: doctors have three cards, everyone else two, so there is never an empty column. */}
+      <div className={`mt-6 grid gap-6 lg:grid-cols-2 ${isDoctor ? "xl:grid-cols-3" : ""}`}>
         <AppearanceCard />
         <AccountCard />
-        {!isAdmin && <NotificationsCard />}
+        {isDoctor && <NotificationsCard />}
+      </div>
+
+      {/* Row 2: change password on the left, email settings beside it. */}
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <PasswordCard />
+        <EmailPreferencesCard />
       </div>
     </section>
   );

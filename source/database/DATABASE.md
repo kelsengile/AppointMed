@@ -44,7 +44,7 @@ AppointMed stores everything in **one MySQL 8 database named `appointmed`**. `sc
 | DBMS | MySQL 8.0 or newer |
 | Storage engine | InnoDB (transactions and foreign keys) |
 | Character set | `utf8mb4` |
-| Tables | 15 (all in `schema.sql`) |
+| Tables | 16 (all in `schema.sql`) |
 | Driver | `mysql-connector-python`, connection pool of 8 |
 | Application account | `appointmed_user`, with `SELECT`, `INSERT`, `UPDATE`, `DELETE` only |
 | Structure owner | `root` (loads the SQL files and restores backups) |
@@ -62,7 +62,7 @@ AppointMed stores everything in **one MySQL 8 database named `appointmed`**. `sc
 
 | File | Purpose |
 |---|---|
-| `schema.sql` | All 15 tables. Starts with `USE appointmed;`, uses `CREATE TABLE IF NOT EXISTS`, and is safe to repeat. |
+| `schema.sql` | All 16 tables. Starts with `USE appointmed;`, uses `CREATE TABLE IF NOT EXISTS`, and is safe to repeat. |
 | `seed.sql` | Fictional sample data including 9 departments. Load **once**. |
 | `source/.env` | Connection settings (`DB_*`). Never committed. |
 | `backend/core/config.py` | Reads `.env` once into the frozen `Settings` object |
@@ -735,7 +735,7 @@ Backups include `site_content` (including pictures), so files can be large; the 
 Run as `root` or `appointmed_user` after loading the schema and seed.
 
 ```sql
--- 15 tables
+-- 16 tables
 SELECT COUNT(*) AS tables_found FROM information_schema.tables WHERE table_schema = 'appointmed';
 
 -- expected: users 10, doctor_schedules 28, doctor_days_off 1, rooms 5, notifications 6,

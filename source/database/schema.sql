@@ -7,6 +7,7 @@
 --     mysql -u root -p appointmed < source/database/schema.sql
 --
 -- This file contains structure only. Sample data lives in seed.sql.
+-- Re-run it against an existing database to create newly added tables.
 --
 -- WORKFLOW THIS SCHEMA SUPPORTS
 -- 1. A patient requests an appointment on the public website (or by
@@ -62,6 +63,17 @@ CREATE TABLE IF NOT EXISTS users (
         FOREIGN KEY (assigned_doctor_id) REFERENCES users(id),
     INDEX idx_users_role (role),
     INDEX idx_users_assigned_doctor (assigned_doctor_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS email_preferences (
+    user_id             INT PRIMARY KEY,
+    notify_requests     BOOLEAN NOT NULL DEFAULT TRUE,
+    notify_appointments BOOLEAN NOT NULL DEFAULT TRUE,
+    notify_billing      BOOLEAN NOT NULL DEFAULT TRUE,
+    notify_account      BOOLEAN NOT NULL DEFAULT TRUE,
+    notify_clinic       BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_email_prefs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ============================================================

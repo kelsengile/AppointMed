@@ -15,6 +15,7 @@ from backend.services.backup_parser import parse_backup
 from backend.models.domain import User
 from backend.repositories.database_repository import DatabaseAdminRepository, admin_session, to_json_value
 from backend.repositories.system_repository import AuditRepository
+from backend.services.notifier import Notifier, notifier
 
 _HIDDEN = frozenset({"password_hash", "avatar"})  # never shown in the browser or the console
 _READ_ONLY = frozenset({"audit_logs"})  # the audit log is append-only
@@ -27,8 +28,9 @@ _KEEP_ON_IMPORT = frozenset({"audit_logs"})  # append-only, so an import never r
 class DatabaseService:
     """Rules for the administrator's database tools."""
 
-    def __init__(self, db: Database = database) -> None:
+    def __init__(self, db: Database = database, notify: Notifier = notifier) -> None:
         self._db = db
+        self._notifier = notify
 
     # ------------------------------------------------------------ helpers
     @staticmethod
@@ -211,6 +213,12 @@ class DatabaseService:
             content, summary = DatabaseAdminRepository(session).dump()
             stamp = session.server_now()
             AuditRepository(session).record(admin.id, "BACKUP_DATABASE", "database", None, f"Downloaded a backup ({summary})")
+        self._notifier.database_event(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="A database backup was downloaded",
+            detail=summary,
+        )
         return f"appointmed-backup_{stamp:%Y-%m-%d_%H%M}.sql", content
 
         # ------------------------------------------------------------ import
@@ -257,4 +265,10 @@ class DatabaseService:
             AuditRepository(session).record(
                 admin.id, "RESTORE_DATABASE", "database", None, f"Imported a backup ({len(targets)} tables, {total} rows)"
             )
+        self._notifier.database_event(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="The database was restored from a backup",
+            detail=f"{len(targets)} tables, {total} rows",
+        )
         return {"ok": True, "tables": len(targets), "rows": total}

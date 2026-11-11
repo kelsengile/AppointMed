@@ -51,7 +51,7 @@ source/
 ├── requirements.txt
 ├── .env / .env.example           # configuration (the real .env is gitignored)
 ├── database/
-│   ├── schema.sql                # all 15 tables and constraints
+│   ├── schema.sql                # all 16 tables and constraints
 │   └── seed.sql                  # fictional sample data
 ├── backend/
     ├── core/
@@ -59,14 +59,15 @@ source/
     │   ├── database.py           # Executor, Transaction, Database
     │   ├── exceptions.py         # AppError family and handlers
     │   ├── security.py           # hashing, tokens, current user, feature check, RateLimiter
+    │   ├── email_templates.py    # escaped responsive HTML and plain-text email layout
     │   ├── mailer.py             # outgoing email
     │   └── utils.py              # to_money, blank_to_none, floor_minute, trim
     ├── models/domain.py          # User / Doctor / Nurse / Admin, AppointmentWorkflow
     ├── schemas/                  # api.py, database.py, site.py
     ├── repositories/             # base, user (+schedule, days off), patient, appointment
     │                             # (+notification), clinical, system, department, site
-    │                             # (site_content), staff_directory, database
-    ├── services/                 # auth, booking, scheduling, appointment, billing, patient,
+    │                             # (+email preferences, site_content), staff_directory, database
+    ├── services/                 # auth, notifier, booking, scheduling, appointment, billing, patient,
     │                             #   dashboard, admin, department, site_service, staff_directory,
     │                             #   database, backup_parser, waiting_queue
     └── routes/                   # auth, public, staff, admin, database
@@ -120,6 +121,7 @@ A **frozen dataclass**, built once by `Settings.from_env()` after `load_dotenv` 
 | Field | Environment variable | Default |
 |---|---|---|
 | `app_env` | `APP_ENV` | `development` |
+| `app_url` | `APP_URL` | `http://localhost:5173` |
 | `db_host`, `db_port` | `DB_HOST`, `DB_PORT` | `localhost`, `3306` |
 | `db_name`, `db_user`, `db_password` | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `appointmed`, `appointmed_user`, empty |
 | `jwt_secret` | `JWT_SECRET` | **none, required** |
@@ -183,7 +185,7 @@ AppError (400)
 
 ### 5.5 `mailer.py`
 
-`Mailer.send(to, subject, body)` starts a **daemon thread** so the request is never delayed. With no address it does nothing. When SMTP is not configured, the whole email is written to the log. When it is configured, it connects (implicit SSL on port 465, otherwise optional STARTTLS), logs in if a username is set, and sends. Failures are logged with a clear reason and never break the request. `send_blocking` sends immediately and raises on failure, for checking SMTP settings.
+`Mailer.send(to, subject, body, html=None)` starts a **daemon thread** so the request is never delayed. It sends a plain-text alternative and optional HTML content. With no address it does nothing. When SMTP is not configured, the plain-text email is written to the log. When it is configured, it connects (implicit SSL on port 465, otherwise optional STARTTLS), logs in if a username is set, and sends. Failures are logged with a clear reason and never break the request. `send_blocking` sends immediately and raises on failure, for checking SMTP settings.
 
 ### 5.6 `utils.py`
 
@@ -283,7 +285,7 @@ An abstract class with generic `get`, `create`, `update`, and `delete`. Subclass
 | `AppointmentRepository` | `appointments` | `get_item`, `list_for_doctor`, `queue`, `consulting`, `unbilled`, `conflict_exists`, `booked_times`, `booked_days`, `active_count_on`, `status_counts_today` |
 | `NotificationRepository` | `notifications` | `list_for_doctor` (with `slot_taken`), `resolve` (only if still Pending), `count_pending`, `pending_days`, `pending_count_on` |
 | `ExaminationRepository`, `PrescriptionRepository`, `InvoiceRepository` | clinical tables | `encounters`, `add_items`, `items_for_appointments`, `get_by_appointment`, `set_amounts` and `mark_paid` (Unpaid only), `count_awaiting_payment` |
-| `RoomRepository`, `SettingsRepository`, `AuditRepository`, `ReportRepository` | system tables | `list_with_occupant`, `in_use`, `upsert`, `record`, `search`, `overview`, `report` |
+| `RoomRepository`, `SettingsRepository`, `AuditRepository`, `ReportRepository`, `EmailPreferenceRepository` | system tables | `list_with_occupant`, `in_use`, `upsert`, `record`, `search`, `overview`, `report`, preference and staff-recipient lookups |
 | `DepartmentRepository` | `departments` | `list_active`, `list_all`, `find_by_name`, `doctors_in`, `rename_specialization` |
 | `SiteContentRepository` | `site_content` | `texts`, `image_keys`, `get_value`, `version`, `upsert`, `remove` |
 | `StaffDirectoryRepository` | `users` | `list_active`, `get_active` (bio fields and a doctor's nurses), `photo` |
@@ -293,7 +295,7 @@ Several guards are done in SQL on purpose so they hold under simultaneous reques
 
 ## 9. Services (business rules)
 
-Each service receives its `Database` (and a `Mailer` where needed) through the constructor, so it can be created with test doubles.
+Each service receives its `Database` and (where needed) `Notifier` through the constructor, so it can be created with test doubles.
 
 ### 9.1 `AuthService`
 
@@ -304,6 +306,8 @@ Each service receives its `Database` (and a `Mailer` where needed) through the c
 | `update_profile`, `remove_avatar` | Change own name, email, bio, education, years of experience and languages, or clear the picture |
 | `set_avatar` | PNG, JPEG, or WebP data URL, valid base64, at most 300,000 bytes, real image signature |
 | `change_password` | Requires the current password, and a new one that is different |
+| `email_preferences`, `save_email_preferences` | Read or save the five per-user email categories; users without a row get all categories enabled |
+| `send_test_email` | Requires a profile email and is limited to 3 test messages per user per 10 minutes |
 
 ### 9.2 `SchedulingService` and `BookingService`
 
@@ -438,7 +442,10 @@ Everything comes from `source/.env` (see `CONTRIBUTING.md`, Step 6). The file is
 
 ## 14. Emails and logging
 
-- Emails are sent for **approved** and **disapproved** booking requests only.
+- `Notifier` sends request, appointment, billing, account, clinic, and database-event messages through the shared `Mailer`.
+- Staff email categories default to enabled and can be changed in Settings. Password-change and password-reset security messages are not preference-filtered.
+- `APP_URL` is used to build links in email content and defaults to `http://localhost:5173`.
+- Re-run `source/database/schema.sql` against an existing database to create `email_preferences`; backups made before this table existed are rejected as incomplete.
 - With no `SMTP_HOST`, each email is printed to the backend console (including the recipient). Treat those logs as sensitive.
 - Logging uses the `appointmed` logger. Unexpected errors are logged with a stack trace. Passwords, tokens, and medical details must never be logged.
 
@@ -565,7 +572,7 @@ Suggested demo order: book as a patient, approve as a nurse (show the email in t
 | Course | Backend evidence |
 |---|---|
 | ITEC 104 Data Structures and Algorithms | `WaitingQueue` (min-heap), `RateLimiter` (deque window), `AppointmentWorkflow` (transition table), slot generation with a set lookup, overlap detection after sorting, the backup tokenizer |
-| ITEC 105 Information Management | 15 tables, keys, `CHECK` constraints, the generated `active_slot` unique index, row locks, transactions, parameterized queries, aggregate reports, audit log, backup and restore |
+| ITEC 105 Information Management | 16 tables, keys, `CHECK` constraints, the generated `active_slot` unique index, row locks, transactions, parameterized queries, aggregate reports, audit log, backup and restore |
 
 ## 18. How to extend the backend
 

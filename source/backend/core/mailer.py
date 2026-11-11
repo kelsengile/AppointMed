@@ -1,4 +1,7 @@
-"""Outgoing email. Sends through SMTP when configured, otherwise writes the email to the log."""
+"""Outgoing email. Sends through SMTP when configured, otherwise writes the email to the log.
+
+Messages carry a plain-text body and, when given, an HTML version (mail apps show the HTML one).
+"""
 
 from __future__ import annotations
 
@@ -14,30 +17,30 @@ logger = logging.getLogger("appointmed")
 
 
 class Mailer:
-    """Sends short plain-text emails without blocking the request."""
+    """Sends emails without blocking the request."""
 
     def __init__(self, config: Settings = settings) -> None:
         self._config = config
 
-    def send(self, to: str | None, subject: str, body: str) -> None:
+    def send(self, to: str | None, subject: str, body: str, html: str | None = None) -> None:
         """Queue an email in a background thread. Silently skips when there is no address."""
         if not to:
             return
-        threading.Thread(target=self._safe_deliver, args=(to, subject, body), daemon=True).start()
+        threading.Thread(target=self._safe_deliver, args=(to, subject, body, html), daemon=True).start()
 
-    def send_blocking(self, to: str, subject: str, body: str) -> None:
+    def send_blocking(self, to: str, subject: str, body: str, html: str | None = None) -> None:
         """Send right now and raise on failure. Used by test_email.py to check the SMTP settings."""
         if not self._config.smtp_enabled:
             raise RuntimeError("SMTP_HOST is empty in source/.env, so no real email can be sent.")
-        self._deliver(to, subject, body)
+        self._deliver(to, subject, body, html)
 
-    def _safe_deliver(self, to: str, subject: str, body: str) -> None:
+    def _safe_deliver(self, to: str, subject: str, body: str, html: str | None) -> None:
         """Background version: failures are logged and never break the request."""
         if not self._config.smtp_enabled:
             logger.info("EMAIL (SMTP not configured, not sent)\nTo: %s\nSubject: %s\n\n%s", to, subject, body)
             return
         try:
-            self._deliver(to, subject, body)
+            self._deliver(to, subject, body, html)
         except smtplib.SMTPAuthenticationError:
             logger.error("Email to %s failed: the SMTP username or password was rejected. Check SMTP_USER and SMTP_PASSWORD.", to)
         except smtplib.SMTPRecipientsRefused:
@@ -47,13 +50,15 @@ class Mailer:
         except (smtplib.SMTPException, OSError, ssl.SSLError) as exc:
             logger.error("Could not send email to %s: %s", to, exc)
 
-    def _deliver(self, to: str, subject: str, body: str) -> None:
+    def _deliver(self, to: str, subject: str, body: str, html: str | None) -> None:
         cfg = self._config
         message = EmailMessage()
         message["From"] = cfg.smtp_from
         message["To"] = to
         message["Subject"] = subject
         message.set_content(body)
+        if html:
+            message.add_alternative(html, subtype="html")
 
         context = ssl.create_default_context()
         if cfg.smtp_port == 465:  # implicit SSL (the connection is encrypted from the start)
