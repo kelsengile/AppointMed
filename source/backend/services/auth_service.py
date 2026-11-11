@@ -9,11 +9,13 @@ from typing import Any
 
 from backend.core.database import Database, database
 from backend.core.exceptions import AuthenticationError, NotFoundError, RateLimitError, ValidationFailedError
-from backend.core.security import create_token, hash_password, login_limiter, verify_password
+from backend.core.config import settings
+from backend.core.security import create_token, hash_password, login_limiter, test_email_limiter, verify_password
 from backend.core.utils import blank_to_none, trim
-from backend.repositories.system_repository import AuditRepository
+from backend.repositories.system_repository import PREF_KEYS, AuditRepository, EmailPreferenceRepository
 from backend.repositories.user_repository import UserRepository
-from backend.schemas.api import ProfileUpdate
+from backend.schemas.api import EmailPreferencesUpdate, ProfileUpdate
+from backend.services.notifier import Notifier, notifier
 
 _MAX_AVATAR_BYTES = 300_000
 # Checked when the username does not exist, so the response time does not reveal which usernames are real.
@@ -34,8 +36,9 @@ def _detect_mime(raw: bytes) -> str | None:
 class AuthService:
     """Authentication and self-service account operations."""
 
-    def __init__(self, db: Database = database) -> None:
+    def __init__(self, db: Database = database, notify: Notifier = notifier) -> None:
         self._db = db
+        self._notifier = notify
         self._users = UserRepository(db)
         self._audit = AuditRepository(db)
 
@@ -119,3 +122,33 @@ class AuthService:
         with self._db.transaction() as tx:
             UserRepository(tx).set_password(user_id, hash_password(new))
             AuditRepository(tx).record(user_id, "CHANGE_PASSWORD", "users", user_id, "Changed own password")
+        self._notifier.password_changed(user_id)
+
+    def email_preferences(self, user_id: int) -> dict[str, Any]:
+        row = self._users.get(user_id)
+        return {
+            "email": row["email"] if row else None,
+            "preferences": EmailPreferenceRepository(self._db).get_for_user(user_id),
+        }
+
+    def save_email_preferences(self, user_id: int, body: EmailPreferencesUpdate) -> dict[str, Any]:
+        with self._db.transaction() as tx:
+            EmailPreferenceRepository(tx).save(user_id, {key: getattr(body, key) for key in PREF_KEYS})
+            AuditRepository(tx).record(
+                user_id, "UPDATE_EMAIL_PREFERENCES", "users", user_id, "Changed email notification settings"
+            )
+        return self.email_preferences(user_id)
+
+    def send_test_email(self, user_id: int) -> dict[str, Any]:
+        row = self._users.get(user_id)
+        if row is None or not row["email"]:
+            raise ValidationFailedError("Add an email address to your profile first.")
+        if test_email_limiter.is_blocked(str(user_id)):
+            raise RateLimitError("You sent several test emails already. Please wait a few minutes.")
+        test_email_limiter.record(str(user_id))
+        self._notifier.test_email(
+            to=row["email"],
+            name=row["full_name"],
+            prefs=EmailPreferenceRepository(self._db).get_for_user(user_id),
+        )
+        return {"ok": True, "smtp_enabled": settings.smtp_enabled}

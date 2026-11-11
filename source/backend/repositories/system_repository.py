@@ -7,7 +7,9 @@ from typing import Any
 
 from backend.core.database import Row
 
-from .base_repository import BaseRepository
+from .base_repository import BaseRepository, placeholders
+
+PREF_KEYS = ("notify_requests", "notify_appointments", "notify_billing", "notify_account", "notify_clinic")
 
 
 class RoomRepository(BaseRepository):
@@ -84,6 +86,58 @@ class AuditRepository(BaseRepository):
         )
         actions = [r["action"] for r in self._db.fetch_all("SELECT DISTINCT action FROM audit_logs ORDER BY action")]
         return {"total": int(total["n"]) if total else 0, "items": items, "actions": actions}
+
+
+class EmailPreferenceRepository(BaseRepository):
+    """Which emails each staff member wants, plus the recipient lookups the Notifier uses."""
+
+    table = "email_preferences"
+    columns = ("user_id", *PREF_KEYS)
+
+    def get_for_user(self, user_id: int) -> dict[str, bool]:
+        row = self._db.fetch_one(
+            f"SELECT {', '.join(PREF_KEYS)} FROM email_preferences WHERE user_id = %s", (user_id,)
+        )
+        return {key: bool(row[key]) if row else True for key in PREF_KEYS}
+
+    def save(self, user_id: int, values: dict[str, bool]) -> None:
+        self._db.execute(
+            f"INSERT INTO email_preferences (user_id, {', '.join(PREF_KEYS)}) "
+            f"VALUES (%s, {', '.join(['%s'] * len(PREF_KEYS))}) "
+            f"ON DUPLICATE KEY UPDATE {', '.join(f'{key} = VALUES({key})' for key in PREF_KEYS)}",
+            [user_id, *(1 if values[key] else 0 for key in PREF_KEYS)],
+        )
+
+    def recipients(self, user_ids: list[int], category: str | None, active_only: bool = True) -> list[Row]:
+        """People with an email address who want this category (category None = security mail, always sent)."""
+        if not user_ids:
+            return []
+        if category is not None and category not in PREF_KEYS:
+            raise ValueError("Unknown email category")
+        wants = f" AND COALESCE(p.{category}, 1) = 1" if category else ""
+        active = " AND u.is_active = 1" if active_only else ""
+        return self._db.fetch_all(
+            "SELECT u.id, u.full_name, u.email, u.role FROM users u "
+            "LEFT JOIN email_preferences p ON p.user_id = u.id "
+            f"WHERE u.id IN ({placeholders(len(user_ids))}) AND u.email IS NOT NULL AND u.email <> ''{active}{wants}",
+            user_ids,
+        )
+
+    def team_ids(self, doctor_id: int) -> list[int]:
+        rows = self._db.fetch_all(
+            "SELECT id FROM users WHERE is_active = 1 AND "
+            "(id = %s OR (role = 'nurse' AND assigned_doctor_id = %s))",
+            (doctor_id, doctor_id),
+        )
+        return [row["id"] for row in rows]
+
+    def staff_ids(self, roles: tuple[str, ...]) -> list[int]:
+        if not roles:
+            return []
+        rows = self._db.fetch_all(
+            f"SELECT id FROM users WHERE is_active = 1 AND role IN ({placeholders(len(roles))})", list(roles)
+        )
+        return [row["id"] for row in rows]
 
 
 class ReportRepository(BaseRepository):

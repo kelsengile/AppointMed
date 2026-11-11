@@ -380,3 +380,15 @@ export interface ReportData {
     new_patients: number;
   };
 }
+
+export type EmailPrefKey =
+  | "notify_requests"
+  | "notify_appointments"
+  | "notify_billing"
+  | "notify_account"
+  | "notify_clinic";
+export type EmailPreferences = Record<EmailPrefKey, boolean>;
+export interface EmailPreferencesResponse {
+  email: string | null;
+  preferences: EmailPreferences;
+}
