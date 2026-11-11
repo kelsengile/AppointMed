@@ -1,6 +1,6 @@
 # FRONTEND | AppointMed
 
-This document explains the AppointMed web frontend: what it is made of, how it starts, how it talks to the backend, what every page and component does, and how it maps to the course requirements. It complements `DOCUMENTATION.md` (whole system), `BACKEND.md`, `DATABASE.md`, and the study notes in [note.md](../../note.md).
+This document explains the AppointMed web frontend: what it is made of, how it starts, how it talks to the backend, what every page and component does, and how it maps to the course requirements. It complements `DOCUMENTATION.md` (whole system), `BACKEND.md`, `DATABASE.md`, and the study notes in [NOTES.md](../../NOTES.md).
 
 **Course Affiliation**
 
@@ -43,7 +43,7 @@ The frontend is a **single-page application** (SPA) with two kinds of screens:
 
 | Kind | Who uses it | Login | Routes |
 |---|---|---|---|
-| **Public** | Patients and visitors | No | `/` (landing page), `/book` (booking page) |
+| **Public** | Patients and visitors | No | `/` (landing page), `/book` (booking page), `/staff/:id` (staff profile) |
 | **Staff** | Everyone on the team | No (it is the sign-in) | `/staff-login` |
 | **Staff portal** | Doctors, nurses, administrators | Yes | `/doctor/...`, `/nurse/...`, `/admin/...` |
 
@@ -54,8 +54,8 @@ The frontend never talks to MySQL. Every read and write goes through the FastAPI
 | Patient | Read the landing page, choose a doctor, a date from a color-coded calendar, and an open slot, and submit a request |
 | Nurse | Review requests, create walk-ins, choose rooms and check patients in, reschedule or cancel, switch room status, manage patient records, mark invoices paid |
 | Doctor | Everything a nurse can for their own data, plus start and finish examinations, write prescriptions, view prescriptions, and mark days off |
-| Admin | Manage users and weekly schedules, rooms, clinic settings, reports, the audit log, and the Database page |
-| Any staff member | Edit their profile and photo, change their password, and read role-specific help |
+| Admin | Manage users and weekly schedules, rooms, clinic settings, branding and departments (Clinic Settings), reports, the audit log, and the Database page |
+| Any staff member | Edit their profile and photo, change their password, set appearance (theme and text size), and read role-specific help |
 
 ## 2. Technology and Tooling
 
@@ -87,40 +87,35 @@ From `source/frontend`:
 
 **Dev proxy.** `vite.config.ts` fixes the port (`strictPort: true`) and forwards `/api` to `http://127.0.0.1:8000`, so there are no cross-origin requests in development. Start the backend first, otherwise every call fails with "Cannot reach the server."
 
+`vite.config.ts` also sets `server.fs.allow: [".."]` because `config/branding.ts` imports the logo and wordmark from `source/assets/icons/`.
+
 | File | Role |
 |---|---|
 | `index.html` | HTML shell with `<div id="root">`, the favicon, Poppins, and `/src/main.tsx` |
 | `tailwind.config.js` | Scans `index.html` and `src/**/*.{ts,tsx}`. Defines the `brand` palette and the `landing` palette. |
 | `postcss.config.js`, `tsconfig.json`, `src/vite-env.d.ts` | Tailwind, strict TypeScript, Vite types |
-| `public/` | Static images: `appointmed-logo.png`, `logo-mark.png`, `footer-logo.png`, `footer-bg.png`, `hero-building.png`, `service-*.png`, `doctor-N.png` and `docchar-N.png` (staff art), `dept-*.png` (department icons), `staff-login-bg.jpg`, `staff-login-logo.png` |
+| `public/` | Static images: `appointmed-logo.png`, `logo-mark.png`, `footer-logo.png`, `footer-bg.png`, `hero-building.png`, `service-*.png`, `doctor-N.png` and `docchar-N.png` (staff art), `dept-*.png` (department icons), `staff-login-bg.jpg`, `staff-login-logo.png`. Uploaded logo and hero images replace `logo-mark` and `hero-building` at runtime. |
 
 ## 4. Folder Structure
 
 ```
 source/frontend/src/
-├── main.tsx                  # mounts <App /> in React.StrictMode
-├── app.tsx                   # routes, and pageFor(): navigation item -> page
-├── index.css                 # Tailwind layers, app-theme, glass login styles, book-btn
-├── api/
-│   ├── client.ts             # the only fetch calls; token; ApiError; download()
-│   ├── endpoints.ts          # authApi, publicApi, staffApi, adminApi
-│   ├── databaseApi.ts        # admin Database page calls
-│   ├── departmentApi.ts      # public departments
-│   └── staffDirectoryApi.ts  # public staff list
-├── components/               # Alert, Badge, EncounterCard, ExamPanel, Logo, Modal, ProtectedRoute,
-│                             #   ScheduleEditor, StatCard, WalkInModal, AgendaCalendar,
-│                             #   BookingCalendar, DepartmentsModal, PasswordRequirements, ui.ts
-├── config/Navigation.ts      # side-panel items for each role
+├── main.tsx                  # applies saved preferences (theme, text size), mounts <App />
+├── app.tsx                   # routes (including /staff/:id), pageFor()
+├── index.css                 # Tailwind layers, app-theme, glass login, book-btn, dark mode
+├── api/                      # client.ts, endpoints.ts, databaseApi.ts, departmentApi.ts,
+│                             # staffDirectoryApi.ts, siteApi.ts
+├── components/               # Alert, Avatar, Badge, BrandingSettings, EncounterCard, ExamPanel,
+│                             # Logo, Modal, ProtectedRoute, ScheduleEditor, StatCard, WalkInModal,
+│                             # AgendaCalendar, BookingCalendar, DepartmentsModal, PasswordRequirements, ui.ts
+├── config/                   # Navigation.ts, branding.ts (default logo and wordmark)
 ├── context/AuthContext.tsx
-├── hooks/usePolling.ts
+├── hooks/                    # usePolling.ts, useSite.ts, useStaffArt.ts
 ├── layouts/DashboardLayout.tsx
-├── pages/
-│   ├── LandingPage.tsx, BookingPage.tsx, StaffLoginPage.tsx, PlaceholderPage.tsx
-│   ├── staff/                # Dashboard, Appointments, Notifications, Patients, History, Invoice, Prescriptions
-│   ├── admin/                # AdminDashboard, Users, Rooms, ClinicSettings, Reports, Audit, Database
-│   └── shared/               # Profile, Settings, Help
-├── types/                    # index.ts, database.ts, department.ts, staff.ts
-└── utils/                    # format.ts, csv.ts, image.ts, input.ts, password.ts
+├── pages/                    # LandingPage (+ StaffProfilePage), BookingPage, StaffLoginPage,
+│                             # PlaceholderPage, staff/, admin/, shared/
+├── types/                    # index.ts, database.ts, department.ts, staff.ts, site.ts
+└── utils/                    # format, csv, image, input, password, preferences, staffArt
 ```
 
 Dependency direction:
@@ -134,7 +129,7 @@ pages  ->  components, hooks, context, config  ->  api  ->  types, utils
 ### 5.1 Startup
 
 1. `index.html` loads `/src/main.tsx`.
-2. `main.tsx` imports `index.css` and renders `<App />` inside `React.StrictMode`.
+2. `main.tsx` applies `applyPrefs(loadPrefs())`, re-applies preferences when the device colour scheme changes, imports `index.css`, and renders `<App />` inside `React.StrictMode`.
 3. `App` wraps everything in `<AuthProvider>` and `<BrowserRouter>`, then declares the routes.
 
 ### 5.2 Route table (`app.tsx`)
@@ -143,6 +138,7 @@ pages  ->  components, hooks, context, config  ->  api  ->  types, utils
 |---|---|---|
 | `/` | `LandingPage` | No |
 | `/book` | `BookingPage` | No |
+| `/staff/:id` | `StaffProfilePage` | No |
 | `/staff-login` | `StaffLoginPage` | No |
 | `/doctor`, `/nurse`, `/admin` | `ProtectedRoute role=...` wrapping `DashboardLayout` | Yes |
 | `/<role>` (index) | Redirects to the role's first navigation item (Dashboard) | Yes |
@@ -229,11 +225,13 @@ sequenceDiagram
 
 | Module | Prefix | Functions |
 |---|---|---|
-| `authApi` | `/api/auth` | `login`, `me`, `updateMe`, `setAvatar`, `removeAvatar`, `changePassword` |
+| `authApi` | `/api/auth` | `login`, `me`, `updateMe` (name, email, bio, education, years, languages), `setAvatar`, `removeAvatar`, `changePassword` |
 | `publicApi` | `/api/public` | `catalog`, `slots`, `calendar`, `book` |
-| `departmentApi`, `staffDirectoryApi` | `/api/public` | `list` (departments), `list` (staff) |
+| `departmentApi` | `/api/public` | `list` |
+| `staffDirectoryApi` | `/api/public` | `list`, `get(id)` |
+| `siteApi` | `/api/public/site`, `/api/admin/site` | `get`, `save`, `setImage`, `removeImage` |
 | `staffApi` | `/api/staff` | dashboard; notifications (`notifications`, `approve`, `dismiss`); appointments (`appointments`, `createAppointment`, `checkIn`, `start`, `release`, `finish`, `cancel`, `reschedule`, `assignRoom`, `bill`); rooms; patients; `history`, `invoices`, `unbilled`, `pay`, `prescriptions`; `calendar`, `setDayOff`, `clearDayOff` |
-| `adminApi` | `/api/admin` | `dashboard`; users (`users`, `doctors`, `createUser`, `updateUser`, `setActive`, `resetPassword`, `schedule`, `saveSchedule`); rooms; `settings`, `saveSettings`; `reports`; `audit` |
+| `adminApi` | `/api/admin` | Existing functions plus `departments`, `createDepartment`, `updateDepartment`, `deleteDepartment`, `setDepartmentIcon`, `removeDepartmentIcon` |
 | `databaseApi` | `/api/admin/database` | `tables`, `table`, `insertRow`, `updateRow`, `deleteRow`, `query`, `backup`, `importBackup` |
 
 The helper `qs(params)` builds a query string and **skips empty values**, so filter tabs that mean "all" send an empty `status`. Each function is typed with the response type from `types/`, so a page that misuses a field fails the TypeScript build.
@@ -268,6 +266,10 @@ const { data, error, loading, reload } = usePolling(loader, intervalMs = 0, deps
 | Admin rooms | `adminApi.rooms` | 10 s |
 | Everything else (including the calendars) | Loaded once, or when inputs change | 0 |
 
+**`useSite()`** keeps one shared copy of website content (texts, links, logo and hero URLs). It loads once, and `publishSite()` pushes changes to every mounted component so a new logo appears everywhere at once. If the request fails, `SITE_DEFAULTS` in `types/site.ts` are used.
+
+**`useStaffArt(name)`** returns the same character art the front page shows for a person. `Avatar` uses it as the fallback picture.
+
 ## 9. Layout and Navigation
 
 ### 9.1 `config/Navigation.ts`
@@ -283,10 +285,10 @@ The first item must be the Dashboard because `/<role>` redirects to it. Paths ar
 
 ### 9.2 `DashboardLayout`
 
-- **Side panel** (`<aside>`, a rounded translucent card): logo linking to the landing page, a profile block (photo or initial, name, role), grouped navigation, **Settings** and a **?** Help button, and **Log out**.
+- **Side panel** (`<aside>`): the logo (a link to the landing page), a close button, a centered profile block (`Avatar`, name, role), grouped navigation, **Settings**, a **?** Help button, and **Log out**. The avatar is the uploaded photo or the person's character art.
 - **Open and close:** open by default from 768 px (Tailwind `md`), closed on phones. A panel icon closes it, and a bordered button in the page reopens it. On phones it closes after choosing a page.
 - **Active link** uses `NavLink` with a blue gradient. The page root carries the `app-theme` class, which restyles cards, headings, and table heads.
-- The avatar fallback takes the first letter of the name after removing a leading "Dr.".
+- `Avatar` uses the uploaded photo or the person's generated character art.
 
 ## 10. Shared Components
 
@@ -304,7 +306,9 @@ The first item must be the Dashboard because `/<role>` redirects to it. Paths ar
 | `ScheduleEditor` | A doctor's weekly working hours | See 10.3 |
 | `AgendaCalendar` | Day picker for the agenda, with day-off management | See 10.4 |
 | `BookingCalendar` | Public date picker that follows a doctor's schedule | See 10.5 |
-| `DepartmentsModal` | Searchable list of every department | Opened from the landing page |
+| `Avatar` | Uploaded photo, or character art (`useStaffArt`) as fallback | Shared profile and staff image |
+| `BrandingSettings` | Admin card group on Clinic Settings: logo and hero upload (`fitImage`), front page texts and links in collapsible groups. Only changed fields are sent; an empty field restores the default. | Clinic Settings |
+| `DepartmentsModal` | Searchable department list. Opening one shows its doctors (matched by specialization), with **View profile** and **Book** buttons. | Opened from the landing page |
 | `PasswordRequirements` | Live checklist under a new-password field | Each rule turns green when met (`utils/password.ts`) |
 | `ui.ts` | Shared class strings and `statusTone()` | See Section 14 |
 
@@ -354,15 +358,17 @@ The public date picker. After a doctor is chosen it loads `publicApi.calendar` f
 
 | Section | Content |
 |---|---|
-| Header | Floating pill navbar: logo, anchor links (Services, About, Staff, Departments), and **Staff login** (or **Dashboard** when signed in) |
-| Hero | "Booked in a click!" over a hospital photo, and a **Book an appointment** button to `/book` |
-| About us | A short fixed text band |
+| Header | Floating navbar: wordmark, links (Home, About Us, Services, Doctors, Departments, Contact), **Staff Login** (or **Dashboard**), and a mobile menu |
+| Hero | Uploaded or default picture, logo, headline and intro (`site.hero_title`, `site.hero_text`), and a **Book in a Click!** button to `/book` |
+| About us | `site.about_*` texts |
 | Services | Four image cards (General Medicine, Prescriptions, Preventive Care, Smart Scheduling) in a bento grid |
-| Meet Our Staff | Every active account from `GET /api/public/staff`: a character cutout, name, role, specialization or supported doctor, weekdays, and a green **Available** badge when a doctor works today. Skeleton cards load first. |
-| Clinical departments | Featured departments from `GET /api/public/departments` as cards. **Learn More** and **View All** open `DepartmentsModal` with a search box. If the request fails or is empty, six built-in departments are shown. |
-| Footer | Logo, text, social links, quick links, and the clinic address and name from `GET /api/public/catalog` (with defaults if the request fails) |
+| Meet Our Staff | Every active account from `/api/public/staff`. Each card links to `/staff/:id`, shows the photo or character art, role, details, weekdays, and **Available** or **Off today**. |
+| Clinical departments | Featured departments as cards. **Learn More** opens the modal on that department's doctors, and **View All** opens the full list. Six built-in departments if the request fails. |
+| Footer | Logo, `site.footer_text`, social links, quick links, address and clinic name from the catalog, and phone, email and hours from `site` |
 
-The staff list, departments, clinic name, and address are **live**. The about text, service cards, footer phone, email, and hours, and the fallback departments are fixed in the file.
+Fixed in the file: the four service cards, the footer link columns, and the fallback departments. Everything else is live or editable by an admin.
+
+**`StaffProfilePage` (`/staff/:id`)** shows one staff member: photo or art, role, specialization or supported doctor, working weekdays, bio, experience, education, languages, a doctor's assigned nurses (linked), and **Book an appointment** for doctors.
 
 **`StaffLoginPage` (`/staff-login`)**, built from the Figma design "Desktop - 9". Two overlapping frosted-glass panels: the AppointMed logo over a blurred photo (left) and the form (right). The background is the landing page itself, blurred and dimmed behind the panels (marked `aria-hidden` and `inert`, so it is not focusable).
 
@@ -380,7 +386,9 @@ The staff list, departments, clinic name, and address are **live**. The about te
 Loads `publicApi.catalog()` and shows a loading line, a load error, a "booking is closed" notice, or the form (in a page shell with a floating header).
 
 1. **Your details:** full name, birthdate, sex (Male or Female), contact number, email, address, reason. Each field removes characters it must never contain while the visitor types or pastes (`CLEAN` map using `utils/input.ts`).
-2. **Doctor and time:** specialization filter, doctor, a note of the weekdays the doctor works, the `BookingCalendar`, and the open slots as a radio group.
+2. **Doctor and time:** specialization filter, doctor, the doctor's photo, weekdays and profile link, the `BookingCalendar`, and open slots as a radio group.
+
+`/book?doctor=ID` opens with that doctor chosen.
 
 - When the doctor or date changes, the slot is cleared and `publicApi.slots` is called. A `cancelled` flag stops a slow response from overwriting a newer one.
 - `validate()` produces field errors (name letters only, birthdate in range, phone 7 to 15 digits, email pattern, address and reason at least 3, doctor, date, slot). The form uses `noValidate`.
@@ -419,11 +427,11 @@ Loads `publicApi.catalog()` and shows a loading line, a load error, a "booking i
 
 **`AdminDashboardPage`** (poll 15 s). Active doctors, nurses, and administrators, patients, appointments today, pending requests, paid this month, unpaid, and a recent activity table.
 
-**`UsersPage`.** Search and role filter. Row actions: **Edit**, **Password**, **Schedule** (doctors), **Deactivate or Reactivate** (disabled for your own active account). `UserForm` checks the username pattern, the password (with `PasswordRequirements`), name, email, and a doctor for nurses. `PasswordForm` asks for the new password twice.
+**`UsersPage`.** Search and role filter. Row actions: **Edit**, **Password**, **Schedule** (doctors), **Deactivate or Reactivate** (disabled for your own active account). `UserForm` checks the username pattern, the password (with `PasswordRequirements`), name, email, and a doctor for nurses. A doctor's **Specialization** is a `<select>` filled from the departments list. `PasswordForm` asks for the new password twice.
 
 **`RoomsPage`** (poll 10 s). Add, edit (`RoomForm`), and delete rooms. The backend refuses to delete a room used in appointments.
 
-**`ClinicSettingsPage`.** A form generated from `FIELDS` (name, address, fee, slot length, booking window, booking toggle). Each field filters characters as you type, `problem(key, value)` mirrors the backend rules, and **only changed values are sent**.
+**`ClinicSettingsPage`.** Three parts: the settings form (name, address, fee, slot length, booking window, booking toggle), **Website and branding** (`BrandingSettings`), and **Departments and specialties** (add, edit, delete, upload or remove an icon, order, featured, visible). Departments with doctors cannot be deleted. Renaming one updates its doctors.
 
 **`ReportsPage`.** From and To dates (default last 30 days), two CSV downloads, totals, appointments by status (a `Bar` made of divs), a per-doctor table, and a day-by-day table.
 
@@ -441,9 +449,9 @@ Loads `publicApi.catalog()` and shows a loading line, a load error, a "booking i
 
 ### 11.4 Shared pages
 
-**`ProfilePage`.** Photo or initial, name, role, specialization, supported doctor. **Upload photo** runs `resizeImage` (center-cropped 256x256 JPEG) so it fits the 300 KB limit. **Remove photo**, and a form for full name and email. Both update the side panel through `updateSession`.
+**`ProfilePage`.** Centered column. Photo (`resizeImage`, 512x512 JPEG, under 300 KB; a transparent photo is placed on one of the clinic backgrounds), name, email, and public profile: about me, education, years of experience, and languages. These appear on the front page and the staff profile page.
 
-**`SettingsPage`.** Change password: current password required, new password checked by `passwordProblem` (8 to 72 bytes, upper, lower, number, special) with the `PasswordRequirements` checklist, confirmation must match, and it must differ from the current one.
+**`SettingsPage`.** Cards: **Appearance** (theme light, dark or match device; text size small, normal or large; saved in `localStorage`), **Account**, **Notifications** (doctors: check-in banner toggle), and **Change password**.
 
 **`HelpPage`.** Short `<details>` guides for the signed-in role plus two common topics. The first opens by default.
 
@@ -472,7 +480,11 @@ Loads `publicApi.catalog()` and shows a loading line, a load error, a "booking i
 
 **`utils/csv.ts`.** `downloadCsv(filename, rows)` builds a CSV with a BOM (so Excel reads UTF-8), quotes cells with commas, quotes, or line breaks, and **neutralizes a leading `= + - @`** by prefixing `'` so spreadsheets cannot run a cell as a formula.
 
-**`utils/image.ts`.** `resizeImage(file, size = 256)` rejects non-images, crops the center square, and returns a JPEG data URL (quality 0.85).
+**`utils/image.ts`.** `resizeImage(file, size = 512, seed)` crops a square and returns a JPEG under about 280 KB, adding a clinic background to transparent pictures. `fitImage(file, maxW, maxH, mime, maxBytes)` shrinks a logo, hero or icon.
+
+**`utils/preferences.ts`.** `loadPrefs`, `savePrefs`, `applyPrefs`, and `updatePrefs` manage theme, text size, and the check-in alert.
+
+**`utils/staffArt.ts`.** `staffArt(name, index)` and `staffPhotoUrl(id, version)`.
 
 ## 13. Types
 
@@ -484,6 +496,8 @@ Loads `publicApi.catalog()` and shows a loading line, a load error, a "booking i
 | `Money` | `number \| string`. Use `toNumber()` before arithmetic. |
 | `SessionUser`, `NavItem` | Frontend-only shapes |
 | `UserRecord`, `Profile` | Staff accounts (`Profile` adds `avatar`) |
+| `ProfilePayload`, `DepartmentPayload`, `StaffDetail` | Profile updates, department changes, and public staff details |
+| `SiteContent`, `SITE_DEFAULTS` (`types/site.ts`) | Website text, links, and image defaults |
 | `Catalog`, `DoctorOption`, `BookingPayload`, `BookingReceipt`, `BookingCalendarData` | Public booking (calendar: `working_weekdays`, `full_days`, `off_days`) |
 | `NotificationItem`, `AppointmentItem`, `AppointmentStatus`, `RoomItem`, `StaffDashboard` | Daily workflow |
 | `DayOff`, `CalendarData` | Agenda calendar (`working_weekdays`, `busy_days`, `off_days` with reasons) |
@@ -502,6 +516,7 @@ When a backend response changes, update these files in the same pull request. Ty
 - **Landing palette** (`landing-*`): `ink`, `heading`, `body #355882`, `muted`, `soft`, `faint`, `leaf` (green badge), `navy`, `pagebg`.
 - **`app-theme`** class (portal and booking page roots) applies the landing look to existing cards: larger radius, soft blue shadows, navy headings.
 - **`.book-btn`**: the glossy blue gradient used by primary buttons. **`.glass-panel`, `.glass-input`, `.glass-login-button`**: the staff login look.
+- **Dark mode** is `html.dark`, which inverts the page and flips pictures back (`index.css`). `font-size` on `<html>` implements text size. Inputs are forced to 16 px on phones so iOS does not zoom.
 - **Shared class strings** in `components/ui.ts`: `inputClass`, `primaryButton`, `secondaryButton`, `dangerButton`, `cardClass`.
 - **`statusTone(status)`** maps every status to a badge color:
 
@@ -570,6 +585,9 @@ Known gap: because the token is in `sessionStorage`, an XSS bug would expose it.
 | `authApi.changePassword` | POST `/api/auth/change-password` |
 | `publicApi.catalog`, `slots`, `calendar`, `book` | GET `/api/public/catalog`, `/slots?doctor_id=&day=`, `/calendar?doctor_id=&date_from=&date_to=`, POST `/bookings` |
 | `departmentApi.list`, `staffDirectoryApi.list` | GET `/api/public/departments`, `/api/public/staff` |
+| `staffDirectoryApi.get` | GET `/api/public/staff/{id}` |
+| `siteApi.*` | GET `/api/public/site`, PUT `/api/admin/site`, PUT or DELETE `/api/admin/site/image/{logo|hero}` |
+| `adminApi.*Department*` | `/api/admin/departments`, `/departments/{id}`, `/departments/{id}/icon` |
 | `staffApi.dashboard` | GET `/api/staff/dashboard` |
 | `staffApi.notifications`, `approve`, `dismiss` | GET `/api/staff/notifications?status=`, POST `/{id}/approve`, `/{id}/dismiss` |
 | `staffApi.appointments`, `createAppointment` | GET, POST `/api/staff/appointments` |
@@ -682,7 +700,8 @@ This file feeds the System Features, Screenshots, and Testing sections of `DOCUM
 
 ## 21. Known Limitations and Notes
 
-- **Part of the landing page is fixed.** The about text, service cards, footer phone, email, and hours, and the six fallback departments are in the file. Staff, departments, clinic name, and address are live.
+- Fixed in the file: the four service cards, the footer link columns, and the fallback departments. Everything else is live or editable by an admin.
+- Dark mode is a CSS inversion, so some colours are approximate.
 - **Polling, not push.** Updates arrive within 8 to 15 seconds. There are no WebSockets.
 - **Doctor notification** for newly checked-in patients works only while the Appointments page is open.
 - **Time zones.** API timestamps have no time zone and are shown as written (correct for one clinic).
@@ -733,6 +752,13 @@ Run with the backend and MySQL running, using the sample logins from `CONTRIBUTI
 | F-31 | Reports | Download both CSV files | Files open in a spreadsheet with correct columns |
 | F-32 | Audit | Filter by an action and page through | Counts and pages stay consistent |
 | F-33 | Database | Create and download a backup | A `.sql` file downloads and the audit log shows `BACKUP_DATABASE` |
+| F-41 | Profile | Open Profile on a wide screen | The page column is centered |
+| F-42 | Branding | As admin, upload a logo | It changes in the side panel, landing page, and footer without a reload |
+| F-43 | Branding | Clear a text field and save | The default text returns |
+| F-44 | Departments | Delete a department that has doctors | Server message; nothing is deleted |
+| F-45 | Staff profile | Click a staff card on `/` | `/staff/:id` shows the profile |
+| F-46 | Settings | Choose Dark, then reload | The theme stays |
+| F-47 | Users | Create a doctor | The specialization list comes from the departments |
 | F-34 | Database | Choose a `.txt` file to import | "Choose a .sql backup file made by this page." |
 | F-35 | Database | Run `DELETE FROM rooms` in the console | "UPDATE and DELETE need a WHERE clause" |
 | F-36 | Database | Open the `users` table | No `password_hash` column. **Add row** is not offered. |
