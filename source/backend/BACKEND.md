@@ -185,7 +185,7 @@ AppError (400)
 
 ### 5.5 `mailer.py`
 
-`Mailer.send(to, subject, body, html=None)` starts a **daemon thread** so the request is never delayed. It sends a plain-text alternative and optional HTML content. With no address it does nothing. When SMTP is not configured, the plain-text email is written to the log. When it is configured, it connects (implicit SSL on port 465, otherwise optional STARTTLS), logs in if a username is set, and sends. Failures are logged with a clear reason and never break the request. `send_blocking` sends immediately and raises on failure, for checking SMTP settings.
+`Mailer.send(to, subject, body, html=None)` starts a **daemon thread** so the request is never delayed. It sends a plain-text alternative and optional HTML content. With no address it does nothing. When SMTP is not configured, the plain-text email is written to the log. When it is configured, it connects (implicit SSL on port 465, otherwise optional STARTTLS), logs in if a username is set, and sends. Routine notification failures are logged and never break the request. `send_blocking` sends immediately and raises on failure; the test-email endpoint uses it to report SMTP delivery failures instead of claiming success prematurely.
 
 ### 5.6 `utils.py`
 
@@ -307,7 +307,7 @@ Each service receives its `Database` and (where needed) `Notifier` through the c
 | `set_avatar` | PNG, JPEG, or WebP data URL, valid base64, at most 300,000 bytes, real image signature |
 | `change_password` | Requires the current password, and a new one that is different |
 | `email_preferences`, `save_email_preferences` | Read or save the five per-user email categories; users without a row get all categories enabled |
-| `send_test_email` | Requires a profile email and is limited to 3 test messages per user per 10 minutes |
+| `send_test_email` | Requires a profile email, is limited to 3 test messages per user per 10 minutes, and waits for SMTP acceptance when configured |
 
 ### 9.2 `SchedulingService` and `BookingService`
 

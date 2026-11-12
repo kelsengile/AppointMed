@@ -4,11 +4,20 @@ from __future__ import annotations
 
 import base64
 import binascii
+import logging
 import re
+import smtplib
+import ssl
 from typing import Any
 
 from backend.core.database import Database, database
-from backend.core.exceptions import AuthenticationError, NotFoundError, RateLimitError, ValidationFailedError
+from backend.core.exceptions import (
+    AuthenticationError,
+    EmailDeliveryError,
+    NotFoundError,
+    RateLimitError,
+    ValidationFailedError,
+)
 from backend.core.config import settings
 from backend.core.security import create_token, hash_password, login_limiter, test_email_limiter, verify_password
 from backend.core.utils import blank_to_none, trim
@@ -18,6 +27,7 @@ from backend.schemas.api import EmailPreferencesUpdate, ProfileUpdate
 from backend.services.notifier import Notifier, notifier
 
 _MAX_AVATAR_BYTES = 300_000
+logger = logging.getLogger("appointmed")
 # Checked when the username does not exist, so the response time does not reveal which usernames are real.
 _DUMMY_HASH = hash_password("appointmed-not-a-real-password")
 
@@ -146,9 +156,13 @@ class AuthService:
         if test_email_limiter.is_blocked(str(user_id)):
             raise RateLimitError("You sent several test emails already. Please wait a few minutes.")
         test_email_limiter.record(str(user_id))
-        self._notifier.test_email(
-            to=row["email"],
-            name=row["full_name"],
-            prefs=EmailPreferenceRepository(self._db).get_for_user(user_id),
-        )
+        try:
+            self._notifier.test_email(
+                to=row["email"],
+                name=row["full_name"],
+                prefs=EmailPreferenceRepository(self._db).get_for_user(user_id),
+            )
+        except (smtplib.SMTPException, OSError, ssl.SSLError) as exc:
+            logger.error("Could not send the test email for user %s (%s).", user_id, type(exc).__name__)
+            raise EmailDeliveryError() from exc
         return {"ok": True, "smtp_enabled": settings.smtp_enabled}

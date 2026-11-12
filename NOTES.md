@@ -26,7 +26,7 @@ Study notes for the final presentation. Each section is short, shows the real co
 
 A **min-heap** keeps the smallest item at the top. Here the "smallest" is the patient who checked in earliest, so the next patient to be examined is always at the top.
 
-```python
+```python6
 class WaitingQueue:
     def __init__(self) -> None:
         self._heap: list[tuple[datetime, int, dict[str, Any]]] = []
