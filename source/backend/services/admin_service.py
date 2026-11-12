@@ -9,18 +9,29 @@ from backend.core.exceptions import ConflictError, DuplicateEntryError, NotFound
 from backend.core.security import hash_password
 from backend.core.utils import blank_to_none, to_money
 from backend.models.domain import User
+from backend.repositories.department_repository import DepartmentRepository
 from backend.repositories.system_repository import AuditRepository, RoomRepository, SettingsRepository
 from backend.repositories.user_repository import ScheduleRepository, UserRepository
 from backend.schemas.api import ScheduleBlock, UserCreate, UserUpdate
+from backend.services.notifier import Notifier, notifier
 
 _BOOL_VALUES = {"true", "false"}
+_SETTING_LABELS = {
+    "clinic_name": "Clinic name",
+    "clinic_address": "Clinic address",
+    "consultation_fee": "Consultation fee",
+    "default_slot_minutes": "Default slot length (minutes)",
+    "booking_window_days": "Booking window (days)",
+    "online_booking_enabled": "Online booking",
+}
 
 
 class AdminService:
     """Management features that only administrators can reach."""
 
-    def __init__(self, db: Database = database) -> None:
+    def __init__(self, db: Database = database, notify: Notifier = notifier) -> None:
         self._db = db
+        self._notifier = notify
 
     # ------------------------------------------------------------ users
     @staticmethod
@@ -35,6 +46,19 @@ class AdminService:
             raise ValidationFailedError("The chosen doctor is not available.")
         return doctor_id
 
+    @staticmethod
+    def _specialization(tx: Executor, role: str, value: str | None) -> str | None:
+        """Doctors must use one of the departments listed in Clinic Settings."""
+        if role != "doctor":
+            return None
+        name = blank_to_none(value)
+        if name is None:
+            raise ValidationFailedError("Choose the doctor's specialization (a department).")
+        match = DepartmentRepository(tx).find_by_name(name)
+        if match is None:
+            raise ValidationFailedError("The specialization must be one of the departments listed in Clinic Settings.")
+        return match["name"]
+
     def list_users(self, role: str | None, term: str | None) -> list[Row]:
         return UserRepository(self._db).list_users(role, blank_to_none(term))
 
@@ -47,13 +71,20 @@ class AdminService:
                     {
                         "username": data.username, "password_hash": hash_password(data.password), "full_name": data.full_name,
                         "role": data.role, "email": blank_to_none(data.email),
-                        "specialization": blank_to_none(data.specialization) if data.role == "doctor" else None,
+                        "specialization": self._specialization(tx, data.role, data.specialization),
                         "assigned_doctor_id": assigned, "is_active": 1,
                     }
                 )
             except DuplicateEntryError as exc:
                 raise ConflictError("That username is already taken.") from exc
             AuditRepository(tx).record(admin.id, "CREATE_USER", "users", new_id, f"Created {data.role} account {data.username}")
+        self._notifier.account_created(
+            user_id=new_id, username=data.username, role=data.role, by_name=admin.full_name
+        )
+        if assigned:
+            self._notifier.nurse_assignment(
+                doctor_id=assigned, nurse_name=data.full_name, assigned=True, by_name=admin.full_name
+            )
         return UserRepository(self._db).get_detail(new_id)  # type: ignore[return-value]
 
     def update_user(self, admin: User, user_id: int, data: UserUpdate) -> Row:
@@ -62,15 +93,42 @@ class AdminService:
             row = users.get(user_id)
             if row is None:
                 raise NotFoundError("User not found.")
+            spec = self._specialization(tx, row["role"], data.specialization)
+            assigned = self._assignment(users, row["role"], data.assigned_doctor_id)
+            email = blank_to_none(data.email)
             users.update(
                 user_id,
                 {
-                    "full_name": data.full_name, "email": blank_to_none(data.email),
-                    "specialization": blank_to_none(data.specialization) if row["role"] == "doctor" else None,
-                    "assigned_doctor_id": self._assignment(users, row["role"], data.assigned_doctor_id),
+                    "full_name": data.full_name,
+                    "email": email,
+                    "specialization": spec,
+                    "assigned_doctor_id": assigned,
                 },
             )
             AuditRepository(tx).record(admin.id, "UPDATE_USER", "users", user_id, f"Edited account {row['username']}")
+            new_doctor = users.get(assigned)["full_name"] if assigned else None  # type: ignore[index]
+        changes = []
+        if data.full_name != row["full_name"]:
+            changes.append(("Full name", data.full_name))
+        if email != row["email"]:
+            changes.append(("Email", email or "Removed"))
+        if spec != row["specialization"]:
+            changes.append(("Specialization", spec or "Removed"))
+        if assigned != row["assigned_doctor_id"]:
+            changes.append(("Supports doctor", new_doctor or "Nobody"))
+            if row["assigned_doctor_id"]:
+                self._notifier.nurse_assignment(
+                    doctor_id=row["assigned_doctor_id"],
+                    nurse_name=data.full_name,
+                    assigned=False,
+                    by_name=admin.full_name,
+                )
+            if assigned:
+                self._notifier.nurse_assignment(
+                    doctor_id=assigned, nurse_name=data.full_name, assigned=True, by_name=admin.full_name
+                )
+        if changes:
+            self._notifier.account_updated(user_id=user_id, by_name=admin.full_name, changes=changes)
         return UserRepository(self._db).get_detail(user_id)  # type: ignore[return-value]
 
     def set_active(self, admin: User, user_id: int, active: bool) -> Row:
@@ -86,6 +144,7 @@ class AdminService:
             AuditRepository(tx).record(
                 admin.id, "ACTIVATE_USER" if active else "DEACTIVATE_USER", "users", user_id, f"Account {row['username']}"
             )
+        self._notifier.account_status(user_id=user_id, active=active, by_name=admin.full_name)
         return UserRepository(self._db).get_detail(user_id)  # type: ignore[return-value]
 
     def reset_password(self, admin: User, user_id: int, new_password: str) -> None:
@@ -96,6 +155,7 @@ class AdminService:
                 raise NotFoundError("User not found.")
             users.set_password(user_id, hash_password(new_password))
             AuditRepository(tx).record(admin.id, "RESET_PASSWORD", "users", user_id, f"Reset password for {row['username']}")
+        self._notifier.password_reset(user_id=user_id, by_name=admin.full_name)
 
     # ------------------------------------------------------------ schedules
     def get_schedule(self, doctor_id: int) -> list[Row]:
@@ -128,6 +188,7 @@ class AdminService:
                 [{"weekday": b.weekday, "start_time": b.start_time, "end_time": b.end_time, "slot_minutes": b.slot_minutes} for b in ordered],
             )
             AuditRepository(tx).record(admin.id, "UPDATE_SCHEDULE", "users", doctor_id, f"{len(ordered)} schedule blocks saved")
+        self._notifier.schedule_updated(doctor_id=doctor_id, actor_name=admin.full_name, blocks=ordered)
         return ScheduleRepository(self._db).blocks_for_doctor(doctor_id)
 
     def doctors(self) -> list[Row]:
@@ -144,6 +205,12 @@ class AdminService:
             except DuplicateEntryError as exc:
                 raise ConflictError("A room with that name already exists.") from exc
             AuditRepository(tx).record(admin.id, "CREATE_ROOM", "rooms", new_id, name)
+        self._notifier.clinic_changed(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="Rooms were changed",
+            lines=[("Room added", name)],
+        )
         return self.list_rooms()
 
     def update_room(self, admin: User, room_id: int, name: str, status: str) -> list[Row]:
@@ -156,6 +223,12 @@ class AdminService:
             except DuplicateEntryError as exc:
                 raise ConflictError("A room with that name already exists.") from exc
             AuditRepository(tx).record(admin.id, "UPDATE_ROOM", "rooms", room_id, f"{name} ({status})")
+        self._notifier.clinic_changed(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="Rooms were changed",
+            lines=[("Room updated", f"{name} ({status})")],
+        )
         return self.list_rooms()
 
     def delete_room(self, admin: User, room_id: int) -> list[Row]:
@@ -168,6 +241,12 @@ class AdminService:
                 raise ConflictError("This room appears in appointment history. Set it to Maintenance instead of deleting it.")
             rooms.delete(room_id)
             AuditRepository(tx).record(admin.id, "DELETE_ROOM", "rooms", room_id, room["room_name"])
+        self._notifier.clinic_changed(
+            actor_id=admin.id,
+            actor_name=admin.full_name,
+            title="Rooms were changed",
+            lines=[("Room removed", room["room_name"])],
+        )
         return self.list_rooms()
 
     # ------------------------------------------------------------ settings
@@ -207,9 +286,22 @@ class AdminService:
         cleaned = {key: self._validate_setting(key, value) for key, value in values.items()}
         with self._db.transaction() as tx:
             settings = SettingsRepository(tx)
+            before = settings.as_dict()
             for key, value in cleaned.items():
                 settings.upsert(key, value, admin.id)
                 AuditRepository(tx).record(admin.id, "UPDATE_SETTING", "clinic_settings", None, f"Changed {key} to {value}"[:255])
+        lines = [
+            (_SETTING_LABELS.get(key, key), f"{before.get(key, '-')} → {value}")
+            for key, value in cleaned.items()
+            if before.get(key) != value
+        ]
+        if lines:
+            self._notifier.clinic_changed(
+                actor_id=admin.id,
+                actor_name=admin.full_name,
+                title="Clinic settings were updated",
+                lines=lines,
+            )
         return self.list_settings()
 
     # ------------------------------------------------------------ audit

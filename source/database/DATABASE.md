@@ -1,6 +1,6 @@
 # DATABASE | AppointMed
 
-This document explains the AppointMed database: why it is shaped the way it is, what every table and column means, how the backend reads and writes it, and how it meets the course requirements. It complements `DOCUMENTATION.md` (whole system), `BACKEND.md`, `FRONTEND.md`, and the study notes in [note.md](../../note.md).
+This document explains the AppointMed database: why it is shaped the way it is, what every table and column means, how the backend reads and writes it, and how it meets the course requirements. It complements `DOCUMENTATION.md` (whole system), `BACKEND.md`, `FRONTEND.md`, and the study notes in [NOTES.md](../../NOTES.md).
 
 **Course Affiliation**
 
@@ -37,14 +37,14 @@ System Project Assigned: Clinic Appointment System
 
 ## 1. Overview
 
-AppointMed stores everything in **one MySQL 8 database named `appointmed`**. `schema.sql` creates **13 tables**, and `landing_update.sql` adds a 14th (`departments`) for the front page. Nobody connects to it directly: the React app and the public pages talk to the FastAPI backend, and only the backend runs SQL.
+AppointMed stores everything in **one MySQL 8 database named `appointmed`**. `schema.sql` creates the normal app tables, including `departments` for the front page. Nobody connects to it directly: the React app and the public pages talk to the FastAPI backend, and only the backend runs SQL.
 
 | Fact | Value |
 |---|---|
 | DBMS | MySQL 8.0 or newer |
 | Storage engine | InnoDB (transactions and foreign keys) |
 | Character set | `utf8mb4` |
-| Tables | 14 (13 in `schema.sql`, plus `departments`) |
+| Tables | 16 (all in `schema.sql`) |
 | Driver | `mysql-connector-python`, connection pool of 8 |
 | Application account | `appointmed_user`, with `SELECT`, `INSERT`, `UPDATE`, `DELETE` only |
 | Structure owner | `root` (loads the SQL files and restores backups) |
@@ -56,15 +56,14 @@ AppointMed stores everything in **one MySQL 8 database named `appointmed`**. `sc
 | Clinical | `examinations`, `prescriptions`, `prescription_items` |
 | Billing | `invoices` |
 | Administration | `clinic_settings`, `audit_logs` |
-| Public front page | `departments` |
+| Public front page | `departments`, `site_content` |
 
 ## 2. Files and Setup
 
 | File | Purpose |
 |---|---|
-| `source/database/schema.sql` | Structure only: tables, keys, constraints, indexes. Starts with `USE appointmed;` and uses `CREATE TABLE IF NOT EXISTS`, so it is safe to repeat. |
-| `source/database/seed.sql` | Fictional sample data. Load **once**. |
-| `source/database/landing_update.sql` | Creates the `departments` table and its sample rows. Safe to repeat. |
+| `schema.sql` | All 16 tables. Starts with `USE appointmed;`, uses `CREATE TABLE IF NOT EXISTS`, and is safe to repeat. |
+| `seed.sql` | Fictional sample data including 9 departments. Load **once**. |
 | `source/.env` | Connection settings (`DB_*`). Never committed. |
 | `backend/core/config.py` | Reads `.env` once into the frozen `Settings` object |
 | `backend/core/database.py` | Pool, transactions, retry, and error translation |
@@ -72,7 +71,7 @@ AppointMed stores everything in **one MySQL 8 database named `appointmed`**. `sc
 Setup order (details in `CONTRIBUTING.md`, Steps 4 to 6):
 
 1. As `root`, create the database and the limited `appointmed_user`.
-2. As `root`, load `schema.sql`, then `seed.sql` (once), then `landing_update.sql`.
+2. As `root`, load `schema.sql`, then `seed.sql` (once).
 3. Put the same password in `source/.env` as `DB_PASSWORD`.
 
 The pool is **created on the first query**, so the backend starts even when MySQL is down. In that case `/api/health/db` reports `connected: false` and API calls return a clean 503. If the database is rebuilt while the backend runs, the next failing call rebuilds the pool once and retries.
@@ -96,6 +95,8 @@ The schema follows the real clinic workflow.
 | Users are deactivated, never deleted | History and the audit trail keep their actors |
 | Weekly schedule as rows, plus single days off | Slots can be computed for any date. Two rows on a day give a lunch break. |
 | Settings as key/value rows | New settings need no schema change |
+| Website text and pictures in `site_content` (key/value) | New fields need no schema change. Empty means "use the built-in default". |
+| Department icons as `dept_icon_<id>` rows in `site_content` | That table has `MEDIUMTEXT`, which fits base64 pictures |
 | Money as `DECIMAL(10,2)` | Exact arithmetic |
 | Statuses as `ENUM` | The database rejects an unknown status |
 
@@ -117,6 +118,7 @@ erDiagram
     users |o--o{ invoices : "paid_by"
     users |o--o{ rooms : "updated_by"
     users |o--o{ clinic_settings : "updated_by"
+    users |o--o{ site_content : "updated_by"
     users |o--o{ audit_logs : "performs"
     users |o--o{ patients : "primary doctor"
     patients |o--o{ appointments : "attends"
@@ -149,6 +151,10 @@ Legend: **PK** primary key, **FK** foreign key, **UQ** unique, **AI** auto incre
 | `role` | ENUM('doctor','nurse','admin') | NN | Decides which features the user may open |
 | `email` | VARCHAR(100) | NULL | Contact email |
 | `specialization` | VARCHAR(100) | NULL | Doctors only. Matches a department name. |
+| `bio` | VARCHAR(1000) | NULL | Public profile text |
+| `education` | VARCHAR(255) | NULL | Public |
+| `years_experience` | TINYINT UNSIGNED | NULL | Public (0 to 70, checked by the backend) |
+| `languages` | VARCHAR(150) | NULL | Public |
 | `assigned_doctor_id` | INT | FK, NULL | Nurses only |
 | `avatar` | MEDIUMBLOB | NULL | Small profile picture (up to 300 KB, checked by the backend) |
 | `is_active` | BOOLEAN | NN, default TRUE | False blocks the account, history is kept |
@@ -312,19 +318,30 @@ Legend: **PK** primary key, **FK** foreign key, **UQ** unique, **AI** auto incre
 
 Actions the backend writes: `LOGIN`, `LOGIN_FAILED`, `UPDATE_PROFILE`, `CHANGE_PASSWORD`, `BOOKING_REQUEST`, `APPROVE_REQUEST`, `DISMISS_REQUEST`, `CREATE_APPOINTMENT`, `CHECK_IN`, `START_EXAM`, `RETURN_TO_QUEUE`, `FINISH_EXAM`, `CANCEL_APPOINTMENT`, `RESCHEDULE_APPOINTMENT`, `CREATE_INVOICE`, `PAY_INVOICE`, `CREATE_PATIENT`, `UPDATE_PATIENT`, `DELETE_PATIENT`, `UPDATE_ROOM_STATUS`, `SET_DAY_OFF`, `CLEAR_DAY_OFF`, `CREATE_USER`, `UPDATE_USER`, `ACTIVATE_USER`, `DEACTIVATE_USER`, `RESET_PASSWORD`, `UPDATE_SCHEDULE`, `CREATE_ROOM`, `UPDATE_ROOM`, `DELETE_ROOM`, `UPDATE_SETTING`, `DB_INSERT_ROW`, `DB_UPDATE_ROW`, `DB_DELETE_ROW`, `DB_RUN_SQL`, `BACKUP_DATABASE`, `RESTORE_DATABASE`.
 
-### 5.13 `departments` (from `landing_update.sql`)
+Also: `UPDATE_SITE_CONTENT`, `UPDATE_SITE_IMAGE`, `REMOVE_SITE_IMAGE`, `CREATE_DEPARTMENT`, `UPDATE_DEPARTMENT`, `DELETE_DEPARTMENT`, `UPDATE_DEPARTMENT_ICON`, `REMOVE_DEPARTMENT_ICON`.
 
-| Column | Type | Meaning |
-|---|---|---|
-| `id` | INT | PK, AI |
-| `name` | VARCHAR | Department name. Doctors whose `specialization` equals it are counted. |
-| `description` | VARCHAR/TEXT | Shown on the front page |
-| `icon` | VARCHAR, NULL | Image path under `frontend/public` |
-| `is_featured` | BOOLEAN | Shown as a card on the front page |
-| `is_active` | BOOLEAN | Inactive departments are hidden |
-| `sort_order` | INT | Ordering after featured |
+### 5.13 `site_content`
 
-Columns are as read by `DepartmentRepository`. If this table is missing, the endpoint answers 503 and the front page shows its built-in six departments.
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `content_key` | VARCHAR(50) | **PK** | A text key (`hero_title`, `footer_text`, `social_x`...), `logo_image`, `hero_image`, or `dept_icon_<id>` |
+| `content_value` | MEDIUMTEXT | NN | Text or a base64 data URL for pictures |
+| `updated_by` | INT | FK, NULL | Who changed it |
+| `updated_at` | TIMESTAMP | `ON UPDATE` now | Also used to build the cache-busting version |
+
+### 5.14 `departments`
+
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `id` | INT | PK, AI | |
+| `name` | VARCHAR(100) | NN, UQ | Department name; doctors use it as their specialization |
+| `description` | VARCHAR(255) | NN | Shown on the front page |
+| `icon` | VARCHAR(255) | NULL | A path or `/api/public/department-icon/<id>?v=...` |
+| `is_featured`, `is_active` | BOOLEAN | NN | Whether featured on the landing page and visible to the public |
+| `sort_order` | INT | default 100 | Ordering |
+| `created_at` | TIMESTAMP | | Creation time |
+
+Index: `idx_departments_order (is_featured, sort_order)`.
 
 ## 6. Relationships and Foreign Keys
 
@@ -334,7 +351,7 @@ All foreign keys use the default `RESTRICT` (a parent cannot be deleted while ch
 |---|---|---|
 | `users.assigned_doctor_id` | `users.id` | Nurse supports a doctor |
 | `doctor_schedules.doctor_id`, `doctor_days_off.doctor_id` | `users.id` | Whose hours and days off |
-| `rooms.updated_by`, `clinic_settings.updated_by`, `audit_logs.user_id` | `users.id` | Who changed or did it |
+| `rooms.updated_by`, `clinic_settings.updated_by`, `site_content.updated_by`, `audit_logs.user_id` | `users.id` | Who changed or did it |
 | `notifications.doctor_id`, `.nurse_id`, `.decided_by` | `users.id` | Requested doctor, routed nurse, decider |
 | `patients.doctor_id` | `users.id` | Primary doctor |
 | `appointments.notification_id` | `notifications.id` | Request it came from |
@@ -383,6 +400,7 @@ All foreign keys use the default `RESTRICT` (a parent cannot be deleted while ch
 | `idx_exam_patient`, `idx_rx_patient` | `examinations`, `prescriptions` | Patient counts and lists |
 | `idx_invoices_status` | `invoices (status)` | Unpaid and paid lists |
 | `idx_audit_created`, `idx_audit_user` | `audit_logs` | Newest-first log, per-user activity |
+| `idx_departments_order` | `departments (is_featured, sort_order)` | Featured departments and display order |
 
 ## 8. Normalization
 
@@ -454,7 +472,8 @@ Generic `get`, `create`, `update`, `delete`. Column names come from the reposito
 | `PrescriptionRepository` | `prescriptions`, `prescription_items` |
 | `InvoiceRepository`, `RoomRepository`, `SettingsRepository`, `AuditRepository` | `invoices`, `rooms`, `clinic_settings`, `audit_logs` |
 | `ReportRepository` | Read-only aggregates across several tables |
-| `DepartmentRepository`, `StaffDirectoryRepository` | `departments`, `users` (public lists) |
+| `SiteContentRepository` | `site_content` |
+| `DepartmentRepository`, `StaffDirectoryRepository` | `departments`, `users` (public lists; DepartmentRepository also writes) |
 | `DatabaseAdminRepository` | Any table, after the name is checked against `information_schema` |
 
 ### 10.5 Error translation
@@ -508,6 +527,7 @@ Note: `PatientService` writes the audit row as a separate commit after the chang
 | 7 | History and patient record | `appointments`, `examinations`, `invoices`, `prescription_items` | None |
 | Cancel | Scheduled or Checked-in | `appointments`, `invoices` | `appointments` (Cancelled, frees `active_slot`), `invoices` (Unpaid becomes Cancelled), `audit_logs` |
 | Day off | Doctor marks a date | `appointments`, `notifications`, `doctor_days_off` | `doctor_days_off`, `audit_logs` |
+| Admin branding | Admin updates branding or department content | `departments`, `site_content`, `users` (specialization rename) | `departments`, `site_content`, `audit_logs` |
 
 State machine enforced by `AppointmentWorkflow`:
 
@@ -640,6 +660,8 @@ ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALU
 | `invoices` | 4 | #1 Paid 1040.00, #2 Paid 500.00, #3 Unpaid 500.00 (appointment 6, Consulting), #4 Paid 900.00 |
 | `clinic_settings` | 6 | The six keys in Section 5.11 |
 | `audit_logs` | 9 | Sample entries for the log screen |
+| `departments` | 9 | 6 featured with icons under `frontend/public`, 3 extra |
+| `site_content` | 0 | Editable website content and uploaded pictures are initially empty |
 
 | # | Patient | Doctor | When | Status | What it tests |
 |---:|---|---|---|---|---|
@@ -686,9 +708,11 @@ CREATE DATABASE appointmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 GRANT SELECT, INSERT, UPDATE, DELETE ON appointmed.* TO 'appointmed_user'@'localhost';
 ```
 
-Then load `schema.sql`, `seed.sql`, and `landing_update.sql`, or use the dev console (`python dev.py`, option 5, which loads `schema.sql` and `seed.sql` only).
+Then load `schema.sql` and `seed.sql`, or use the dev console (`python dev.py`, option 5).
 
 **Back up and restore**
+
+Backups include `site_content` (including pictures), so files can be large; the import limit is 25 MB.
 
 | Way | How | Notes |
 |---|---|---|
@@ -699,7 +723,7 @@ Then load `schema.sql`, `seed.sql`, and `landing_update.sql`, or use the dev con
 
 **Change the structure**
 
-1. Edit `schema.sql` (and `seed.sql`, `landing_update.sql` if sample data changes). Do not change tables by hand without updating the files.
+1. Edit `schema.sql` and `seed.sql` if sample data changes. Do not change tables by hand without updating the files.
 2. Update the matching repository queries and the frontend types.
 3. Describe the change in the pull request.
 4. After merging, every teammate resets their database.
@@ -708,13 +732,15 @@ Then load `schema.sql`, `seed.sql`, and `landing_update.sql`, or use the dev con
 
 ## 18. Verification Queries
 
-Run as `root` or `appointmed_user` after loading the schema, seed, and landing update.
+Run as `root` or `appointmed_user` after loading the schema and seed.
 
 ```sql
--- 14 tables
+-- 16 tables
 SELECT COUNT(*) AS tables_found FROM information_schema.tables WHERE table_schema = 'appointmed';
 
--- Row counts (expected: 10, 28, 1, 5, 6, 12, 15, 4, 3, 4, 4, 6, 9)
+-- expected: users 10, doctor_schedules 28, doctor_days_off 1, rooms 5, notifications 6,
+-- patients 12, appointments 15, examinations 4, prescriptions 3, prescription_items 4,
+-- invoices 4, clinic_settings 6, audit_logs 9, departments 9, site_content 0
 SELECT 'users' t, COUNT(*) n FROM users UNION ALL
 SELECT 'doctor_schedules', COUNT(*) FROM doctor_schedules UNION ALL
 SELECT 'doctor_days_off', COUNT(*) FROM doctor_days_off UNION ALL
@@ -727,7 +753,9 @@ SELECT 'prescriptions', COUNT(*) FROM prescriptions UNION ALL
 SELECT 'prescription_items', COUNT(*) FROM prescription_items UNION ALL
 SELECT 'invoices', COUNT(*) FROM invoices UNION ALL
 SELECT 'clinic_settings', COUNT(*) FROM clinic_settings UNION ALL
-SELECT 'audit_logs', COUNT(*) FROM audit_logs;
+SELECT 'audit_logs', COUNT(*) FROM audit_logs UNION ALL
+SELECT 'departments', COUNT(*) FROM departments UNION ALL
+SELECT 'site_content', COUNT(*) FROM site_content;
 
 -- The double-booking guard should refuse this (use a real doctor id and an existing active time)
 -- INSERT INTO appointments (full_name, doctor_id, scheduled_time) VALUES ('Test', 2, '<same time as an existing appointment>');
@@ -805,7 +833,7 @@ WHERE a.status = 'Examined' AND i.id IS NULL;
 
 | # | Finding | Impact | Suggested fix |
 |---|---|---|---|
-| 1 | `departments` is created by `landing_update.sql`, not `schema.sql`, and the dev console reset skips that file | After a reset the front page uses its built-in six departments until the file is loaded | Move the table into `schema.sql` and seed its rows in `seed.sql` |
+| 1 | `dev.py` previously listed a non-existent `site_content.sql`; `SQL_FILES` now uses `("schema.sql", "seed.sql")` | Option 4 could fail while looking for the missing file | Fixed |
 | 2 | Role rules on foreign keys (doctor, nurse) exist only in Python | Direct SQL edits (or the SQL console) could break them | Add triggers, or keep writes behind the backend |
 | 3 | `default_slot_minutes` is stored but not used to build slots | The setting has no effect | Use it as the default for new schedule blocks, or remove it |
 | 4 | `DATETIME` and `TIMESTAMP` carry no time zone | Fine for one clinic | Store UTC and convert in the frontend |
@@ -815,10 +843,10 @@ WHERE a.status = 'Examined' AND i.id IS NULL;
 | 8 | Two Pending requests for the same slot are possible under a race | Staff see a warning, and approval conflict checks and the unique index stop the second approval | Acceptable |
 | 9 | Walk-in "check in now" does not require a room, though normal check-in does | Inconsistent rule | Apply one rule in the service |
 | 10 | The SQL console masks hash columns by result name, and an administrator can write to most tables | An alias can reveal a hash, and a bad statement can break history | Block `password_hash` in console statements and limit writable tables |
-| 11 | A doctor is counted in a department only when `specialization` equals the name | A spelling difference hides the doctor | Add a `department_id` foreign key |
+| 11 | Large pictures live in the database, which makes backups large | Backup files can exceed the 25 MB import limit | Consider storing files on disk |
 | 12 | No automated database tests | Schema changes are verified by hand | Add a script that loads the SQL files and runs the Section 18 queries |
 
-**Resolved since the last update:** `CREATE DATABASE` removed from `schema.sql`; seed invoices #2 and #3 are now consistent with their appointments; `CHECK (amount = consultation_fee + medicines_total)` added; unused legacy backend files removed.
+**Resolved since the last update:** `departments` moved into `schema.sql`; `dev.py` now loads `schema.sql` and `seed.sql`; `CREATE DATABASE` removed from `schema.sql`; seed invoices #2 and #3 are now consistent with their appointments; `CHECK (amount = consultation_fee + medicines_total)` added; unused legacy backend files removed.
 
 ---
 

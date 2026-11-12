@@ -40,6 +40,26 @@ def staff() -> list:
     return staff_service.list_public()
 
 
+@router.get("/staff/{staff_id}")
+def staff_member(staff_id: int) -> dict:
+    """One staff member's public profile (doctors include their nurses)."""
+    return staff_service.get_public(staff_id)
+
+
+@router.get("/staff/{staff_id}/photo")
+def staff_photo(staff_id: int) -> Response:
+    """The profile picture the staff member uploaded."""
+    data, mime = staff_service.photo(staff_id)
+    return Response(content=data, media_type=mime, headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/department-icon/{department_id}")
+def department_icon(department_id: int) -> Response:
+    """An icon an administrator uploaded for a department."""
+    data, mime = department_service.icon(department_id)
+    return Response(content=data, media_type=mime, headers={"Cache-Control": "public, max-age=3600"})
+
+
 @router.get("/slots")
 def slots(doctor_id: int, day: date) -> dict:
     """Open times for a doctor on a day."""

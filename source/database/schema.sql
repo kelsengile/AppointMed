@@ -7,6 +7,7 @@
 --     mysql -u root -p appointmed < source/database/schema.sql
 --
 -- This file contains structure only. Sample data lives in seed.sql.
+-- Re-run it against an existing database to create newly added tables.
 --
 -- WORKFLOW THIS SCHEMA SUPPORTS
 -- 1. A patient requests an appointment on the public website (or by
@@ -49,6 +50,10 @@ CREATE TABLE IF NOT EXISTS users (
     role               ENUM('doctor', 'nurse', 'admin') NOT NULL,
     email              VARCHAR(100) NULL,
     specialization     VARCHAR(100) NULL,                  -- doctors only
+    bio                VARCHAR(1000) NULL,                 -- public profile text
+    education          VARCHAR(255) NULL,
+    years_experience   TINYINT UNSIGNED NULL,
+    languages          VARCHAR(150) NULL,
     assigned_doctor_id INT NULL,                           -- nurses only: the doctor they support
     avatar             MEDIUMBLOB NULL,                    -- profile picture (small JPEG)
     is_active          BOOLEAN NOT NULL DEFAULT TRUE,      -- admin can deactivate instead of deleting
@@ -58,6 +63,17 @@ CREATE TABLE IF NOT EXISTS users (
         FOREIGN KEY (assigned_doctor_id) REFERENCES users(id),
     INDEX idx_users_role (role),
     INDEX idx_users_assigned_doctor (assigned_doctor_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS email_preferences (
+    user_id             INT PRIMARY KEY,
+    notify_requests     BOOLEAN NOT NULL DEFAULT TRUE,
+    notify_appointments BOOLEAN NOT NULL DEFAULT TRUE,
+    notify_billing      BOOLEAN NOT NULL DEFAULT TRUE,
+    notify_account      BOOLEAN NOT NULL DEFAULT TRUE,
+    notify_clinic       BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_email_prefs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ============================================================
@@ -110,6 +126,18 @@ CREATE TABLE IF NOT EXISTS rooms (
     updated_by INT NULL,                                   -- nurse or doctor who last changed it
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_rooms_updated_by FOREIGN KEY (updated_by) REFERENCES users(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS departments (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL UNIQUE,
+    description VARCHAR(255) NOT NULL,
+    icon        VARCHAR(255) NULL,                 -- image path, or /api/public/department-icon/<id> when uploaded
+    is_featured BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order  INT NOT NULL DEFAULT 100,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_departments_order (is_featured, sort_order)
 ) ENGINE=InnoDB;
 
 -- ============================================================

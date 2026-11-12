@@ -2,7 +2,7 @@
 
 This document explains everything the AppointMed backend does: how a request travels through the code, what each file is responsible for, the business rules the services enforce, and how the code meets the CMSC 203 final-project requirements (and the related ITEC 104 and ITEC 105 ideas).
 
-For setup see `CONTRIBUTING.md`. For the whole system, diagrams, and test cases see `source/documentation/DOCUMENTATION.md`. For the data layer see `DATABASE.md`, for the web app `FRONTEND.md`, and for short study notes [note.md](../../note.md).
+For setup see `CONTRIBUTING.md`. For the whole system, diagrams, and test cases see `source/documentation/DOCUMENTATION.md`. For the data layer see `DATABASE.md`, for the web app `FRONTEND.md`, and for short study notes [NOTES.md](../../NOTES.md).
 
 **Contents**
 
@@ -51,26 +51,24 @@ source/
 ├── requirements.txt
 ├── .env / .env.example           # configuration (the real .env is gitignored)
 ├── database/
-│   ├── schema.sql                # 13 tables and constraints
-│   ├── seed.sql                  # fictional sample data
-│   └── landing_update.sql        # departments table for the front page
-└── backend/
+│   ├── schema.sql                # all 16 tables and constraints
+│   └── seed.sql                  # fictional sample data
+├── backend/
     ├── core/
     │   ├── config.py             # Settings (frozen dataclass)
     │   ├── database.py           # Executor, Transaction, Database
     │   ├── exceptions.py         # AppError family and handlers
     │   ├── security.py           # hashing, tokens, current user, feature check, RateLimiter
+    │   ├── email_templates.py    # escaped responsive HTML and plain-text email layout
     │   ├── mailer.py             # outgoing email
     │   └── utils.py              # to_money, blank_to_none, floor_minute, trim
     ├── models/domain.py          # User / Doctor / Nurse / Admin, AppointmentWorkflow
-    ├── schemas/
-    │   ├── api.py                # Pydantic request bodies and shared checks
-    │   └── database.py           # bodies for the Database page
+    ├── schemas/                  # api.py, database.py, site.py
     ├── repositories/             # base, user (+schedule, days off), patient, appointment
-    │                             #   (+notification), clinical, system, department,
-    │                             #   staff_directory, database
-    ├── services/                 # auth, booking, scheduling, appointment, billing, patient,
-    │                             #   dashboard, admin, department, staff_directory,
+    │                             # (+notification), clinical, system, department, site
+    │                             # (+email preferences, site_content), staff_directory, database
+    ├── services/                 # auth, notifier, booking, scheduling, appointment, billing, patient,
+    │                             #   dashboard, admin, department, site_service, staff_directory,
     │                             #   database, backup_parser, waiting_queue
     └── routes/                   # auth, public, staff, admin, database
 ```
@@ -123,6 +121,7 @@ A **frozen dataclass**, built once by `Settings.from_env()` after `load_dotenv` 
 | Field | Environment variable | Default |
 |---|---|---|
 | `app_env` | `APP_ENV` | `development` |
+| `app_url` | `APP_URL` | `http://localhost:5173` |
 | `db_host`, `db_port` | `DB_HOST`, `DB_PORT` | `localhost`, `3306` |
 | `db_name`, `db_user`, `db_password` | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `appointmed`, `appointmed_user`, empty |
 | `jwt_secret` | `JWT_SECRET` | **none, required** |
@@ -186,7 +185,7 @@ AppError (400)
 
 ### 5.5 `mailer.py`
 
-`Mailer.send(to, subject, body)` starts a **daemon thread** so the request is never delayed. With no address it does nothing. When SMTP is not configured, the whole email is written to the log. When it is configured, it connects (implicit SSL on port 465, otherwise optional STARTTLS), logs in if a username is set, and sends. Failures are logged with a clear reason and never break the request. `send_blocking` sends immediately and raises on failure, for checking SMTP settings.
+`Mailer.send(to, subject, body, html=None)` starts a **daemon thread** so the request is never delayed. It sends a plain-text alternative and optional HTML content. With no address it does nothing. When SMTP is not configured, the plain-text email is written to the log. When it is configured, it connects (implicit SSL on port 465, otherwise optional STARTTLS), logs in if a username is set, and sends. Routine notification failures are logged and never break the request. `send_blocking` sends immediately and raises on failure; the test-email endpoint uses it to report SMTP delivery failures instead of claiming success prematurely.
 
 ### 5.6 `utils.py`
 
@@ -248,7 +247,11 @@ A small state machine. `TRANSITIONS` maps each status to the set it may become. 
 | Schema | Used by | Notable rules |
 |---|---|---|
 | `LoginRequest` | login | username 1 to 50, password 1 to 200 (strength is not checked at login) |
-| `ProfileUpdate`, `AvatarUpload`, `PasswordChange` | profile | name checks, optional email, image text at most 500,000 characters, new password strong |
+| `ProfileUpdate` | own profile | name, optional email, `bio` (1000, multiline), `education` (255), `years_experience` 0 to 70, `languages` (letters, `, . & / -`) |
+| `AvatarUpload`, `PasswordChange` | profile | image text at most 2,500,000 characters, new password strong |
+| `DepartmentIn` | admin departments | name 2 to 100 (letters, digits, `& , . ' ’ ( ) / -`), description 3 to 255, `sort_order` 0 to 9999 |
+| `SiteContentUpdate` | admin site texts | At most 20 keys `[a-z_]`, values up to 1100 characters |
+| `SiteImageUpload` | logo, hero, department icon | Data URL up to 2,500,000 characters |
 | `BookingRequest` | public booking | all details required, sex Male or Female, email pattern (lowercased), phone and address checks |
 | `ApproveRequest`, `DismissRequest` | notifications | optional room and time, dismissal note 3 to 255 |
 | `AppointmentCreate` | walk-ins | existing `patient_id` or a name, optional details, `check_in_now` |
@@ -275,23 +278,24 @@ An abstract class with generic `get`, `create`, `update`, and `delete`. Subclass
 
 | Repository | Table | Notable methods |
 |---|---|---|
-| `UserRepository` | `users` | `get` (never returns the hash), `get_detail`, `get_by_username` (login only, includes the hash), `list_users`, `touch_login`, `set_password`, avatar get and set, `public_doctors`, `nurses_for_doctor` (fewest pending first), `active_doctors` |
+| `UserRepository` | `users` | As before, plus public profile columns in `_PUBLIC` and `_LISTING` |
 | `ScheduleRepository` | `doctor_schedules` | `blocks_for_day`, `blocks_for_doctor` (`HH:MM`), `replace` (delete then insert, inside a transaction) |
 | `DayOffRepository` | `doctor_days_off` | `in_range`, `is_off`, `remove` |
 | `PatientRepository` | `patients` | `search`, `get_scoped`, `find_match` (NULL-safe `<=>`), `has_history` |
 | `AppointmentRepository` | `appointments` | `get_item`, `list_for_doctor`, `queue`, `consulting`, `unbilled`, `conflict_exists`, `booked_times`, `booked_days`, `active_count_on`, `status_counts_today` |
 | `NotificationRepository` | `notifications` | `list_for_doctor` (with `slot_taken`), `resolve` (only if still Pending), `count_pending`, `pending_days`, `pending_count_on` |
 | `ExaminationRepository`, `PrescriptionRepository`, `InvoiceRepository` | clinical tables | `encounters`, `add_items`, `items_for_appointments`, `get_by_appointment`, `set_amounts` and `mark_paid` (Unpaid only), `count_awaiting_payment` |
-| `RoomRepository`, `SettingsRepository`, `AuditRepository`, `ReportRepository` | system tables | `list_with_occupant`, `in_use`, `upsert`, `record`, `search`, `overview`, `report` |
-| `DepartmentRepository` | `departments` | `list_active` (featured first, with a doctor count by matching specialization) |
-| `StaffDirectoryRepository` | `users` | `list_active`: doctors, then nurses, then admins, with only safe fields and each doctor's weekdays |
+| `RoomRepository`, `SettingsRepository`, `AuditRepository`, `ReportRepository`, `EmailPreferenceRepository` | system tables | `list_with_occupant`, `in_use`, `upsert`, `record`, `search`, `overview`, `report`, preference and staff-recipient lookups |
+| `DepartmentRepository` | `departments` | `list_active`, `list_all`, `find_by_name`, `doctors_in`, `rename_specialization` |
+| `SiteContentRepository` | `site_content` | `texts`, `image_keys`, `get_value`, `version`, `upsert`, `remove` |
+| `StaffDirectoryRepository` | `users` | `list_active`, `get_active` (bio fields and a doctor's nurses), `photo` |
 | `DatabaseAdminRepository` | any table | metadata from `information_schema`, `page`, `insert`, `update_row`, `delete_row`, `insert_many`, `dump` (see Section 15) |
 
 Several guards are done in SQL on purpose so they hold under simultaneous requests: `resolve` only updates a row that is still `Pending`, and `set_amounts` and `mark_paid` only touch an `Unpaid` invoice.
 
 ## 9. Services (business rules)
 
-Each service receives its `Database` (and a `Mailer` where needed) through the constructor, so it can be created with test doubles.
+Each service receives its `Database` and (where needed) `Notifier` through the constructor, so it can be created with test doubles.
 
 ### 9.1 `AuthService`
 
@@ -299,9 +303,11 @@ Each service receives its `Database` (and a `Mailer` where needed) through the c
 |---|---|
 | `login` | Blocks after 5 failures per username in 5 minutes. For an unknown username it still checks a dummy bcrypt hash so the response time does not reveal real usernames. A wrong login records a failure, writes `LOGIN_FAILED`, and returns one generic message. A deactivated account is refused. Success resets the limiter, updates `last_login_at`, writes `LOGIN` (in a transaction), and returns the token and a small user object. |
 | `profile` | Returns user detail with the avatar as a `data:` URL (type detected from the first bytes) |
-| `update_profile`, `remove_avatar` | Change own name and email, or clear the picture |
+| `update_profile`, `remove_avatar` | Change own name, email, bio, education, years of experience and languages, or clear the picture |
 | `set_avatar` | PNG, JPEG, or WebP data URL, valid base64, at most 300,000 bytes, real image signature |
 | `change_password` | Requires the current password, and a new one that is different |
+| `email_preferences`, `save_email_preferences` | Read or save the five per-user email categories; users without a row get all categories enabled |
+| `send_test_email` | Requires a profile email, is limited to 3 test messages per user per 10 minutes, and waits for SMTP acceptance when configured |
 
 ### 9.2 `SchedulingService` and `BookingService`
 
@@ -360,13 +366,21 @@ Almost every state change also calls `AuditRepository.record(...)`.
 |---|---|
 | `PatientService` | Patients are scoped to the doctor. `create` refuses a duplicate name and birthdate. `delete` refuses if the patient has any appointment. |
 | `DashboardService` | `staff`: today's counts, pending requests, unbilled sessions, sessions awaiting payment, the queue (via `WaitingQueue`), the patient being examined, and the next five scheduled appointments. `admin`: totals and the eight latest audit entries. `report`: last 30 days by default, range at most 366 days. |
-| `AdminService` users | A nurse **must** be assigned to an active doctor. A duplicate username is a clear conflict. Users are deactivated, not deleted. An admin cannot deactivate their own account. Passwords are hashed before storing. All changes and audits run in transactions. |
+| `AdminService` users | A nurse **must** be assigned to an active doctor. A doctor's specialization must match an existing department (`_specialization` normalizes to the stored name). A duplicate username is a clear conflict. Users are deactivated, not deleted. An admin cannot deactivate their own account. Passwords are hashed before storing. All changes and audits run in transactions. |
 | `AdminService` schedules | Each block ends after it starts and is at least one slot long. Blocks are sorted and neighbors checked, so none overlap. The schedule is replaced in one transaction. |
 | `AdminService` rooms and settings | Unique room names. A room in any appointment cannot be deleted. Each setting is validated key by key (name and address required, fee 0 to 1,000,000, slot 5 to 120, window 1 to 365, booking `true` or `false`, unknown keys refused) and then saved together. |
 
-### 9.6 `DepartmentService`, `StaffDirectoryService`
+### 9.6 `DepartmentService`
 
-Read-only services for the public front page. They add no rules beyond returning the repository results.
+`list_public` and `icon` serve public departments and icons. Admin methods create and update departments, rename doctors' specialization when a department is renamed, refuse deletion while doctors use a department, and set or remove icons. Icons must be PNG, JPEG, or WebP, at most 150 KB, and are checked by signature; they are stored in `site_content` as `dept_icon_<id>`.
+
+### 9.6a `SiteService`
+
+`TEXT_FIELDS` allowlists hero, about, footer, contact and social-link content and validates each field by kind (line, multi, URL, email, or phone). Saving an empty text deletes its row so the frontend default returns. `set_image` and `remove_image` manage the logo (up to 300 KB) and hero (up to 1.5 MB). `public()` returns a `version` used as a cache buster.
+
+### 9.6b `StaffDirectoryService`
+
+`list_public`, `get_public`, and `photo` provide the public staff list, profile details, and photos.
 
 ### 9.7 `WaitingQueue`
 
@@ -379,9 +393,9 @@ Routes are thin: read the validated body, call one service method, return the re
 | Router | Prefix | Login | Features used |
 |---|---|---|---|
 | `auth_routes` | `/api/auth` | login is open, the rest need any signed-in user | none (uses `get_current_user`) |
-| `public_routes` | `/api/public` | none | none. `/bookings` is rate-limited. |
+| `public_routes` | `/api/public` | none | `GET /site`, `GET /site-image/{logo|hero}`, `GET /staff/{id}`, `GET /staff/{id}/photo`, `GET /department-icon/{id}`, and rate-limited `GET /staff`, `GET /departments`, `POST /bookings` |
 | `staff_routes` | `/api/staff` | doctor or nurse | `dashboard`, `notifications`, `appointments`, `exam`, `invoice`, `patients`, `history`, `prescriptions`, `schedule` (days off) |
-| `admin_routes` | `/api/admin` | admin | `admin_dashboard`, `users`, `rooms`, `settings`, `reports`, `audit` |
+| `admin_routes` | `/api/admin` | admin | `admin_dashboard`, `users`, `rooms`, `settings`, `PUT /site`, `PUT or DELETE /site/image/{kind}`, `GET or POST /departments`, `PUT or DELETE /departments/{id}`, `PUT or DELETE /departments/{id}/icon`, `reports`, `audit` |
 | `database_routes` | `/api/admin/database` | admin | `database` |
 
 The complete endpoint list is in `DOCUMENTATION.md`, Section 11. The public booking route checks `booking_limiter.is_blocked` first and **records the hit only after a successful booking**, so a mistyped form does not use up a visitor's allowance.
@@ -428,7 +442,10 @@ Everything comes from `source/.env` (see `CONTRIBUTING.md`, Step 6). The file is
 
 ## 14. Emails and logging
 
-- Emails are sent for **approved** and **disapproved** booking requests only.
+- `Notifier` sends request, appointment, billing, account, clinic, and database-event messages through the shared `Mailer`.
+- Staff email categories default to enabled and can be changed in Settings. Password-change and password-reset security messages are not preference-filtered.
+- `APP_URL` is used to build links in email content and defaults to `http://localhost:5173`.
+- Re-run `source/database/schema.sql` against an existing database to create `email_preferences`; backups made before this table existed are rejected as incomplete.
 - With no `SMTP_HOST`, each email is printed to the backend console (including the recipient). Treat those logs as sensitive.
 - Logging uses the `appointmed` logger. Unexpected errors are logged with a stack trace. Passwords, tokens, and medical details must never be logged.
 
@@ -455,6 +472,8 @@ Files: `repositories/database_repository.py`, `services/database_service.py`, `s
 
 **Backup** (`dump`): every table's `SHOW CREATE TABLE` and rows as batched `INSERT` statements (100 rows each), parents first, generated columns left out. It starts with the header `-- AppointMed database backup`. It contains password hashes. Restoring with the `mysql` client needs the `root` user. Download is audited as `BACKUP_DATABASE`.
 
+`site_content` holds base64 pictures, so its rows can be very long and backups can be large. `_TABLE_ORDER` does not list `departments`, `site_content`, or `doctor_days_off`, so they are dumped last; this is safe because foreign-key checks are off while loading.
+
 **Import** (`import_backup`): the file is **parsed, never executed**.
 
 1. `parse_backup` accepts only `SET`, `DROP TABLE IF EXISTS`, `CREATE TABLE` (ignored: structure is not changed), and `INSERT`. Values are tokenized into Python objects.
@@ -473,7 +492,6 @@ Honest notes for the team. None stop the system from working.
 | Walk-in check-in | `check_in` needs a room, but a walk-in created with "check in now" skips that rule. Decide on one rule. |
 | Masking by name | The SQL console hides `password_hash` and `avatar` by result-column name, so `SELECT password_hash AS x` would show it. Block those columns in the statement or remove read access to `users`. |
 | Console power | An admin can run `UPDATE` or `DELETE` on any table except the audit log (including `users`). It is audited, but consider limiting it. |
-| Schema file | `schema.sql` has 13 tables. `departments` lives only in `landing_update.sql`, and the dev console reset skips it. Move it into `schema.sql`. |
 | Public calendar cost | `BookingService.calendar` calls `available_slots` for each day (up to 62 days, several queries each). Batch the queries or cache the result. |
 | Non-indexed date filter | Queries such as `DATE(scheduled_time) = %s` cannot use the time index. Use a `>= day AND < day + 1` range. |
 | Metadata queries | `DatabaseService.tables()` calls `table_names()` once per table. Fetch the list once. |
@@ -481,10 +499,15 @@ Honest notes for the team. None stop the system from working.
 | Rate limits | In memory only, so they reset on restart and are not shared across processes. Keys are never evicted. |
 | Audit outside transactions | `PatientService` and the failed-login entry write their audit row on a separate connection from the change. |
 | Department counting | A doctor is counted in a department only when `specialization` equals the department name exactly. |
+| Public profile | `/api/public/staff/{id}` exposes bio, education, years, and languages. Staff should be told these are public. |
+| Cache | Public photos and icons send `max-age=3600`, so a changed picture can take an hour to refresh unless the `?v=` version changes (it does for photos and site images). |
+| Backup size | Large pictures live in `site_content`, which can make backups large. Consider storing files on disk. |
+| Dump order | `_TABLE_ORDER` omits `departments`, `site_content`, and `doctor_days_off`; they are dumped last. Add them for a tidier backup. |
+| SQL setup (fixed) | `dev.py` previously listed a missing `site_content.sql`; `SQL_FILES` now contains `("schema.sql", "seed.sql")`. |
 | Import and audit rows | After an import, old `audit_logs.user_id` values may point to ids that no longer match the restored users. |
 | No automated tests | Test by hand for now (`DOCUMENTATION.md`, Section 20). Services accept their `Database` and `Mailer`, so tests with fakes are straightforward to add. |
 
-**Resolved since the last update:** the one-exam-at-a-time race (now a row lock), the dead expression in `PatientService.create`, the `CREATE DATABASE` line in `schema.sql`, and the unused legacy files (`deps.py`, `permissions.py`, `visit_service.py`, and others), which were removed.
+**Resolved since the last update:** `departments` moved into `schema.sql`; `dev.py` now loads only `schema.sql` and `seed.sql`; the one-exam-at-a-time race (now a row lock), the dead expression in `PatientService.create`, the `CREATE DATABASE` line in `schema.sql`, and the unused legacy files (`deps.py`, `permissions.py`, `visit_service.py`, and others), which were removed.
 
 ## 17. Compliance with the project instructions
 
@@ -542,14 +565,14 @@ The CMSC 203 final project is graded on seven criteria. This section shows where
 
 ### 17.5 Documentation, presentation, and related courses
 
-Documentation: `DOCUMENTATION.md` covers the required sections, and this file, `DATABASE.md`, `FRONTEND.md`, and `note.md` add detail. Remaining for the team: related studies, screenshots, the conclusion, and the test results column.
+Documentation: `DOCUMENTATION.md` covers the required sections, and this file, `DATABASE.md`, `FRONTEND.md`, and `NOTES.md` add detail. Remaining for the team: related studies, screenshots, the conclusion, and the test results column.
 
 Suggested demo order: book as a patient, approve as a nurse (show the email in the console), choose a room and check in, examine as a doctor, pay, mark a day off and show it on the booking calendar, then show the audit log and the Database page as admin. Be ready to explain any file.
 
 | Course | Backend evidence |
 |---|---|
 | ITEC 104 Data Structures and Algorithms | `WaitingQueue` (min-heap), `RateLimiter` (deque window), `AppointmentWorkflow` (transition table), slot generation with a set lookup, overlap detection after sorting, the backup tokenizer |
-| ITEC 105 Information Management | 13 tables plus `departments`, keys, `CHECK` constraints, the generated `active_slot` unique index, row locks, transactions, parameterized queries, aggregate reports, audit log, backup and restore |
+| ITEC 105 Information Management | 16 tables, keys, `CHECK` constraints, the generated `active_slot` unique index, row locks, transactions, parameterized queries, aggregate reports, audit log, backup and restore |
 
 ## 18. How to extend the backend
 

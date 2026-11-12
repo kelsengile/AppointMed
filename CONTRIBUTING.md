@@ -83,7 +83,7 @@ When it finishes, it offers to start the project. If you used the dev console, s
 | `1` | Checks Python (3.11+), Git, Node.js (20+), npm, and the MySQL client |
 | `2` | Creates `source/.venv`, runs `pip install -r requirements.txt` and `npm install` |
 | `3` | Creates `source/.env` from `.env.example` with your database password and a fresh random `JWT_SECRET` |
-| `4` | Creates the database and app account, loads `schema.sql`, `seed.sql` (only if the database is empty), and `landing_update.sql` |
+| `4` | Creates the database and app account, then loads `schema.sql` and `seed.sql` (only if the database is empty) |
 | `5` | Reset database: drops and rebuilds it with `schema.sql` and `seed.sql` (you must type `RESET`) |
 | `6`, `7` | Start the backend or the frontend in a new terminal window that stays open |
 | `8` | Starts both, runs a health check, and opens the web app in your browser |
@@ -163,14 +163,13 @@ Replace `change_this_password` with a password of your own, and use the same one
 
 ### Step 5: Load the schema and sample data
 
-`schema.sql` creates the tables (it starts with `USE appointmed;`, so create the database in Step 4 first). `seed.sql` fills them with fictional sample data: staff are SpongeBob SquarePants characters and patients are cartoon characters. `landing_update.sql` adds the `departments` table and its sample departments for the front page. Run all three from the **project root**, in this order.
+`schema.sql` creates all 15 tables (it starts with `USE appointmed;`, so create the database in Step 4 first). `seed.sql` fills them with fictional sample data: staff are SpongeBob SquarePants characters and patients are cartoon characters, including nine departments. Run both from the **project root**, in this order.
 
 **Git Bash, Command Prompt, macOS, or Linux:**
 
 ```bash
 mysql -u root -p appointmed < source/database/schema.sql
 mysql -u root -p appointmed < source/database/seed.sql
-mysql -u root -p appointmed < source/database/landing_update.sql
 ```
 
 **PowerShell** does not support `<`. Use:
@@ -178,15 +177,14 @@ mysql -u root -p appointmed < source/database/landing_update.sql
 ```powershell
 cmd /c "mysql -u root -p appointmed < source\database\schema.sql"
 cmd /c "mysql -u root -p appointmed < source\database\seed.sql"
-cmd /c "mysql -u root -p appointmed < source\database\landing_update.sql"
 ```
 
-Load `seed.sql` **once**. Running it twice causes `Duplicate entry` errors. `schema.sql` and `landing_update.sql` are safe to repeat. To start over, see [Resetting your database](#resetting-your-database).
+Load `seed.sql` **once**. Running it twice causes `Duplicate entry` errors. `schema.sql` is safe to repeat. To start over, see [Resetting your database](#resetting-your-database).
 
 **Verify:**
 
 ```sql
-SHOW TABLES;                          -- 14 tables (13 from schema.sql + departments)
+SHOW TABLES;                          -- 15 tables
 SELECT username, role FROM users;     -- 10 users
 ```
 
@@ -300,7 +298,7 @@ Web app: http://localhost:5173. Stop either server with `Ctrl + C`.
 | "Cannot reach the server. Check that the backend is running." | The backend is stopped or not on port 8000 | Start the backend, reload the page |
 | `Port 5173 is already in use` | Another Vite server is open (the port is fixed on purpose) | Close it, then `npm run dev` |
 | `Duplicate entry` while loading `seed.sql` | The seed was already loaded | [Reset your database](#resetting-your-database) |
-| `ERROR 1146: Table 'appointmed.departments' doesn't exist` or the front page shows only six built-in departments | `landing_update.sql` was not loaded (the dev console reset skips it) | Run `mysql -u root -p appointmed < source/database/landing_update.sql` |
+| `ERROR 1146: Table 'appointmed.departments' doesn't exist` | The database was not reset or its schema is out of date | Load `schema.sql` and `seed.sql` using Step 5 |
 | "Too many failed attempts" at login | Five wrong passwords for that username within 5 minutes | Wait a few minutes (or restart the backend) |
 | "Choose an exam room before checking the patient in." | Check-in requires a room | Pick a room on the appointment card, then press **Check in** |
 | The booking page shows no available times | The doctor does not work that weekday, marked it a day off, the times passed or are taken, the date is outside the window, or online booking is off | Try another date or doctor, or check **Clinic Settings** as `admin` |
@@ -321,7 +319,7 @@ CREATE DATABASE appointmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 GRANT SELECT, INSERT, UPDATE, DELETE ON appointmed.* TO 'appointmed_user'@'localhost';
 ```
 
-Then repeat Step 5, or choose **Reset database** in the dev console (type `RESET` to confirm). The dev console reset loads `schema.sql` and `seed.sql` only, so load `landing_update.sql` afterwards if you want the `departments` table. Never run `seed.sql` against a shared or production database.
+Then repeat Step 5, or choose **Reset database** in the dev console (type `RESET` to confirm). The dev console reset loads `schema.sql` and `seed.sql`. Never run `seed.sql` against a shared or production database.
 
 An administrator can also download and import a backup from the **Database** page (see [BACKEND.md](source/backend/BACKEND.md), Section 15).
 
@@ -333,7 +331,7 @@ Each time you start working, run `git pull`, then check what changed:
 |---|---|
 | `source/requirements.txt` | `pip install -r requirements.txt` (with `.venv` active) |
 | `source/frontend/package.json` or `package-lock.json` | `npm install` in `source/frontend` |
-| `schema.sql`, `seed.sql`, or `landing_update.sql` | Reset your database so it matches the team's |
+| `schema.sql` or `seed.sql` | Reset your database so it matches the team's |
 | `source/.env.example` | Add new variables to your own `source/.env`, then restart the backend |
 
 The dev console's **Update from GitHub** option does the pull and the reinstalls, and warns you when the SQL files changed.
@@ -350,7 +348,7 @@ The dev console's **Update from GitHub** option does the pull and the reinstalls
 ├── DOCUMENTATION.md          # technical documentation for the course
 ├── README.md
 ├── SECURITY.md
-├── note.md                   # study notes: structures, complexity, OOP, security, privacy
+├── NOTES.md                  # study notes: structures, complexity, OOP, security, privacy
 ├── dev.py                    # terminal console: install, set up the database, start the project
 └── source/
     ├── .env                  # local secrets (gitignored)
@@ -362,17 +360,16 @@ The dev console's **Update from GitHub** option does the pull and the reinstalls
     │   ├── BACKEND.md
     │   ├── core/             # config, database, exceptions, security, mailer, utils
     │   ├── models/           # domain.py: User/Doctor/Nurse/Admin and AppointmentWorkflow
-    │   ├── schemas/          # api.py (request bodies), database.py (Database page bodies)
+    │   ├── schemas/          # api.py (request bodies), database.py, site.py
     │   ├── repositories/     # base, user (+schedule, days off), patient, appointment (+notification),
-    │   │                     #   clinical, system, department, staff_directory, database
+    │   │                     #   clinical, system, department, site, staff_directory, database
     │   ├── services/         # auth, booking, scheduling, appointment, billing, patient, dashboard,
-    │   │                     #   admin, department, staff_directory, database, backup_parser, waiting_queue
+    │   │                     #   admin, department, site_service, staff_directory, database, backup_parser, waiting_queue
     │   └── routes/           # auth, public, staff, admin, database
     ├── database/
     │   ├── DATABASE.md
-    │   ├── schema.sql        # 13 tables and constraints
+    │   ├── schema.sql        # all 15 tables and constraints
     │   ├── seed.sql          # fictional sample data
-    │   └── landing_update.sql # departments table for the front page
     ├── documentation/        # diagrams/, flowcharts/, screenshots/
     └── frontend/             # React + TypeScript web app (Vite + Tailwind)
         ├── FRONTEND.md
@@ -392,7 +389,7 @@ The dev console's **Update from GitHub** option does the pull and the reinstalls
 
 ## Contributing
 
-Thank you for helping build AppointMed. This section explains how we plan work, write and review code, and keep the project consistent. Please also read the [Code of Conduct](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md), and the study notes in [note.md](note.md).
+Thank you for helping build AppointMed. This section explains how we plan work, write and review code, and keep the project consistent. Please also read the [Code of Conduct](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md), and the study notes in [NOTES.md](NOTES.md).
 
 ### Before you start
 
@@ -473,7 +470,7 @@ Closes #<issue-number>
 - [ ] New endpoints use `require_feature(...)` and stay inside the user's doctor scope
 - [ ] SQL is parameterized and lives only in a repository
 - [ ] No secrets, `.env` contents, or real personal data included
-- [ ] Documentation (and note.md, if a concept changed) updated
+- [ ] Documentation (and NOTES.md, if a concept changed) updated
 - [ ] I can explain every part of this code
 ```
 
@@ -547,9 +544,9 @@ Rules of thumb:
 | **Constructors and factories** | `User.__init__` rejects a missing username or name. `User.from_row` and `Settings.from_env` are factories. |
 | **Custom exceptions** | The `AppError` family (`AppointmentConflictError`, `InvalidScheduleError`, `InvalidStatusError`, `DuplicateEntryError`, `RateLimitError`, `DatabaseUnavailableError`, and others) |
 | **Data structures and algorithms (ITEC 104)** | `WaitingQueue` (min-heap), `RateLimiter` (sliding window over a `deque`), `AppointmentWorkflow` (transition dictionary), slot generation with a taken-time set, sorted overlap detection |
-| **Information management (ITEC 105)** | 13 tables plus `departments`, keys, `CHECK` constraints, the `active_slot` double-booking guard, row locks, transactions, parameterized queries, report aggregates, an audit log, backup and restore |
+| **Information management (ITEC 105)** | 15 tables, keys, `CHECK` constraints, the `active_slot` double-booking guard, row locks, transactions, parameterized queries, report aggregates, an audit log, backup and restore |
 
-Study notes with code excerpts and complexity analysis are in [note.md](note.md).
+Study notes with code excerpts and complexity analysis are in [NOTES.md](NOTES.md).
 
 ### Coding standards
 
@@ -612,7 +609,7 @@ There are no automated tests yet, so test by hand.
 
 ### Documentation
 
-- Update `source/documentation/DOCUMENTATION.md`, the area documents (`BACKEND.md`, `DATABASE.md`, `FRONTEND.md`), and [note.md](note.md) when you add or change a feature.
+- Update `DOCUMENTATION.md`, the area documents (`BACKEND.md`, `DATABASE.md`, `FRONTEND.md`), and [NOTES.md](NOTES.md) when you add or change a feature.
 - Save UML diagrams in `diagrams/`, flowcharts in `flowcharts/`, and screenshots in `screenshots/` (fictional data only).
 - Update this file or the README if you change how the project is set up or run.
 

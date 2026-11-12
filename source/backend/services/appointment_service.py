@@ -16,7 +16,6 @@ from backend.core.exceptions import (
     NotFoundError,
     ValidationFailedError,
 )
-from backend.core.mailer import Mailer, mailer
 from backend.core.utils import blank_to_none, floor_minute, to_money, trim
 from backend.models.domain import AppointmentWorkflow, User
 from backend.repositories.appointment_repository import AppointmentRepository, NotificationRepository
@@ -25,6 +24,7 @@ from backend.repositories.patient_repository import PatientRepository
 from backend.repositories.system_repository import AuditRepository, RoomRepository, SettingsRepository
 from backend.repositories.user_repository import DayOffRepository, ScheduleRepository, UserRepository
 from backend.schemas.api import AppointmentCreate, ExamFinish
+from backend.services.notifier import Notifier, notifier
 
 MAX_INVOICE = Decimal("99999999.99")  # fits DECIMAL(10,2)
 
@@ -32,9 +32,9 @@ MAX_INVOICE = Decimal("99999999.99")  # fits DECIMAL(10,2)
 class AppointmentService:
     """Business rules for notifications and appointments. Works on the user's doctor scope."""
 
-    def __init__(self, db: Database = database, mail: Mailer = mailer) -> None:
+    def __init__(self, db: Database = database, notify: Notifier = notifier) -> None:
         self._db = db
-        self._mail = mail
+        self._notifier = notify
 
     # ------------------------------------------------------------ helpers
     @staticmethod
@@ -161,13 +161,23 @@ class AppointmentService:
             if notifications.resolve(notification_id, "Converted", None, user.id) == 0:
                 raise ConflictError("This request was already handled.")
             AuditRepository(tx).record(user.id, "APPROVE_REQUEST", "notifications", notification_id, f"Created appointment #{new_id}")
-            clinic = SettingsRepository(tx).as_dict().get("clinic_name", "the clinic")
             doctor_name = UserRepository(tx).get(doctor_id)["full_name"]  # type: ignore[index]
-        self._mail.send(
-            note["email"],
-            f"Your appointment at {clinic} is confirmed",
-            f"Hello {note['requester_name']},\n\nYour appointment with {doctor_name} is confirmed for "
-            f"{when:%A, %B %d, %Y at %I:%M %p}.\nPlease arrive a few minutes early.\n\n{clinic}",
+            room = RoomRepository(tx).get(room_id) if room_id else None
+        self._notifier.request_approved(
+            email=note["email"],
+            name=note["requester_name"],
+            doctor_name=doctor_name,
+            when=when,
+            room_name=room["room_name"] if room else None,
+        )
+        self._notifier.request_decided(
+            actor_id=user.id,
+            actor_name=user.full_name,
+            doctor_id=doctor_id,
+            patient=note["requester_name"],
+            approved=True,
+            when=when,
+            note=None,
         )
         return AppointmentRepository(self._db).get_item(new_id)  # type: ignore[return-value]
 
@@ -182,12 +192,15 @@ class AppointmentService:
             if notifications.resolve(notification_id, "Dismissed", note_text, user.id) == 0:
                 raise ConflictError("This request was already handled.")
             AuditRepository(tx).record(user.id, "DISMISS_REQUEST", "notifications", notification_id, trim(note_text, 200))
-            clinic = SettingsRepository(tx).as_dict().get("clinic_name", "the clinic")
-        self._mail.send(
-            note["email"],
-            f"About your appointment request at {clinic}",
-            f"Hello {note['requester_name']},\n\nWe could not confirm your appointment request.\nReason: {note_text}\n\n"
-            f"Please request another time or call the clinic.\n\n{clinic}",
+        self._notifier.request_dismissed(email=note["email"], name=note["requester_name"], reason=note_text)
+        self._notifier.request_decided(
+            actor_id=user.id,
+            actor_name=user.full_name,
+            doctor_id=doctor_id,
+            patient=note["requester_name"],
+            approved=False,
+            when=note["preferred_datetime"],
+            note=note_text,
         )
 
     # ------------------------------------------------------------ appointments
@@ -232,6 +245,14 @@ class AppointmentService:
                 )
             days_off.create({"doctor_id": doctor_id, "off_date": day, "reason": blank_to_none(reason)})
             AuditRepository(tx).record(user.id, "SET_DAY_OFF", "doctor_days_off", None, f"Unavailable on {day.isoformat()}")
+        self._notifier.day_off_changed(
+            actor_id=user.id,
+            doctor_id=doctor_id,
+            doctor_name=user.full_name,
+            day=day,
+            reason=reason,
+            unavailable=True,
+        )
         return {"ok": True}
 
     def clear_day_off(self, user: User, day: date) -> dict[str, bool]:
@@ -241,6 +262,14 @@ class AppointmentService:
             if DayOffRepository(tx).remove(doctor_id, day) == 0:
                 raise NotFoundError("That day is not marked as unavailable.")
             AuditRepository(tx).record(user.id, "CLEAR_DAY_OFF", "doctor_days_off", None, f"Available again on {day.isoformat()}")
+        self._notifier.day_off_changed(
+            actor_id=user.id,
+            doctor_id=doctor_id,
+            doctor_name=user.full_name,
+            day=day,
+            reason=None,
+            unavailable=False,
+        )
         return {"ok": True}
 
     def create_appointment(self, user: User, data: AppointmentCreate) -> Row:
@@ -303,7 +332,15 @@ class AppointmentService:
             self._ensure_patient(tx, appt)
             appointments.update(appointment_id, {"status": "Checked-in", "checked_in_at": now})
             AuditRepository(tx).record(user.id, "CHECK_IN", "appointments", appointment_id, None)
-        return AppointmentRepository(self._db).get_item(appointment_id)  # type: ignore[return-value]
+        result = AppointmentRepository(self._db).get_item(appointment_id)
+        self._notifier.patient_checked_in(
+            actor_id=user.id,
+            actor_name=user.full_name,
+            doctor_id=doctor_id,
+            patient=appt["full_name"],
+            room=result["room_name"],  # type: ignore[index]
+        )
+        return result  # type: ignore[return-value]
 
     def start_exam(self, user: User, appointment_id: int, room_id: int | None) -> Row:
         """Doctor starts the examination: occupy a room and create the invoice (consultation fee only)."""
@@ -427,6 +464,13 @@ class AppointmentService:
             self._free_room(tx, appt["room_id"], user.id)
             appointments.update(appointment_id, {"status": "Examined"})
             AuditRepository(tx).record(user.id, "FINISH_EXAM", "appointments", appointment_id, None)
+        self._notifier.awaiting_payment(
+            actor_id=user.id,
+            actor_name=user.full_name,
+            doctor_id=doctor_id,
+            patient=appt["full_name"],
+            amount=fee + medicines,
+        )
         return AppointmentRepository(self._db).get_item(appointment_id)  # type: ignore[return-value]
 
     def cancel(self, user: User, appointment_id: int, reason: str | None) -> Row:
@@ -441,6 +485,14 @@ class AppointmentService:
             if invoice and invoice["status"] == "Unpaid":
                 InvoiceRepository(tx).update(invoice["id"], {"status": "Cancelled"})
             AuditRepository(tx).record(user.id, "CANCEL_APPOINTMENT", "appointments", appointment_id, trim(reason or "No reason given", 200))
+        self._notifier.appointment_cancelled(
+            actor_id=user.id,
+            actor_name=user.full_name,
+            doctor_id=doctor_id,
+            patient=appt["full_name"],
+            when=appt["scheduled_time"],
+            reason=reason,
+        )
         return AppointmentRepository(self._db).get_item(appointment_id)  # type: ignore[return-value]
 
     def reschedule(self, user: User, appointment_id: int, new_time: datetime) -> Row:
@@ -462,6 +514,14 @@ class AppointmentService:
             except DuplicateEntryError as exc:
                 raise AppointmentConflictError() from exc
             AuditRepository(tx).record(user.id, "RESCHEDULE_APPOINTMENT", "appointments", appointment_id, f"Moved to {when:%Y-%m-%d %H:%M}")
+        self._notifier.appointment_rescheduled(
+            actor_id=user.id,
+            actor_name=user.full_name,
+            doctor_id=doctor_id,
+            patient=appt["full_name"],
+            old=appt["scheduled_time"],
+            new=when,
+        )
         return AppointmentRepository(self._db).get_item(appointment_id)  # type: ignore[return-value]
 
     def assign_room(self, user: User, appointment_id: int, room_id: int | None) -> Row:

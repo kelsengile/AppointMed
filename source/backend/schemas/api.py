@@ -126,6 +126,10 @@ class LoginRequest(Schema):
 class ProfileUpdate(Schema):
     full_name: str = Field(min_length=2, max_length=100)
     email: str | None = Field(default=None, max_length=100)
+    bio: str | None = Field(default=None, max_length=1000)
+    education: str | None = Field(default=None, max_length=255)
+    years_experience: int | None = Field(default=None, ge=0, le=70)
+    languages: str | None = Field(default=None, max_length=150)
 
     @field_validator("full_name")
     @classmethod
@@ -136,6 +140,21 @@ class ProfileUpdate(Schema):
     @classmethod
     def email_ok(cls, value: str | None) -> str | None:
         return _check_optional_email(value)
+
+    @field_validator("bio")
+    @classmethod
+    def bio_ok(cls, value: str | None) -> str | None:
+        return _opt(value, lambda v: _no_control(v, multiline=True))
+
+    @field_validator("education")
+    @classmethod
+    def education_ok(cls, value: str | None) -> str | None:
+        return _opt(value, _no_control)
+
+    @field_validator("languages")
+    @classmethod
+    def languages_ok(cls, value: str | None) -> str | None:
+        return _opt(value, lambda v: _restrict(v, " ,.&/-", "Languages", digits=False))
 
 
 class AvatarUpload(Schema):
@@ -150,6 +169,14 @@ class PasswordChange(Schema):
     @classmethod
     def password_strong(cls, value: str) -> str:
         return _check_password_strength(value)
+
+
+class EmailPreferencesUpdate(Schema):
+    notify_requests: bool
+    notify_appointments: bool
+    notify_billing: bool
+    notify_account: bool
+    notify_clinic: bool
 
 
 # ---------- public booking ----------
@@ -387,6 +414,24 @@ class RoomIn(Schema):
     @classmethod
     def room_ok(cls, value: str) -> str:
         return _room_name(value)
+
+
+class DepartmentIn(Schema):
+    name: str = Field(min_length=2, max_length=100)
+    description: str = Field(min_length=3, max_length=255)
+    is_featured: bool = False
+    is_active: bool = True
+    sort_order: int = Field(default=100, ge=0, le=9999)
+
+    @field_validator("name")
+    @classmethod
+    def name_ok(cls, value: str) -> str:
+        return _restrict(value, " &,. '’()/-", "The name")
+
+    @field_validator("description")
+    @classmethod
+    def description_ok(cls, value: str) -> str:
+        return _no_control(value)
 
 
 # ---------- admin ----------

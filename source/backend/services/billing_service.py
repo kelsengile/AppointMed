@@ -12,13 +12,15 @@ from backend.models.domain import AppointmentWorkflow, User
 from backend.repositories.appointment_repository import AppointmentRepository
 from backend.repositories.clinical_repository import ExaminationRepository, InvoiceRepository, PrescriptionRepository
 from backend.repositories.system_repository import AuditRepository, SettingsRepository
+from backend.services.notifier import Notifier, notifier
 
 
 class BillingService:
     """Money-related and record-keeping operations for the user's doctor."""
 
-    def __init__(self, db: Database = database) -> None:
+    def __init__(self, db: Database = database, notify: Notifier = notifier) -> None:
         self._db = db
+        self._notifier = notify
 
     def invoices(self, user: User, status: str | None) -> list[Row]:
         """Invoices with their medicine lines."""
@@ -77,6 +79,14 @@ class BillingService:
                 raise ConflictError("This invoice is no longer unpaid.")
             AppointmentRepository(tx).update(invoice["appointment_id"], {"status": "Completed"})
             AuditRepository(tx).record(user.id, "PAY_INVOICE", "invoices", invoice_id, f"Payment received: {invoice['amount']}")
+            patient = (AppointmentRepository(tx).get_item(invoice["appointment_id"]) or {}).get("full_name", "A patient")
+        self._notifier.payment_received(
+            actor_id=user.id,
+            actor_name=user.full_name,
+            doctor_id=doctor_id,
+            patient=patient,
+            amount=invoice["amount"],
+        )
 
     def history(
         self, user: User, term: str | None, patient_id: int | None, date_from: date | None, date_to: date | None

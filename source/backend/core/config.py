@@ -29,6 +29,7 @@ class Settings:
     """Immutable bag of configuration values (encapsulates reading the environment)."""
 
     app_env: str
+    app_url: str
     db_host: str
     db_port: int
     db_name: str
@@ -54,6 +55,7 @@ class Settings:
             logger.warning("JWT_SECRET is still the placeholder. Generate a real one before sharing this app.")
         return cls(
             app_env=os.getenv("APP_ENV", "development"),
+            app_url=os.getenv("APP_URL", "http://localhost:5173").strip().rstrip("/"),
             db_host=os.getenv("DB_HOST", "localhost"),
             db_port=int(os.getenv("DB_PORT", "3306")),
             db_name=os.getenv("DB_NAME", "appointmed"),

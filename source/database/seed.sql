@@ -49,13 +49,25 @@ USE appointmed;
 -- USERS (admin and doctors first, because nurses reference doctors)
 -- Hashes are bcrypt (cost 12): admin123, doctor123, nurse123.
 -- ------------------------------------------------------------
-INSERT INTO users (username, password_hash, full_name, role, email, specialization, assigned_doctor_id) VALUES
-('admin',          '$2b$12$TxWNxJbDxJvnG8UUASINZ.L1X23uGUsn7NaUwSdUV9ag3.E4CcgT6', 'Eugene H. Krabs',         'admin',  'mr.krabs@example.com',    NULL,               NULL),
-('dr.cheeks',      '$2b$12$B83F6RVelKn914j9Aa981.KDbWtde1hWrOCgfPkS0cAf/2abwp636', 'Dr. Sandy Cheeks',        'doctor', 's.cheeks@example.com',    'General Medicine', NULL),
-('dr.tentacles',   '$2b$12$B83F6RVelKn914j9Aa981.KDbWtde1hWrOCgfPkS0cAf/2abwp636', 'Dr. Squidward Tentacles', 'doctor', 's.tentacles@example.com', 'Pediatrics',       NULL),
-('dr.pearl',       '$2b$12$B83F6RVelKn914j9Aa981.KDbWtde1hWrOCgfPkS0cAf/2abwp636', 'Dr. Pearl Krabs',         'doctor', 'p.krabs@example.com',     'Ophthalmology',    NULL),
-('dr.squarepants', '$2b$12$B83F6RVelKn914j9Aa981.KDbWtde1hWrOCgfPkS0cAf/2abwp636', 'Dr. SpongeBob SquarePants','doctor', 'spongebob@example.com',   'Orthopedics',      NULL),
-('dr.patrick',     '$2b$12$B83F6RVelKn914j9Aa981.KDbWtde1hWrOCgfPkS0cAf/2abwp636', 'Dr. Patrick Star',        'doctor', 'p.star@example.com',      'Neurology',        NULL);
+INSERT INTO users (username, password_hash, full_name, role, email, specialization, bio, education, years_experience, languages, assigned_doctor_id) VALUES
+('admin', '$2b$12$TxWNxJbDxJvnG8UUASINZ.L1X23uGUsn7NaUwSdUV9ag3.E4CcgT6', 'Eugene H. Krabs', 'admin', 'mr.krabs@example.com', NULL,
+ 'Runs the clinic office, keeps the schedules tidy, and makes sure every patient has a smooth visit from booking to payment.',
+ 'BS Business Administration, Bikini Bottom University', 25, 'English, Filipino', NULL),
+('dr.cheeks', '$2b$12$B83F6RVelKn914j9Aa981.KDbWtde1hWrOCgfPkS0cAf/2abwp636', 'Dr. Sandy Cheeks', 'doctor', 's.cheeks@example.com', 'General Medicine',
+ 'A family doctor who loves preventive care and clear explanations. Sandy helps patients manage everyday illness and long-term conditions.',
+ 'Doctor of Medicine, Texas Treedome University; Residency in Family Medicine', 12, 'English, Filipino', NULL),
+('dr.tentacles', '$2b$12$B83F6RVelKn914j9Aa981.KDbWtde1hWrOCgfPkS0cAf/2abwp636', 'Dr. Squidward Tentacles', 'doctor', 's.tentacles@example.com', 'Pediatrics',
+ 'Cares for infants, children, and teens with a calm and patient approach. Special interest in childhood allergies and vaccinations.',
+ 'Doctor of Medicine, Krusty Krab College of Medicine; Fellowship in Pediatrics', 9, 'English, Filipino, Spanish', NULL),
+('dr.pearl', '$2b$12$B83F6RVelKn914j9Aa981.KDbWtde1hWrOCgfPkS0cAf/2abwp636', 'Dr. Pearl Krabs', 'doctor', 'p.krabs@example.com', 'Ophthalmology',
+ 'Eye specialist focused on vision tests, dry eye care, and early detection of eye disease for all ages.',
+ 'Doctor of Medicine, Bikini Bottom University; Residency in Ophthalmology', 7, 'English, Filipino', NULL),
+('dr.squarepants', '$2b$12$B83F6RVelKn914j9Aa981.KDbWtde1hWrOCgfPkS0cAf/2abwp636', 'Dr. SpongeBob SquarePants', 'doctor', 'spongebob@example.com', 'Orthopedics',
+ 'Treats bone, joint, and muscle problems, from sports injuries to long-term joint pain, with plenty of enthusiasm.',
+ 'Doctor of Medicine, Conch Street Medical School; Residency in Orthopedic Surgery', 10, 'English, Filipino', NULL),
+('dr.patrick', '$2b$12$B83F6RVelKn914j9Aa981.KDbWtde1hWrOCgfPkS0cAf/2abwp636', 'Dr. Patrick Star', 'doctor', 'p.star@example.com', 'Neurology',
+ 'Neurologist who helps patients with headaches, migraines, and nerve conditions, and takes time to explain each step.',
+ 'Doctor of Medicine, Rock Bottom University; Residency in Neurology', 8, 'English, Filipino', NULL);
 
 SET @admin   := (SELECT id FROM users WHERE username = 'admin');
 SET @sandy   := (SELECT id FROM users WHERE username = 'dr.cheeks');
@@ -64,16 +76,35 @@ SET @pearl   := (SELECT id FROM users WHERE username = 'dr.pearl');
 SET @bob     := (SELECT id FROM users WHERE username = 'dr.squarepants');
 SET @patrick := (SELECT id FROM users WHERE username = 'dr.patrick');
 
-INSERT INTO users (username, password_hash, full_name, role, email, specialization, assigned_doctor_id) VALUES
-('nurse.dora',      '$2b$12$6P8IiOL2fy.Z7ftsz5BWSeY72I12H5OYgkiCMNvBTc80zj9Xjva4u', 'Dora Marquez (Dora the Explorer)', 'nurse', 'dora@example.com',      NULL, @sandy),
-('nurse.blossom',   '$2b$12$6P8IiOL2fy.Z7ftsz5BWSeY72I12H5OYgkiCMNvBTc80zj9Xjva4u', 'Blossom Utonium',                  'nurse', 'blossom@example.com',   NULL, @sandy),
-('nurse.bubbles',   '$2b$12$6P8IiOL2fy.Z7ftsz5BWSeY72I12H5OYgkiCMNvBTc80zj9Xjva4u', 'Bubbles Utonium',                  'nurse', 'bubbles@example.com',   NULL, @squid),
-('nurse.buttercup', '$2b$12$6P8IiOL2fy.Z7ftsz5BWSeY72I12H5OYgkiCMNvBTc80zj9Xjva4u', 'Buttercup Utonium',                'nurse', 'buttercup@example.com', NULL, @pearl);
+INSERT INTO users (username, password_hash, full_name, role, email, specialization, bio, education, years_experience, languages, assigned_doctor_id) VALUES
+('nurse.dora', '$2b$12$6P8IiOL2fy.Z7ftsz5BWSeY72I12H5OYgkiCMNvBTc80zj9Xjva4u', 'Dora Marquez (Dora the Explorer)', 'nurse', 'dora@example.com', NULL,
+ 'Welcomes patients, checks them in, and keeps Dr. Cheeks''s queue moving. Always ready to explain what happens next.',
+ 'BS Nursing, Explorer State University', 6, 'English, Filipino, Spanish', @sandy),
+('nurse.blossom', '$2b$12$6P8IiOL2fy.Z7ftsz5BWSeY72I12H5OYgkiCMNvBTc80zj9Xjva4u', 'Blossom Utonium', 'nurse', 'blossom@example.com', NULL,
+ 'Organized and detail-minded. Handles appointment requests, records, and billing for Dr. Cheeks.',
+ 'BS Nursing, Townsville College', 5, 'English, Filipino', @sandy),
+('nurse.bubbles', '$2b$12$6P8IiOL2fy.Z7ftsz5BWSeY72I12H5OYgkiCMNvBTc80zj9Xjva4u', 'Bubbles Utonium', 'nurse', 'bubbles@example.com', NULL,
+ 'Gentle with young patients and their families. Supports Dr. Tentacles in the pediatric clinic.',
+ 'BS Nursing, Townsville College; Certificate in Pediatric Nursing', 4, 'English, Filipino', @squid),
+('nurse.buttercup', '$2b$12$6P8IiOL2fy.Z7ftsz5BWSeY72I12H5OYgkiCMNvBTc80zj9Xjva4u', 'Buttercup Utonium', 'nurse', 'buttercup@example.com', NULL,
+ 'Quick, reliable, and calm under pressure. Prepares patients and rooms for Dr. Pearl''s eye examinations.',
+ 'BS Nursing, Townsville College', 5, 'English, Filipino', @pearl);
 
 SET @dora      := (SELECT id FROM users WHERE username = 'nurse.dora');
 SET @blossom   := (SELECT id FROM users WHERE username = 'nurse.blossom');
 SET @bubbles   := (SELECT id FROM users WHERE username = 'nurse.bubbles');
 SET @buttercup := (SELECT id FROM users WHERE username = 'nurse.buttercup');
+
+INSERT INTO departments (name, description, icon, is_featured, is_active, sort_order) VALUES
+('General Medicine', 'Primary care, routine checkups, preventive health screenings and chronic disease management.', '/dept-general.png', 1, 1, 10),
+('Cardiology', 'Heart disease diagnosis and treatment. ECG, Echo, and stress testing available.', '/dept-cardiology.png', 1, 1, 20),
+('Neurology', 'Expert care for neurological disorders including stroke, epilepsy, and movement disorders.', '/dept-neurology.png', 1, 1, 30),
+('Orthopedics', 'Bone, joint and muscle care including sports injuries, fractures, and joint replacement.', '/dept-orthopedics.png', 1, 1, 40),
+('Pediatrics', 'Comprehensive child health care from newborns to adolescents.', '/dept-pediatrics.png', 1, 1, 50),
+('Ophthalmology', 'Complete eye care including vision tests, dry eye treatment, and cataract care.', '/dept-ophthalmology.png', 1, 1, 60),
+('Dermatology', 'Skin, hair, and nail conditions, including allergies and rashes.', NULL, 0, 1, 100),
+('Dentistry', 'Dental checkups, cleaning, fillings, and oral health advice.', NULL, 0, 1, 110),
+('Otolaryngology (ENT)', 'Ear, nose, and throat conditions for children and adults.', NULL, 0, 1, 120);
 
 -- ------------------------------------------------------------
 -- DOCTOR SCHEDULES (weekday: 1 = Monday ... 7 = Sunday)

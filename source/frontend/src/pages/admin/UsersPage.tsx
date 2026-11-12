@@ -11,8 +11,9 @@ import { useAuth } from "../../context/AuthContext";
 import { usePolling } from "../../hooks/usePolling";
 import type { DoctorRef, Role, UserCreatePayload, UserRecord } from "../../types";
 import { formatDateTime } from "../../utils/format";
-import { cleanEmail, cleanName, cleanSpecialization, cleanUsername, isEmail, isName, isUsername } from "../../utils/input";
+import { cleanEmail, cleanName, cleanUsername, isEmail, isName, isUsername } from "../../utils/input";
 import { PASSWORD_MAX, passwordProblem } from "../../utils/password";
+import type { DepartmentItem } from "../../types/department";
 
 const ROLES: Role[] = ["doctor", "nurse", "admin"];
 
@@ -23,7 +24,7 @@ type ModalState =
   | null;
 
 // Create (editing = null) or edit form.
-function UserForm({ editing, doctors, onClose, onSaved }: { editing: UserRecord | null; doctors: DoctorRef[]; onClose: () => void; onSaved: (message: string) => void }) {
+function UserForm({ editing, doctors, departments, onClose, onSaved }: { editing: UserRecord | null; doctors: DoctorRef[]; departments: DepartmentItem[]; onClose: () => void; onSaved: (message: string) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>(editing?.role ?? "nurse");
@@ -43,6 +44,7 @@ function UserForm({ editing, doctors, onClose, onSaved }: { editing: UserRecord 
     }
     if (!isName(fullName.trim())) return setError("Enter the full name (letters only, at least 2).");
     if (email.trim() && !isEmail(email.trim())) return setError("Enter a valid email address.");
+    if (role === "doctor" && !specialization) return setError("Choose the doctor's specialization.");
     if (role === "nurse" && !assigned) return setError("Choose the doctor this nurse supports.");
 
     const common = {
@@ -106,8 +108,16 @@ function UserForm({ editing, doctors, onClose, onSaved }: { editing: UserRecord 
         </label>
         {role === "doctor" && (
           <label className="block text-sm font-medium">
-            Specialization
-            <input className={`${inputClass} mt-1`} maxLength={100} value={specialization} onChange={(e) => setSpecialization(cleanSpecialization(e.target.value))} />
+            Specialization (department)
+            <select className={`${inputClass} mt-1`} value={specialization} onChange={(e) => setSpecialization(e.target.value)}>
+              <option value="">Select a department...</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.name}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs font-normal text-slate-500">Departments are managed in Clinic Settings.</span>
           </label>
         )}
         {role === "nurse" && (
@@ -196,6 +206,7 @@ export default function UsersPage() {
   const [actionError, setActionError] = useState("");
   const users = usePolling(() => adminApi.users(role, search.trim()), 0, [role, search]);
   const doctors = usePolling(() => adminApi.doctors(), 0);
+  const departments = usePolling(() => adminApi.departments(), 0);
 
   function saved(text: string) {
     setModal(null);
@@ -311,7 +322,7 @@ export default function UsersPage() {
         </table>
       </div>
 
-      {modal?.kind === "form" && <UserForm editing={modal.user} doctors={doctors.data ?? []} onClose={() => setModal(null)} onSaved={saved} />}
+      {modal?.kind === "form" && <UserForm editing={modal.user} doctors={doctors.data ?? []} departments={departments.data ?? []} onClose={() => setModal(null)} onSaved={saved} />}
       {modal?.kind === "password" && <PasswordForm target={modal.user} onClose={() => setModal(null)} onSaved={saved} />}
       {modal?.kind === "schedule" && <ScheduleEditor doctor={modal.user} onClose={() => setModal(null)} onSaved={() => saved(`Working hours saved for ${modal.user.full_name}.`)} />}
     </section>

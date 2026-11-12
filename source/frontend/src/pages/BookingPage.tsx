@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { publicApi } from "../api/endpoints";
 import BookingCalendar from "../components/BookingCalendar";
 import Logo from "../components/Logo";
 import type { BookingReceipt, Catalog, Sex } from "../types";
 import { formatDate, formatTime, isoDate, weekdayList } from "../utils/format";
 import { MIN_BIRTHDATE, cleanAddress, cleanEmail, cleanName, cleanPhone, cleanText, isEmail, isName, isPhone } from "../utils/input";
+import { staffPhotoUrl } from "../utils/staffArt";
 
 const input =
   "mt-1 w-full rounded-xl border border-[#BBD4F3] bg-white px-3 py-2 text-landing-heading focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30";
@@ -49,7 +50,7 @@ function Shell({ children, narrow = false }: { children: ReactNode; narrow?: boo
       <header className="px-4 pt-4 sm:px-8">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 rounded-2xl bg-white/85 px-4 py-2.5 shadow-[0_10px_30px_rgba(53,88,130,0.12)] backdrop-blur">
           <Link to="/" aria-label="Back to AppointMed home">
-            <Logo size={36} />
+            <Logo size={36} showName={false} />
           </Link>
           <Link to="/" className="rounded-xl border border-brand-200 px-4 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">
             Back to home
@@ -76,6 +77,7 @@ export default function BookingPage() {
   const [submitError, setSubmitError] = useState("");
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState<BookingReceipt | null>(null);
+  const [params] = useSearchParams();
 
   useEffect(() => {
     publicApi
@@ -83,6 +85,18 @@ export default function BookingPage() {
       .then(setCatalog)
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Could not load the doctors."));
   }, []);
+
+  // /book?doctor=ID (from a staff profile) opens the page with that doctor already chosen.
+  useEffect(() => {
+    const wanted = params.get("doctor");
+    if (!catalog || !wanted) return;
+    const found = catalog.doctors.find((d) => String(d.id) === wanted);
+    if (found) {
+      setSpecialization(found.specialization ?? "");
+      setDoctorId(String(found.id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog]);
 
   const today = new Date();
   const maxDay = new Date();
@@ -269,7 +283,25 @@ export default function BookingPage() {
                 </select>
               </Field>
             </div>
-            {chosen && <p className="text-sm text-landing-muted">{chosen.full_name} sees patients on {weekdayList(chosen.weekdays)}.</p>}
+            {chosen && (
+              <div className="flex items-center gap-3 rounded-2xl border border-[#DCE9FB] bg-[#F4F9FE] p-3">
+                {chosen.has_photo ? (
+                  <img src={staffPhotoUrl(chosen.id, chosen.photo_version)} alt="" className="h-14 w-14 rounded-full object-cover" />
+                ) : (
+                  <span aria-hidden className="grid h-14 w-14 place-items-center rounded-full bg-brand-100 text-lg font-bold text-brand-700">
+                    {chosen.full_name.replace(/^Dr\.?\s+/i, "").charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <div className="min-w-0 text-sm">
+                  <p className="font-semibold text-landing-heading">{chosen.full_name}</p>
+                  {chosen.specialization && <p className="text-landing-muted">{chosen.specialization}</p>}
+                  <p className="text-landing-muted">Sees patients on {weekdayList(chosen.weekdays)}.</p>
+                  <Link to={`/staff/${chosen.id}`} className="font-semibold text-brand-700 hover:underline">
+                    View full profile
+                  </Link>
+                </div>
+              </div>
+            )}
 
             {/* A div, not a label: a label around a button can fire the button twice. */}
             <div className="text-sm font-medium text-landing-body">

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from backend.core.security import get_current_user
 from backend.models.domain import User
-from backend.schemas.api import AvatarUpload, LoginRequest, PasswordChange, ProfileUpdate
+from backend.schemas.api import AvatarUpload, EmailPreferencesUpdate, LoginRequest, PasswordChange, ProfileUpdate
 from backend.services.auth_service import AuthService
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -25,8 +25,8 @@ def me(user: User = Depends(get_current_user)) -> dict:
 
 @router.put("/me")
 def update_me(body: ProfileUpdate, user: User = Depends(get_current_user)) -> dict:
-    """Change own name and email."""
-    return service.update_profile(user.id, body.full_name, body.email)
+    """Change own name, email, and public profile details."""
+    return service.update_profile(user.id, body)
 
 
 @router.put("/me/avatar")
@@ -46,3 +46,18 @@ def change_password(body: PasswordChange, user: User = Depends(get_current_user)
     """Change own password."""
     service.change_password(user.id, body.current_password, body.new_password)
     return {"ok": True}
+
+
+@router.get("/me/email-preferences")
+def email_preferences(user: User = Depends(get_current_user)) -> dict:
+    return service.email_preferences(user.id)
+
+
+@router.put("/me/email-preferences")
+def save_email_preferences(body: EmailPreferencesUpdate, user: User = Depends(get_current_user)) -> dict:
+    return service.save_email_preferences(user.id, body)
+
+
+@router.post("/me/email-preferences/test")
+def send_test_email(user: User = Depends(get_current_user)) -> dict:
+    return service.send_test_email(user.id)

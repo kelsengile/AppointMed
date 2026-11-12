@@ -35,6 +35,10 @@ export interface UserRecord {
   role: Role;
   email: string | null;
   specialization: string | null;
+  bio: string | null;
+  education: string | null;
+  years_experience: number | null;
+  languages: string | null;
   assigned_doctor_id: number | null;
   assigned_doctor_name: string | null;
   is_active: boolean;
@@ -46,6 +50,15 @@ export interface Profile extends UserRecord {
   avatar: string | null;
 }
 
+export interface ProfilePayload {
+  full_name: string;
+  email: string | null;
+  bio: string | null;
+  education: string | null;
+  years_experience: number | null;
+  languages: string | null;
+}
+
 // ---------- public booking ----------
 
 export interface DoctorOption {
@@ -53,6 +66,8 @@ export interface DoctorOption {
   full_name: string;
   specialization: string | null;
   weekdays: number[]; // 1 = Monday ... 7 = Sunday
+  has_photo: boolean;
+  photo_version: number;
 }
 
 export interface Catalog {
@@ -364,4 +379,16 @@ export interface ReportData {
     revenue_unpaid: number;
     new_patients: number;
   };
+}
+
+export type EmailPrefKey =
+  | "notify_requests"
+  | "notify_appointments"
+  | "notify_billing"
+  | "notify_account"
+  | "notify_clinic";
+export type EmailPreferences = Record<EmailPrefKey, boolean>;
+export interface EmailPreferencesResponse {
+  email: string | null;
+  preferences: EmailPreferences;
 }

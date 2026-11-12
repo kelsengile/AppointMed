@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from backend.core.database import Database, database
-from backend.core.exceptions import AppError, InvalidScheduleError, NotFoundError
+from backend.core.exceptions import AppError, InvalidScheduleError, NotFoundError, ValidationFailedError
 from backend.core.utils import floor_minute
 from backend.repositories.appointment_repository import NotificationRepository
 from backend.repositories.system_repository import AuditRepository, SettingsRepository
@@ -14,13 +14,15 @@ from backend.repositories.user_repository import DayOffRepository, ScheduleRepos
 from backend.schemas.api import BookingRequest
 
 from .scheduling_service import SchedulingService
+from .notifier import Notifier, notifier
 
 
 class BookingService:
     """Everything a patient can do without an account."""
 
-    def __init__(self, db: Database = database) -> None:
+    def __init__(self, db: Database = database, notify: Notifier = notifier) -> None:
         self._db = db
+        self._notifier = notify
 
     def _settings(self) -> dict[str, str]:
         return SettingsRepository(self._db).as_dict()
@@ -98,10 +100,11 @@ class BookingService:
             tx.fetch_one("SELECT id FROM users WHERE id = %s FOR UPDATE", (request.doctor_id,))
             SchedulingService(tx).ensure_bookable(request.doctor_id, when)
             nurses = UserRepository(tx).nurses_for_doctor(request.doctor_id)
+            nurse_id = nurses[0]["id"] if nurses else None
             new_id = NotificationRepository(tx).create(
                 {
                     "doctor_id": request.doctor_id,
-                    "nurse_id": nurses[0]["id"] if nurses else None,
+                    "nurse_id": nurse_id,
                     "requester_name": request.full_name,
                     "contact_number": request.contact_number,
                     "email": request.email,
@@ -115,6 +118,16 @@ class BookingService:
                 }
             )
             AuditRepository(tx).record(None, "BOOKING_REQUEST", "notifications", new_id, "New request from the public website")
+        self._notifier.request_received(
+            email=request.email, name=request.full_name, doctor_name=doctor["full_name"], when=when
+        )
+        self._notifier.new_request(
+            doctor_id=request.doctor_id,
+            nurse_id=nurse_id,
+            requester=request.full_name,
+            doctor_name=doctor["full_name"],
+            when=when,
+        )
         return {
             "id": new_id,
             "doctor_name": doctor["full_name"],
