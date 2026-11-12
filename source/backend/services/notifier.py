@@ -1,7 +1,7 @@
 """Every email AppointMed sends, one method per event.
 
 Services call these after their transaction has committed, so a mail problem cannot undo saved work.
-Failures are logged and do not break the request.
+Routine notification failures are logged; the test-email check propagates delivery failures.
 """
 
 from __future__ import annotations
@@ -114,6 +114,7 @@ class Notifier:
         footer: str = PATIENT_HINT,
         path: str | None = None,
         button_label: str | None = None,
+        blocking: bool = False,
         **content: Any,
     ) -> None:
         """Email one address (a patient, or a test message)."""
@@ -124,8 +125,13 @@ class Notifier:
             text, html = render_email(
                 clinic=self._clinic(), greeting=f"Hello {name},", button=button, footer=footer, **content
             )
-            self._mail.send(to, subject, text, html)
+            if blocking and self._config.smtp_enabled:
+                self._mail.send_blocking(to, subject, text, html)
+            else:
+                self._mail.send(to, subject, text, html)
         except Exception:
+            if blocking:
+                raise
             logger.exception("Could not send the '%s' email.", subject)
 
     def _team(self, doctor_id: int) -> list[int]:
@@ -520,6 +526,7 @@ class Notifier:
             footer="You asked for this test from Settings > Notifications.",
             badge="Test email",
             tone="green",
+            blocking=True,
             heading="Email notifications are working",
             paragraphs=[
                 "This is a test message. If you can read it, AppointMed can reach you. These are your current settings."

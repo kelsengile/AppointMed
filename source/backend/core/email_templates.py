@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from html import escape
 from typing import Sequence
 
+LOGO_CID = "appointmed-logo"
+
 FONT = "Poppins,'Segoe UI',Helvetica,Arial,sans-serif"
 NAVY = "#1F3655"
 BRAND = "#365983"
@@ -118,7 +120,7 @@ def render_email(
   <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;">
     <tr><td style="padding:0 6px 14px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td width="40" height="40" align="center" bgcolor="{BRAND}" style="width:40px;height:40px;border-radius:12px;background:{BRAND};background-image:linear-gradient(135deg,{BRAND},{BRAND_LIGHT});color:#ffffff;font-size:20px;font-weight:800;line-height:40px;">A</td>
+        <td width="40" height="40" style="width:40px;height:40px;"><img src="cid:{LOGO_CID}" width="40" height="40" alt="A" style="display:block;width:40px;height:40px;border:0;border-radius:12px;"></td>
         <td style="padding-left:12px;font-size:20px;font-weight:800;color:{NAVY};letter-spacing:-0.01em;">AppointMed</td>
         <td align="right" style="font-size:12px;font-weight:600;color:{MUTED};">{escape(clinic)}</td>
       </tr></table>

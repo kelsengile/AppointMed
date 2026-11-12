@@ -99,6 +99,13 @@ class DatabaseUnavailableError(AppError):
     default_message = "The database is not available right now. Please try again."
 
 
+class EmailDeliveryError(AppError):
+    """The SMTP server could not accept an email for delivery."""
+
+    status_code = 502
+    default_message = "The test email could not be sent. Check the email server settings and try again."
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach handlers so every error leaves the API as {"detail": "..."}."""
 
